@@ -74,6 +74,7 @@ export default function App() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [selectedCat, setSelectedCat] = useState<string>('antipasti');
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
+  const [translatedDesc, setTranslatedDesc] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -86,25 +87,27 @@ export default function App() {
     setStartError(null);
     setLoading(true);
     try {
-      // Carica menu (veloce, senza traduzione)
-      const menuRes = await fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=es`);
+      // Menu e sessione in parallelo
+      const [menuRes, sessionRes] = await Promise.all([
+        fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=es`),
+        fetch(`${API}/api/chat/session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ restaurant_slug: params.restaurant, table_number: params.table, language: selectedLang }),
+        }),
+      ]);
       if (!menuRes.ok) throw new Error(`Menu ${menuRes.status}`);
-      const menuData: Dish[] = await menuRes.json();
+      if (!sessionRes.ok) throw new Error(`Session ${sessionRes.status}`);
+
+      const [menuData, sessionData]: [Dish[], { session_id: string; welcome_message: string }] =
+        await Promise.all([menuRes.json(), sessionRes.json()]);
+
       const available = menuData.filter(d => d.available);
       setDishes(available);
       const firstCat = CAT_ORDER.find(c => available.some(d => d.category === c)) ?? available[0]?.category ?? 'antipasti';
       setSelectedCat(firstCat);
-
-      // Avvia sessione chat
-      const res = await fetch(`${API}/api/chat/session`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ restaurant_slug: params.restaurant, table_number: params.table, language: selectedLang }),
-      });
-      if (!res.ok) throw new Error(`Session ${res.status}`);
-      const data = await res.json();
-      setSessionId(data.session_id);
-      setMessages([{ role: 'assistant', content: data.welcome_message, timestamp: new Date().toISOString() }]);
+      setSessionId(sessionData.session_id);
+      setMessages([{ role: 'assistant', content: sessionData.welcome_message, timestamp: new Date().toISOString() }]);
       setScreen('main');
     } catch (err) {
       setStartError(String(err));
@@ -153,6 +156,23 @@ export default function App() {
         timestamp: new Date().toISOString(),
       }]);
     } catch { alert('Errore conferma ordine'); } finally { setLoading(false); }
+  }
+
+  async function openDish(dish: Dish) {
+    setSelectedDish(dish);
+    setTranslatedDesc(null);
+    if (lang === 'es' || !dish.description) return;
+    try {
+      const res = await fetch(`${API}/api/menu/translate-desc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: dish.description, lang }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTranslatedDesc(data.translated);
+      }
+    } catch { /* mostra originale */ }
   }
 
   function askAboutDish(dish: Dish) {
@@ -293,7 +313,7 @@ export default function App() {
           {/* Dish cards */}
           <div style={S.dishGrid}>
             {visibleDishes.map(dish => (
-              <button key={dish.id} style={S.dishCard} onClick={() => setSelectedDish(dish)}>
+              <button key={dish.id} style={S.dishCard} onClick={() => openDish(dish)}>
                 <div style={S.dishIcon}>{CAT_ICONS[dish.category]}</div>
                 <div style={S.dishInfo}>
                   <div style={S.dishName}>{dish.name}</div>
@@ -345,8 +365,11 @@ export default function App() {
             <div style={S.modalIcon}>{CAT_ICONS[selectedDish.category]}</div>
             <h2 style={S.modalTitle}>{selectedDish.name}</h2>
             <div style={S.modalPrice}>€{parseFloat(String(selectedDish.price ?? 0)).toFixed(2)}</div>
-            {selectedDish.description && (
-              <p style={S.modalDesc}>{selectedDish.description}</p>
+            {(translatedDesc ?? selectedDish.description) && (
+              <p style={S.modalDesc}>
+                {translatedDesc ?? selectedDish.description}
+                {!translatedDesc && lang !== 'es' && <span style={{ opacity: 0.4, fontSize: 11 }}> ↻</span>}
+              </p>
             )}
             <button style={S.modalAskBtn} onClick={() => askAboutDish(selectedDish)}>
               💬 {lang === 'en' ? 'Ask the AI about this dish' : lang === 'de' ? 'KI fragen' : lang === 'es' ? 'Preguntar al asistente' : 'Chiedi all\'assistente AI'}

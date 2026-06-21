@@ -47,6 +47,25 @@ router.get('/:restaurantSlug', async (req, res) => {
   }
 });
 
+// POST /api/menu/translate-desc — traduce una singola descrizione
+router.post('/translate-desc', async (req, res) => {
+  try {
+    const { text, lang } = req.body;
+    if (!text || !lang || lang === 'es') return res.json({ translated: text });
+    const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French' };
+    const client = new Anthropic();
+    const msg = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 256,
+      messages: [{ role: 'user', content: `Translate this dish description to ${langNames[lang] || 'English'}. Reply with ONLY the translated text, nothing else:\n\n${text}` }],
+    });
+    res.json({ translated: (msg.content[0] as { text: string }).text.trim() });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Translation failed' });
+  }
+});
+
 // GET /api/menu/:restaurantSlug/dishes/translated?lang=XX — menu tradotto
 router.get('/:restaurantSlug/dishes/translated', async (req, res) => {
   try {
