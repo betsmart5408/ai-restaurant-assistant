@@ -86,8 +86,8 @@ export default function App() {
     setStartError(null);
     setLoading(true);
     try {
-      // Carica menu tradotto
-      const menuRes = await fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=${selectedLang}`);
+      // Carica menu (veloce, senza traduzione)
+      const menuRes = await fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=es`);
       if (!menuRes.ok) throw new Error(`Menu ${menuRes.status}`);
       const menuData: Dish[] = await menuRes.json();
       const available = menuData.filter(d => d.available);
@@ -158,13 +158,25 @@ export default function App() {
   function askAboutDish(dish: Dish) {
     setSelectedDish(null);
     setTab('chat');
-    const prompt = lang === 'en'
-      ? `Tell me about "${dish.name}": ingredients, flavor, and what drinks you'd recommend with it.`
-      : lang === 'de'
-      ? `Erkläre mir "${dish.name}": Zutaten, Geschmack und was ich dazu trinken sollte.`
-      : lang === 'es'
-      ? `Cuéntame sobre "${dish.name}": ingredientes, sabor y qué bebida recomiendas.`
-      : `Parlami di "${dish.name}": ingredienti, sapore e cosa consigli da bere abbinato.`;
+    const isDrink = ['cocktails', 'spirits', 'birre', 'vini', 'soft_drinks'].includes(dish.category);
+    let prompt = '';
+    if (isDrink) {
+      prompt = lang === 'en'
+        ? `Tell me about "${dish.name}": what it tastes like, how it's served, and what food would pair well with it.`
+        : lang === 'de'
+        ? `Erkläre mir "${dish.name}": Geschmack, wie es serviert wird und welche Speisen dazu passen.`
+        : lang === 'es'
+        ? `Cuéntame sobre "${dish.name}": cómo sabe, cómo se sirve y qué platos maridan bien.`
+        : `Parlami di "${dish.name}": com'è, come si serve e con quali piatti si abbina.`;
+    } else {
+      prompt = lang === 'en'
+        ? `Tell me about "${dish.name}": ingredients, flavor, and what drink would you recommend with it.`
+        : lang === 'de'
+        ? `Erkläre mir "${dish.name}": Zutaten, Geschmack und welches Getränk du dazu empfiehlst.`
+        : lang === 'es'
+        ? `Cuéntame sobre "${dish.name}": ingredientes, sabor y qué bebida recomiendas para acompañarlo.`
+        : `Parlami di "${dish.name}": ingredienti, sapore e cosa consigli da bere in abbinamento.`;
+    }
     sendMessage(prompt);
   }
 
