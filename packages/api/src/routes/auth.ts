@@ -144,4 +144,10 @@ router.post('/change-password', requireAuth, async (req, res) => {
   res.json({ success: true });
 });
 
+// GET /api/auth/restaurants — lista pubblica dei ristoranti
+router.get('/restaurants', async (_req, res) => {
+  const result = await db.query('SELECT id, name, slug FROM restaurants ORDER BY name');
+  res.json(result.rows);
+});
+
 export default router;

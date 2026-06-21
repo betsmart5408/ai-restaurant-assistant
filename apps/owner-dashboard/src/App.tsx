@@ -4,9 +4,9 @@ import {
 } from 'recharts';
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
-const RESTAURANT_ID = import.meta.env.VITE_RESTAURANT_ID ?? '11111111-1111-1111-1111-111111111111';
 
 type Tab = 'today' | 'weekly' | 'inventory' | 'margins' | 'forecast' | 'menu';
+interface Restaurant { id: string; name: string; slug: string; }
 
 interface TodayData {
   orders_count: string;
@@ -35,33 +35,49 @@ export default function App() {
   const [menuForm, setMenuForm] = useState<Partial<Dish> | null>(null);
   const [menuSaving, setMenuSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [selectedRest, setSelectedRest] = useState<Restaurant | null>(null);
 
   useEffect(() => {
-    loadTab(tab);
-  }, [tab]);
+    fetch(`${API}/api/auth/restaurants`)
+      .then(r => r.json())
+      .then((data: Restaurant[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setRestaurants(data);
+          const defaultId = import.meta.env.VITE_RESTAURANT_ID;
+          const def = defaultId ? data.find(x => x.id === defaultId) : null;
+          setSelectedRest(def ?? data[0]);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (selectedRest) loadTab(tab);
+  }, [tab, selectedRest]);
 
   async function loadTab(t: Tab) {
     setLoading(true);
     try {
       if (t === 'today') {
-        const res = await fetch(`${API}/api/dashboard/${RESTAURANT_ID}/today`);
+        const res = await fetch(`${API}/api/dashboard/${selectedRest?.id}/today`);
         setToday(await res.json());
       } else if (t === 'weekly') {
-        const res = await fetch(`${API}/api/dashboard/${RESTAURANT_ID}/weekly`);
+        const res = await fetch(`${API}/api/dashboard/${selectedRest?.id}/weekly`);
         setWeekly(await res.json());
       } else if (t === 'inventory') {
-        const res = await fetch(`${API}/api/inventory/${RESTAURANT_ID}/alerts`);
+        const res = await fetch(`${API}/api/inventory/${selectedRest?.id}/alerts`);
         setInventory(await res.json());
       } else if (t === 'margins') {
-        const res = await fetch(`${API}/api/dashboard/${RESTAURANT_ID}/margins`);
+        const res = await fetch(`${API}/api/dashboard/${selectedRest?.id}/margins`);
         setMargins(await res.json());
       } else if (t === 'menu') {
-        const res = await fetch(`${API}/api/menu/da-mario/dishes`);
+        const res = await fetch(`${API}/api/menu/${selectedRest?.slug}/dishes`);
         setMenu(await res.json());
       } else if (t === 'forecast') {
         const [f, p] = await Promise.all([
-          fetch(`${API}/api/forecast/${RESTAURANT_ID}`).then(r => r.json()),
-          fetch(`${API}/api/forecast/${RESTAURANT_ID}/portions`).then(r => r.json()),
+          fetch(`${API}/api/forecast/${selectedRest?.id}`).then(r => r.json()),
+          fetch(`${API}/api/forecast/${selectedRest?.id}/portions`).then(r => r.json()),
         ]);
         setForecast(f);
         setPortions(p);
@@ -82,6 +98,18 @@ export default function App() {
       {/* Sidebar */}
       <aside style={S.sidebar}>
         <div style={S.logo}>🍽️ Dashboard</div>
+        {restaurants.length > 1 && (
+          <select
+            style={{ ...S.formInput, marginBottom: 16, background: '#334155', color: '#f8fafc', border: '1px solid #475569' }}
+            value={selectedRest?.id ?? ''}
+            onChange={e => {
+              const r = restaurants.find(x => x.id === e.target.value);
+              if (r) setSelectedRest(r);
+            }}
+          >
+            {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        )}
         <nav style={S.nav}>
           {([
             ['today', '📊 Oggi'],
@@ -219,7 +247,7 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h1 style={S.pageTitle}>Forecast scorte</h1>
               <a
-                href={`${API}/api/forecast/${RESTAURANT_ID}/report`}
+                href={`${API}/api/forecast/${selectedRest?.id}/report`}
                 target="_blank"
                 rel="noreferrer"
                 style={{ background: '#6366f1', color: 'white', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}
@@ -318,10 +346,10 @@ export default function App() {
                       const method = menuForm.id ? 'PATCH' : 'POST';
                       const url = menuForm.id
                         ? `${API}/api/menu/da-mario/dishes/${menuForm.id}`
-                        : `${API}/api/menu/da-mario/dishes`;
+                        : `${API}/api/menu/${selectedRest?.slug}/dishes`;
                       await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(menuForm) });
                       setMenuForm(null);
-                      const res = await fetch(`${API}/api/menu/da-mario/dishes`);
+                      const res = await fetch(`${API}/api/menu/${selectedRest?.slug}/dishes`);
                       setMenu(await res.json());
                     } finally {
                       setMenuSaving(false);
