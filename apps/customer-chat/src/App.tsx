@@ -279,7 +279,7 @@ export default function App() {
                   <div style={S.dishName}>{dish.name}</div>
                   <div style={S.dishDesc}>{dish.description}</div>
                 </div>
-                <div style={S.dishPrice}>€{(dish.price ?? 0).toFixed(2)}</div>
+                <div style={S.dishPrice}>€{parseFloat(String(dish.price ?? 0)).toFixed(2)}</div>
               </button>
             ))}
           </div>
@@ -324,7 +324,7 @@ export default function App() {
           <div style={S.modalBox} onClick={e => e.stopPropagation()}>
             <div style={S.modalIcon}>{CAT_ICONS[selectedDish.category]}</div>
             <h2 style={S.modalTitle}>{selectedDish.name}</h2>
-            <div style={S.modalPrice}>€{(selectedDish.price ?? 0).toFixed(2)}</div>
+            <div style={S.modalPrice}>€{parseFloat(String(selectedDish.price ?? 0)).toFixed(2)}</div>
             {selectedDish.description && (
               <p style={S.modalDesc}>{selectedDish.description}</p>
             )}
