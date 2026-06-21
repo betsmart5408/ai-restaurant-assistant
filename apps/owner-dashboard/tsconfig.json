@@ -5,7 +5,8 @@
     "module": "ESNext", "skipLibCheck": true,
     "moduleResolution": "bundler", "allowImportingTsExtensions": true,
     "resolveJsonModule": true, "isolatedModules": true, "noEmit": true,
-    "jsx": "react-jsx", "strict": true
+    "jsx": "react-jsx", "strict": true,
+    "types": ["vite/client"]
   },
   "include": ["src"]
 }
