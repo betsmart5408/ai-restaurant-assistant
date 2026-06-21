@@ -228,38 +228,39 @@ export default function App() {
 
   // ─── Lingua / Loading / Errore ────────────────────────────
   if (screen === 'lang') {
-    if (loading) {
-      return (
-        <div style={S.loadingScreen}>
-          <div style={S.spinner} />
-          <p style={S.loadingText}>
-            {lang === 'en' ? 'Loading menu...' : lang === 'de' ? 'Lade Menü...' : lang === 'es' ? 'Cargando carta...' : 'Caricamento menu...'}
-          </p>
-          <p style={S.loadingSubText}>
-            {lang === 'es' ? 'El primer inicio puede tardar 30 segundos' : 'Il primo avvio può richiedere 30 secondi'}
-          </p>
-        </div>
-      );
-    }
     return (
       <div style={S.langScreen}>
-        <div style={S.logoArea}>
-          <div style={S.logo}>🍽️</div>
-          <h1 style={S.logoTitle}>Benvenuto</h1>
+        {/* Sfondo con chef */}
+        <div style={S.coverBg} />
+        <div style={S.coverOverlay} />
+
+        {/* Logo centrato */}
+        <img src="/logo.png" alt="Gusto" style={S.coverLogo} />
+
+        <div style={S.langBox}>
           <p style={S.logoSub}>Scegli la tua lingua / Choose your language</p>
+          {startError && (
+            <div style={S.errorBox}>
+              ⚠️ Connessione lenta. Riprova.
+              <br /><span style={{ fontSize: 11, opacity: 0.6 }}>{startError}</span>
+            </div>
+          )}
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <div style={S.spinner} />
+              <p style={S.loadingText}>
+                {lang === 'en' ? 'Loading menu...' : lang === 'de' ? 'Lade Menü...' : lang === 'es' ? 'Cargando carta...' : 'Caricamento menu...'}
+              </p>
+            </div>
+          ) : (
+            <div style={S.langGrid}>
+              {LANG_OPTIONS.map(opt => (
+                <button key={opt.code} style={S.langBtn} onClick={() => startSession(opt.code)}>{opt.label}</button>
+              ))}
+            </div>
+          )}
+          <p style={S.tableTag}>Tavolo {params.table}</p>
         </div>
-        {startError && (
-          <div style={S.errorBox}>
-            ⚠️ Connessione lenta. Riprova.
-            <br /><span style={{ fontSize: 11, opacity: 0.6 }}>{startError}</span>
-          </div>
-        )}
-        <div style={S.langGrid}>
-          {LANG_OPTIONS.map(opt => (
-            <button key={opt.code} style={S.langBtn} onClick={() => startSession(opt.code)}>{opt.label}</button>
-          ))}
-        </div>
-        <p style={S.tableTag}>Tavolo {params.table}</p>
       </div>
     );
   }
@@ -302,10 +303,8 @@ export default function App() {
       {/* Header */}
       <header style={S.header}>
         <button style={S.backBtn} onClick={() => setScreen('lang')}>←</button>
-        <div style={{ flex: 1 }}>
-          <div style={S.headerTitle}>🍽️ Menu AI</div>
-          <div style={S.headerSub}>Tavolo {params.table}</div>
-        </div>
+        <img src="/logo.png" alt="Gusto" style={S.headerLogo} />
+        <div style={S.headerSub2}>Tavolo {params.table}</div>
         {orderConfirmed && <span style={S.orderBadge}>✓ Ordinato</span>}
       </header>
 
@@ -414,20 +413,22 @@ const S: Record<string, React.CSSProperties> = {
   loadingSubText: { fontSize: 13, color: '#a8a8b3', textAlign: 'center', padding: '0 32px' },
   errorBox: { background: '#2a1a1a', border: '1px solid #e94560', color: '#e94560', borderRadius: 10, padding: '12px 16px', fontSize: 14, textAlign: 'center', maxWidth: 320, width: '100%' },
 
-  langScreen: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', gap: 32, padding: 24, background: 'linear-gradient(160deg, #0f0f1a 0%, #1a1a2e 100%)' },
-  logoArea: { textAlign: 'center' },
-  logo: { fontSize: 72, marginBottom: 12 },
-  logoTitle: { fontSize: 32, fontWeight: 700, color: '#eaeaea', marginBottom: 8 },
-  logoSub: { fontSize: 14, color: '#a8a8b3' },
+  langScreen: { position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', minHeight: '100dvh', overflow: 'hidden' },
+  coverBg: { position: 'absolute', inset: 0, backgroundImage: 'url(/cover.png)', backgroundSize: 'cover', backgroundPosition: 'center top', zIndex: 0 },
+  coverOverlay: { position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.75) 60%, rgba(0,0,0,0.95) 100%)', zIndex: 1 },
+  coverLogo: { position: 'absolute', top: '8%', left: '50%', transform: 'translateX(-50%)', width: 200, zIndex: 2 },
+  langBox: { position: 'relative', zIndex: 2, width: '100%', padding: '0 24px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 },
+  logoSub: { fontSize: 14, color: 'rgba(255,255,255,0.75)', textAlign: 'center' as const },
   langGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', maxWidth: 320 },
-  langBtn: { padding: '16px 12px', borderRadius: 12, fontSize: 16, fontWeight: 600, background: '#16213e', color: '#eaeaea', border: '1.5px solid #2a2a4a', cursor: 'pointer' },
-  tableTag: { color: '#a8a8b3', fontSize: 13 },
+  langBtn: { padding: '16px 12px', borderRadius: 12, fontSize: 16, fontWeight: 600, background: 'rgba(22,33,62,0.85)', color: '#eaeaea', border: '1.5px solid rgba(255,255,255,0.15)', cursor: 'pointer', backdropFilter: 'blur(8px)' },
+  tableTag: { color: 'rgba(255,255,255,0.5)', fontSize: 13 },
 
-  header: { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: '#16213e', borderBottom: '1px solid #2a2a4a', flexShrink: 0 },
-  backBtn: { background: 'none', color: '#a8a8b3', fontSize: 20, padding: 4, border: 'none', cursor: 'pointer' },
-  headerTitle: { fontWeight: 700, fontSize: 16, color: '#eaeaea' },
+  header: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#0f0f0f', borderBottom: '1px solid #2a2a4a', flexShrink: 0 },
+  backBtn: { background: 'none', color: '#a8a8b3', fontSize: 20, padding: 4, border: 'none', cursor: 'pointer', flexShrink: 0 },
+  headerLogo: { height: 36, objectFit: 'contain' as const, flex: 1 },
+  headerSub2: { fontSize: 12, color: '#a8a8b3', flexShrink: 0 },
   headerSub: { fontSize: 12, color: '#a8a8b3' },
-  orderBadge: { background: '#22c55e22', color: '#22c55e', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 },
+  orderBadge: { background: '#22c55e22', color: '#22c55e', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, flexShrink: 0 },
 
   tabBar: { display: 'flex', background: '#16213e', borderBottom: '1px solid #2a2a4a', flexShrink: 0 },
   tabActive: { flex: 1, padding: '12px', fontSize: 14, fontWeight: 700, color: '#e94560', background: 'none', border: 'none', borderBottom: '2px solid #e94560', cursor: 'pointer', position: 'relative' },
