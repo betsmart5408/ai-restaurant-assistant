@@ -140,6 +140,21 @@ export default function App() {
     sendMessage(prompt);
   }
 
+  // ─── Loading ──────────────────────────────────────────────
+  if (screen === 'main' && loading && messages.length === 0) {
+    return (
+      <div style={S.loadingScreen}>
+        <div style={S.spinner} />
+        <p style={S.loadingText}>
+          {lang === 'en' ? 'Loading menu...' : lang === 'de' ? 'Lade Menü...' : lang === 'es' ? 'Cargando carta...' : 'Caricamento menu...'}
+        </p>
+        <p style={S.loadingSubText}>
+          {lang === 'en' ? 'First start may take 30 seconds' : lang === 'es' ? 'El primer inicio puede tardar 30 segundos' : 'Il primo avvio può richiedere 30 secondi'}
+        </p>
+      </div>
+    );
+  }
+
   // ─── Lingua ───────────────────────────────────────────────
   if (screen === 'lang') {
     return (
@@ -303,6 +318,10 @@ export default function App() {
 // ─── Styles ───────────────────────────────────────────────
 const S: Record<string, React.CSSProperties> = {
   appWrap: { display: 'flex', flexDirection: 'column', height: '100dvh', background: '#0f0f1a', overflow: 'hidden' },
+  loadingScreen: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', gap: 16, background: '#0f0f1a' },
+  spinner: { width: 48, height: 48, border: '4px solid #2a2a4a', borderTop: '4px solid #e94560', borderRadius: '50%', animation: 'spin 1s linear infinite' },
+  loadingText: { fontSize: 18, fontWeight: 600, color: '#eaeaea' },
+  loadingSubText: { fontSize: 13, color: '#a8a8b3', textAlign: 'center', padding: '0 32px' },
 
   langScreen: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', gap: 32, padding: 24, background: 'linear-gradient(160deg, #0f0f1a 0%, #1a1a2e 100%)' },
   logoArea: { textAlign: 'center' },
