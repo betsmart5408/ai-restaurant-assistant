@@ -6,7 +6,7 @@ import {
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 const RESTAURANT_ID = import.meta.env.VITE_RESTAURANT_ID ?? '11111111-1111-1111-1111-111111111111';
 
-type Tab = 'today' | 'weekly' | 'inventory' | 'margins' | 'forecast';
+type Tab = 'today' | 'weekly' | 'inventory' | 'margins' | 'forecast' | 'menu';
 
 interface TodayData {
   orders_count: string;
@@ -21,6 +21,7 @@ interface StockAlert { ingredient_id: string; name: string; current_qty: number;
 interface MarginDish { id: string; name: string; price: number; cost: number; margin_pct: number; sold_last_30d: number; profit_last_30d: number; category: string; }
 interface ForecastItem { ingredient_id: string; name: string; unit: string; current_qty: number; avg_daily_consumption: number; days_until_empty: number | null; suggested_reorder_qty: number; risk_level: string; expiry_date: string | null; }
 interface PortionItem { dish_id: string; dish_name: string; category: string; limiting_ingredient: string; max_portions_possible: number; }
+interface Dish { id: string; name: string; description: string; price: number; category: string; available: boolean; }
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('today');
@@ -30,6 +31,9 @@ export default function App() {
   const [margins, setMargins] = useState<MarginDish[]>([]);
   const [forecast, setForecast] = useState<ForecastItem[]>([]);
   const [portions, setPortions] = useState<PortionItem[]>([]);
+  const [menu, setMenu] = useState<Dish[]>([]);
+  const [menuForm, setMenuForm] = useState<Partial<Dish> | null>(null);
+  const [menuSaving, setMenuSaving] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -51,6 +55,9 @@ export default function App() {
       } else if (t === 'margins') {
         const res = await fetch(`${API}/api/dashboard/${RESTAURANT_ID}/margins`);
         setMargins(await res.json());
+      } else if (t === 'menu') {
+        const res = await fetch(`${API}/api/menu/da-mario/dishes`);
+        setMenu(await res.json());
       } else if (t === 'forecast') {
         const [f, p] = await Promise.all([
           fetch(`${API}/api/forecast/${RESTAURANT_ID}`).then(r => r.json()),
@@ -82,6 +89,7 @@ export default function App() {
             ['inventory', '🥩 Magazzino'],
             ['margins', '💰 Margini'],
           ['forecast', '🔮 Forecast'],
+          ['menu', '📋 Menu'],
           ] as [Tab, string][]).map(([key, label]) => (
             <button
               key={key}
@@ -266,6 +274,94 @@ export default function App() {
           </div>
         )}
 
+        {/* ── MENU ─────────────────────────────────────────── */}
+        {tab === 'menu' && (
+          <div style={S.content}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h1 style={S.pageTitle}>Gestione Menu</h1>
+              <button style={S.btnPrimary} onClick={() => setMenuForm({ name: '', description: '', price: 0, category: 'primi', available: true })}>
+                + Aggiungi piatto
+              </button>
+            </div>
+
+            {menuForm !== null && (
+              <div style={S.formCard}>
+                <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
+                  {menuForm.id ? 'Modifica piatto' : 'Nuovo piatto'}
+                </h2>
+                <div style={S.formGrid}>
+                  <label style={S.formLabel}>Nome
+                    <input style={S.formInput} value={menuForm.name ?? ''} onChange={e => setMenuForm(f => ({ ...f, name: e.target.value }))} />
+                  </label>
+                  <label style={S.formLabel}>Categoria
+                    <select style={S.formInput} value={menuForm.category ?? 'primi'} onChange={e => setMenuForm(f => ({ ...f, category: e.target.value }))}>
+                      {['antipasti','primi','secondi','contorni','dolci','bevande'].map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </label>
+                  <label style={S.formLabel}>Prezzo (€)
+                    <input style={S.formInput} type="number" step="0.5" value={menuForm.price ?? 0} onChange={e => setMenuForm(f => ({ ...f, price: parseFloat(e.target.value) }))} />
+                  </label>
+                  <label style={S.formLabel}>Disponibile
+                    <select style={S.formInput} value={menuForm.available ? 'si' : 'no'} onChange={e => setMenuForm(f => ({ ...f, available: e.target.value === 'si' }))}>
+                      <option value="si">Sì</option>
+                      <option value="no">No</option>
+                    </select>
+                  </label>
+                </div>
+                <label style={{ ...S.formLabel, marginTop: 8 }}>Descrizione
+                  <textarea style={{ ...S.formInput, minHeight: 64, resize: 'vertical' }} value={menuForm.description ?? ''} onChange={e => setMenuForm(f => ({ ...f, description: e.target.value }))} />
+                </label>
+                <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                  <button style={S.btnPrimary} disabled={menuSaving} onClick={async () => {
+                    setMenuSaving(true);
+                    try {
+                      const method = menuForm.id ? 'PATCH' : 'POST';
+                      const url = menuForm.id
+                        ? `${API}/api/menu/da-mario/dishes/${menuForm.id}`
+                        : `${API}/api/menu/da-mario/dishes`;
+                      await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(menuForm) });
+                      setMenuForm(null);
+                      const res = await fetch(`${API}/api/menu/da-mario/dishes`);
+                      setMenu(await res.json());
+                    } finally {
+                      setMenuSaving(false);
+                    }
+                  }}>
+                    {menuSaving ? 'Salvataggio...' : 'Salva'}
+                  </button>
+                  <button style={S.btnSecondary} onClick={() => setMenuForm(null)}>Annulla</button>
+                </div>
+              </div>
+            )}
+
+            {['antipasti','primi','secondi','contorni','dolci','bevande'].map(cat => {
+              const dishes = menu.filter(d => d.category === cat);
+              if (dishes.length === 0) return null;
+              return (
+                <div key={cat}>
+                  <h2 style={{ ...S.sectionTitle, textTransform: 'capitalize' }}>{cat}</h2>
+                  <div style={S.table}>
+                    <div style={{ ...S.tableHeader, gridTemplateColumns: '2fr 2fr 1fr 1fr 1fr' }}>
+                      <span>Nome</span><span>Descrizione</span><span>Prezzo</span><span>Stato</span><span></span>
+                    </div>
+                    {dishes.map(d => (
+                      <div key={d.id} style={{ ...S.tableRow, gridTemplateColumns: '2fr 2fr 1fr 1fr 1fr' }}>
+                        <span style={{ fontWeight: 600 }}>{d.name}</span>
+                        <span style={{ color: '#64748b', fontSize: 13 }}>{d.description}</span>
+                        <span>€{parseFloat(String(d.price)).toFixed(2)}</span>
+                        <span style={{ color: d.available ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+                          {d.available ? '✓ Attivo' : '✗ Nascosto'}
+                        </span>
+                        <button style={S.btnEdit} onClick={() => setMenuForm({ ...d })}>Modifica</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* ── MARGINI ──────────────────────────────────────── */}
         {tab === 'margins' && (
           <div style={S.content}>
@@ -346,5 +442,28 @@ const S: Record<string, React.CSSProperties> = {
     display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr',
     padding: '12px 16px', borderTop: '1px solid #e2e8f0',
     fontSize: 14, color: '#1e293b', alignItems: 'center',
+  },
+  btnPrimary: {
+    background: '#6366f1', color: '#fff', border: 'none',
+    padding: '9px 18px', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+  },
+  btnSecondary: {
+    background: '#f1f5f9', color: '#1e293b', border: '1px solid #e2e8f0',
+    padding: '9px 18px', borderRadius: 8, fontSize: 14, cursor: 'pointer',
+  },
+  btnEdit: {
+    background: 'none', color: '#6366f1', border: '1px solid #6366f1',
+    padding: '5px 12px', borderRadius: 6, fontSize: 13, cursor: 'pointer',
+  },
+  formCard: {
+    background: '#fff', borderRadius: 12, padding: 24,
+    boxShadow: '0 1px 3px #0001', border: '1px solid #e2e8f0',
+  },
+  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 },
+  formLabel: { display: 'flex', flexDirection: 'column' as const, gap: 4, fontSize: 13, fontWeight: 600, color: '#475569' },
+  formInput: {
+    marginTop: 2, padding: '8px 10px', borderRadius: 6,
+    border: '1px solid #e2e8f0', fontSize: 14, color: '#1e293b',
+    fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const,
   },
 };
