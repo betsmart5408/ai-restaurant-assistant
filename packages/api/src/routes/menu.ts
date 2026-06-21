@@ -47,6 +47,31 @@ router.get('/:restaurantSlug', async (req, res) => {
   }
 });
 
+// POST /api/menu/translate-batch — traduce un array di descrizioni {id, text}
+router.post('/translate-batch', async (req, res) => {
+  try {
+    const { items, lang }: { items: { id: string; text: string }[]; lang: string } = req.body;
+    if (!items?.length || lang === 'es') return res.json(items.map(i => ({ id: i.id, translated: i.text })));
+    const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French' };
+    const client = new Anthropic();
+    const compact = items.map((item, idx) => `${idx}|${item.text}`).join('\n');
+    const msg = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: `Translate each line to ${langNames[lang] || 'English'}. Keep format INDEX|TRANSLATION exactly. One per line:\n\n${compact}` }],
+    });
+    const lines = (msg.content[0] as { text: string }).text.trim().split('\n');
+    const result = items.map((item, idx) => {
+      const line = lines.find(l => l.startsWith(`${idx}|`));
+      return { id: item.id, translated: line ? line.slice(line.indexOf('|') + 1) : item.text };
+    });
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Batch translation failed' });
+  }
+});
+
 // POST /api/menu/translate-desc — traduce una singola descrizione
 router.post('/translate-desc', async (req, res) => {
   try {

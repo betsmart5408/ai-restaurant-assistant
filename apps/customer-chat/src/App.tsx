@@ -75,12 +75,38 @@ export default function App() {
   const [selectedCat, setSelectedCat] = useState<string>('antipasti');
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
   const [translatedDesc, setTranslatedDesc] = useState<string | null>(null);
+  const [translatedDishes, setTranslatedDishes] = useState<Record<string, string>>({}); // dish.id -> translated desc
+  const [translatingCat, setTranslatingCat] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  // Traduce le descrizioni della categoria visibile
+  useEffect(() => {
+    if (lang === 'es' || screen !== 'main') return;
+    const catDishes = dishes.filter(d => d.category === selectedCat);
+    const toTranslate = catDishes.filter(d => d.description && !translatedDishes[d.id]);
+    if (toTranslate.length === 0) return;
+    setTranslatingCat(selectedCat);
+    fetch(`${API}/api/menu/translate-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: toTranslate.map(d => ({ id: d.id, text: d.description })), lang }),
+    })
+      .then(r => r.json())
+      .then((data: { id: string; translated: string }[]) => {
+        setTranslatedDishes(prev => {
+          const next = { ...prev };
+          for (const item of data) next[item.id] = item.translated;
+          return next;
+        });
+      })
+      .catch(() => {})
+      .finally(() => setTranslatingCat(null));
+  }, [selectedCat, screen, lang]);
 
   async function startSession(selectedLang: string) {
     setLang(selectedLang);
@@ -305,7 +331,7 @@ export default function App() {
                 style={selectedCat === c ? S.catPillActive : S.catPill}
                 onClick={() => setSelectedCat(c)}
               >
-                {CAT_ICONS[c]} {catLabel(c, lang)}
+                {CAT_ICONS[c]} {catLabel(c, lang)}{translatingCat === c ? ' ↻' : ''}
               </button>
             ))}
           </div>
@@ -317,7 +343,7 @@ export default function App() {
                 <div style={S.dishIcon}>{CAT_ICONS[dish.category]}</div>
                 <div style={S.dishInfo}>
                   <div style={S.dishName}>{dish.name}</div>
-                  <div style={S.dishDesc}>{dish.description}</div>
+                  <div style={S.dishDesc}>{translatedDishes[dish.id] ?? dish.description}</div>
                 </div>
                 <div style={S.dishPrice}>€{parseFloat(String(dish.price ?? 0)).toFixed(2)}</div>
               </button>
@@ -365,11 +391,8 @@ export default function App() {
             <div style={S.modalIcon}>{CAT_ICONS[selectedDish.category]}</div>
             <h2 style={S.modalTitle}>{selectedDish.name}</h2>
             <div style={S.modalPrice}>€{parseFloat(String(selectedDish.price ?? 0)).toFixed(2)}</div>
-            {(translatedDesc ?? selectedDish.description) && (
-              <p style={S.modalDesc}>
-                {translatedDesc ?? selectedDish.description}
-                {!translatedDesc && lang !== 'es' && <span style={{ opacity: 0.4, fontSize: 11 }}> ↻</span>}
-              </p>
+            {(translatedDishes[selectedDish.id] ?? selectedDish.description) && (
+              <p style={S.modalDesc}>{translatedDishes[selectedDish.id] ?? selectedDish.description}</p>
             )}
             <button style={S.modalAskBtn} onClick={() => askAboutDish(selectedDish)}>
               💬 {lang === 'en' ? 'Ask the AI about this dish' : lang === 'de' ? 'KI fragen' : lang === 'es' ? 'Preguntar al asistente' : 'Chiedi all\'assistente AI'}
