@@ -1,0 +1,7 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f8fafc; --surface: #ffffff; --accent: #6366f1;
+  --text: #1e293b; --text2: #64748b; --border: #e2e8f0;
+  --success: #22c55e; --warning: #f59e0b; --danger: #ef4444;
+}
+body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }

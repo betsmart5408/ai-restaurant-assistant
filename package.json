@@ -1,0 +1,22 @@
+{
+  "name": "ai-restaurant-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=packages/api\" \"npm run dev --workspace=apps/customer-chat\" \"npm run dev --workspace=apps/owner-dashboard\"",
+    "dev:api": "npm run dev --workspace=packages/api",
+    "dev:chat": "npm run dev --workspace=apps/customer-chat",
+    "dev:dashboard": "npm run dev --workspace=apps/owner-dashboard",
+    "dev:kitchen": "npm run dev --workspace=apps/kitchen-display",
+    "db:migrate": "npm run migrate --workspace=packages/api",
+    "db:seed": "npm run seed --workspace=packages/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.2"
+  }
+}
