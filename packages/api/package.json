@@ -16,6 +16,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^18.19.130",
     "@types/pdfkit": "^0.17.6",
+    "@types/pg": "^8.11.10",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -31,7 +32,6 @@
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
-    "@types/pg": "^8.11.10",
     "@types/uuid": "^10.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
