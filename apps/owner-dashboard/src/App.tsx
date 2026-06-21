@@ -323,7 +323,7 @@ export default function App() {
                   </label>
                   <label style={S.formLabel}>Categoria
                     <select style={S.formInput} value={menuForm.category ?? 'primi'} onChange={e => setMenuForm(f => ({ ...f, category: e.target.value }))}>
-                      {['antipasti','primi','secondi','contorni','dolci','bevande'].map(c => <option key={c} value={c}>{c}</option>)}
+                      {['antipasti','pizze','primi','secondi','contorni','dolci','cocktails','spirits','birre','vini','soft_drinks'].map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </label>
                   <label style={S.formLabel}>Prezzo (€)
@@ -362,7 +362,7 @@ export default function App() {
               </div>
             )}
 
-            {['antipasti','primi','secondi','contorni','dolci','bevande'].map(cat => {
+            {['antipasti','pizze','primi','secondi','contorni','dolci','cocktails','spirits','birre','vini','soft_drinks'].map(cat => {
               const dishes = menu.filter(d => d.category === cat);
               if (dishes.length === 0) return null;
               return (
