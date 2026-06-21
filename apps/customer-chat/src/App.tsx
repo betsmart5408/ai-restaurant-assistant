@@ -50,6 +50,7 @@ export default function App() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [selectedCat, setSelectedCat] = useState<string>('antipasti');
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -58,15 +59,16 @@ export default function App() {
 
   async function startSession(selectedLang: string) {
     setLang(selectedLang);
-    setScreen('main');
+    setStartError(null);
     setLoading(true);
     try {
       // Carica menu
       const menuRes = await fetch(`${API}/api/menu/${params.restaurant}/dishes`);
+      if (!menuRes.ok) throw new Error(`Menu ${menuRes.status}`);
       const menuData: Dish[] = await menuRes.json();
-      setDishes(menuData.filter(d => d.available));
-
-      const firstCat = CAT_ORDER.find(c => menuData.some(d => d.category === c)) ?? 'antipasti';
+      const available = menuData.filter(d => d.available);
+      setDishes(available);
+      const firstCat = CAT_ORDER.find(c => available.some(d => d.category === c)) ?? available[0]?.category ?? 'antipasti';
       setSelectedCat(firstCat);
 
       // Avvia sessione chat
@@ -75,11 +77,13 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ restaurant_slug: params.restaurant, table_number: params.table, language: selectedLang }),
       });
+      if (!res.ok) throw new Error(`Session ${res.status}`);
       const data = await res.json();
       setSessionId(data.session_id);
       setMessages([{ role: 'assistant', content: data.welcome_message, timestamp: new Date().toISOString() }]);
-    } catch {
-      setMessages([{ role: 'assistant', content: '⚠️ Connessione non disponibile. Riprova.', timestamp: new Date().toISOString() }]);
+      setScreen('main');
+    } catch (err) {
+      setStartError(String(err));
     } finally {
       setLoading(false);
     }
@@ -140,23 +144,21 @@ export default function App() {
     sendMessage(prompt);
   }
 
-  // ─── Loading ──────────────────────────────────────────────
-  if (screen === 'main' && loading && messages.length === 0) {
-    return (
-      <div style={S.loadingScreen}>
-        <div style={S.spinner} />
-        <p style={S.loadingText}>
-          {lang === 'en' ? 'Loading menu...' : lang === 'de' ? 'Lade Menü...' : lang === 'es' ? 'Cargando carta...' : 'Caricamento menu...'}
-        </p>
-        <p style={S.loadingSubText}>
-          {lang === 'en' ? 'First start may take 30 seconds' : lang === 'es' ? 'El primer inicio puede tardar 30 segundos' : 'Il primo avvio può richiedere 30 secondi'}
-        </p>
-      </div>
-    );
-  }
-
-  // ─── Lingua ───────────────────────────────────────────────
+  // ─── Lingua / Loading / Errore ────────────────────────────
   if (screen === 'lang') {
+    if (loading) {
+      return (
+        <div style={S.loadingScreen}>
+          <div style={S.spinner} />
+          <p style={S.loadingText}>
+            {lang === 'en' ? 'Loading menu...' : lang === 'de' ? 'Lade Menü...' : lang === 'es' ? 'Cargando carta...' : 'Caricamento menu...'}
+          </p>
+          <p style={S.loadingSubText}>
+            {lang === 'es' ? 'El primer inicio puede tardar 30 segundos' : 'Il primo avvio può richiedere 30 secondi'}
+          </p>
+        </div>
+      );
+    }
     return (
       <div style={S.langScreen}>
         <div style={S.logoArea}>
@@ -164,6 +166,12 @@ export default function App() {
           <h1 style={S.logoTitle}>Benvenuto</h1>
           <p style={S.logoSub}>Scegli la tua lingua / Choose your language</p>
         </div>
+        {startError && (
+          <div style={S.errorBox}>
+            ⚠️ Connessione lenta. Riprova.
+            <br /><span style={{ fontSize: 11, opacity: 0.6 }}>{startError}</span>
+          </div>
+        )}
         <div style={S.langGrid}>
           {LANG_OPTIONS.map(opt => (
             <button key={opt.code} style={S.langBtn} onClick={() => startSession(opt.code)}>{opt.label}</button>
@@ -322,6 +330,7 @@ const S: Record<string, React.CSSProperties> = {
   spinner: { width: 48, height: 48, border: '4px solid #2a2a4a', borderTop: '4px solid #e94560', borderRadius: '50%', animation: 'spin 1s linear infinite' },
   loadingText: { fontSize: 18, fontWeight: 600, color: '#eaeaea' },
   loadingSubText: { fontSize: 13, color: '#a8a8b3', textAlign: 'center', padding: '0 32px' },
+  errorBox: { background: '#2a1a1a', border: '1px solid #e94560', color: '#e94560', borderRadius: 10, padding: '12px 16px', fontSize: 14, textAlign: 'center', maxWidth: 320, width: '100%' },
 
   langScreen: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', gap: 32, padding: 24, background: 'linear-gradient(160deg, #0f0f1a 0%, #1a1a2e 100%)' },
   logoArea: { textAlign: 'center' },
