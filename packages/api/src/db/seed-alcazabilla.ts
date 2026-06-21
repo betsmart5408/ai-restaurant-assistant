@@ -127,6 +127,12 @@ async function seed() {
       { name: 'Pizza al Monte', desc: 'Mozzarella, seta porcino, champiñones, salsiccia, salsa de trufa negra italiana y escamas de parmesano', price: 16.00, cat: 'pizze' },
       { name: 'Pizza La Porcina', desc: 'Mozzarella, setas porcini, salsiccia, pancetta, parmesano, albahaca y aceite de oliva', price: 14.00, cat: 'pizze' },
 
+      // ─── DOLCI ───
+      { name: 'Tiramisù', desc: 'Crema a strati servita in un bicchiere, cosparsa di cacao', price: 7.00, cat: 'dolci' },
+      { name: 'Pan di Stelle', desc: 'Postre en capas de crema y cacao con galleta Pan di Stelle', price: 8.00, cat: 'dolci' },
+      { name: 'Cannolo Siciliano', desc: 'Canutillo crujiente relleno de crema de ricotta, terminado con chocolate y azúcar glas', price: 8.00, cat: 'dolci' },
+      { name: 'Delizia al Limone', desc: 'Bizcocho esponjoso relleno y cubierto de crema de limón', price: 8.00, cat: 'dolci' },
+
       // ─── COCKTAILS ───
       { name: 'Aperol Spritz', desc: 'Aperol, cava, soda', price: 7.00, cat: 'cocktails' },
       { name: 'Hugo Spritz', desc: 'St. Germain, cava, soda', price: 8.00, cat: 'cocktails' },
