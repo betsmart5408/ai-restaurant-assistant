@@ -1,4 +1,20 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Component, ReactNode } from 'react';
+
+export class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(e: Error) { return { error: e.message }; }
+  render() {
+    if (this.state.error) return (
+      <div style={{ padding: 32, color: '#e94560', background: '#0f0f1a', minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+        <div style={{ fontSize: 48 }}>⚠️</div>
+        <div style={{ fontWeight: 700, fontSize: 18, color: '#eaeaea' }}>Errore inatteso</div>
+        <div style={{ fontSize: 13, color: '#a8a8b3', textAlign: 'center' }}>{this.state.error}</div>
+        <button onClick={() => window.location.reload()} style={{ padding: '12px 24px', background: '#e94560', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, cursor: 'pointer' }}>Ricarica</button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 
@@ -263,7 +279,7 @@ export default function App() {
                   <div style={S.dishName}>{dish.name}</div>
                   <div style={S.dishDesc}>{dish.description}</div>
                 </div>
-                <div style={S.dishPrice}>€{dish.price.toFixed(2)}</div>
+                <div style={S.dishPrice}>€{(dish.price ?? 0).toFixed(2)}</div>
               </button>
             ))}
           </div>
@@ -308,7 +324,7 @@ export default function App() {
           <div style={S.modalBox} onClick={e => e.stopPropagation()}>
             <div style={S.modalIcon}>{CAT_ICONS[selectedDish.category]}</div>
             <h2 style={S.modalTitle}>{selectedDish.name}</h2>
-            <div style={S.modalPrice}>€{selectedDish.price.toFixed(2)}</div>
+            <div style={S.modalPrice}>€{(selectedDish.price ?? 0).toFixed(2)}</div>
             {selectedDish.description && (
               <p style={S.modalDesc}>{selectedDish.description}</p>
             )}
