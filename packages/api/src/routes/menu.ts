@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db/client';
+import Anthropic from '@anthropic-ai/sdk';
 
 const router = Router();
 
@@ -43,6 +44,63 @@ router.get('/:restaurantSlug', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/menu/:restaurantSlug/dishes/translated?lang=XX — menu tradotto
+router.get('/:restaurantSlug/dishes/translated', async (req, res) => {
+  try {
+    const { restaurantSlug } = req.params;
+    const lang = (req.query.lang as string) || 'es';
+
+    const result = await db.query(
+      `SELECT d.id, d.name, d.description, d.price, d.category, d.available
+       FROM dishes d
+       JOIN restaurants r ON r.id = d.restaurant_id
+       WHERE r.slug = $1 AND d.available = true
+       ORDER BY d.category, d.name`,
+      [restaurantSlug]
+    );
+    const dishes = result.rows;
+
+    if (lang === 'es' || dishes.length === 0) {
+      return res.json(dishes);
+    }
+
+    const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French' };
+    const targetLang = langNames[lang] || 'English';
+
+    // Batch translate descriptions with Claude
+    const client = new Anthropic();
+    const compact = dishes.map((d, i) => `${i}|${d.description || ''}`).join('\n');
+    const msg = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: `Translate each dish description below to ${targetLang}. Keep the same format: INDEX|TRANSLATED_DESCRIPTION. One per line. Do not change dish names or prices. If description is empty, return INDEX| (empty after pipe).\n\n${compact}`,
+      }],
+    });
+
+    const translated = (msg.content[0] as { text: string }).text.trim().split('\n');
+    const descMap: Record<number, string> = {};
+    for (const line of translated) {
+      const pipe = line.indexOf('|');
+      if (pipe !== -1) {
+        const idx = parseInt(line.slice(0, pipe));
+        if (!isNaN(idx)) descMap[idx] = line.slice(pipe + 1);
+      }
+    }
+
+    const translatedDishes = dishes.map((d, i) => ({
+      ...d,
+      description: descMap[i] !== undefined ? descMap[i] : d.description,
+    }));
+
+    res.json(translatedDishes);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Translation failed' });
   }
 });
 

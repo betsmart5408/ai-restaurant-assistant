@@ -41,11 +41,19 @@ const LANG_OPTIONS = [
   { code: 'es', label: '🇪🇸 Español' },
 ];
 
-const CAT_LABELS: Record<string, string> = {
-  antipasti: 'Antipasti', pizze: 'Pizze', primi: 'Primi Piatti',
-  secondi: 'Secondi', dolci: 'Dolci', cocktails: 'Cocktails',
-  spirits: 'Spirits & Liquori', birre: 'Birre', vini: 'Vini', soft_drinks: 'Analcolici',
+const CAT_LABELS: Record<string, Record<string, string>> = {
+  antipasti: { it: 'Antipasti', en: 'Starters', de: 'Vorspeisen', es: 'Entrantes' },
+  pizze:     { it: 'Pizze', en: 'Pizzas', de: 'Pizzen', es: 'Pizzas' },
+  primi:     { it: 'Primi Piatti', en: 'Pasta & Risotto', de: 'Erste Gänge', es: 'Primeros Platos' },
+  secondi:   { it: 'Secondi', en: 'Main Courses', de: 'Hauptgerichte', es: 'Segundos Platos' },
+  dolci:     { it: 'Dolci', en: 'Desserts', de: 'Desserts', es: 'Postres' },
+  cocktails: { it: 'Cocktails', en: 'Cocktails', de: 'Cocktails', es: 'Cócteles' },
+  spirits:   { it: 'Spirits & Liquori', en: 'Spirits & Liqueurs', de: 'Spirituosen', es: 'Licores & Spirits' },
+  birre:     { it: 'Birre', en: 'Beers', de: 'Biere', es: 'Cervezas' },
+  vini:      { it: 'Vini', en: 'Wines', de: 'Weine', es: 'Vinos' },
+  soft_drinks: { it: 'Analcolici', en: 'Soft Drinks', de: 'Alkoholfrei', es: 'Refrescos' },
 };
+function catLabel(cat: string, lang: string) { return CAT_LABELS[cat]?.[lang] ?? CAT_LABELS[cat]?.['it'] ?? cat; }
 const CAT_ICONS: Record<string, string> = {
   antipasti: '🥗', pizze: '🍕', primi: '🍝', secondi: '🥩',
   dolci: '🍮', cocktails: '🍹', spirits: '🥃', birre: '🍺', vini: '🍷', soft_drinks: '🥤',
@@ -78,8 +86,8 @@ export default function App() {
     setStartError(null);
     setLoading(true);
     try {
-      // Carica menu
-      const menuRes = await fetch(`${API}/api/menu/${params.restaurant}/dishes`);
+      // Carica menu tradotto
+      const menuRes = await fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=${selectedLang}`);
       if (!menuRes.ok) throw new Error(`Menu ${menuRes.status}`);
       const menuData: Dish[] = await menuRes.json();
       const available = menuData.filter(d => d.available);
@@ -265,7 +273,7 @@ export default function App() {
                 style={selectedCat === c ? S.catPillActive : S.catPill}
                 onClick={() => setSelectedCat(c)}
               >
-                {CAT_ICONS[c]} {CAT_LABELS[c] ?? c}
+                {CAT_ICONS[c]} {catLabel(c, lang)}
               </button>
             ))}
           </div>
