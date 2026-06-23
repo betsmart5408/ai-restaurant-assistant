@@ -54,7 +54,7 @@ router.post('/translate-batch', async (req, res) => {
   try {
     const { items, lang }: { items: { id: string; text: string }[]; lang: string } = req.body;
     if (!items?.length || lang === 'es') return res.json(items.map(i => ({ id: i.id, translated: i.text })));
-    const langNames: Record<string, string> = { en: 'English', de: 'German', fr: 'French', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese (Simplified)', ja: 'Japanese', ar: 'Arabic', es: 'Spanish' };
+    const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese (Simplified)', ja: 'Japanese', ar: 'Arabic' };
     const compact = items.map((item, idx) => `${idx}|${item.text}`).join('\n');
     const msg = await groq.chat.completions.create({
       model: 'llama-3.1-8b-instant',

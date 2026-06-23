@@ -133,31 +133,10 @@ export default function App() {
   const recognitionRef = useRef<any>(null);
   const checkInTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Carica preferenze e sessione salvata al primo render
+  // Carica preferenze salvate al primo render
   useEffect(() => {
     const prefs = loadPrefs(params.restaurant);
     if (prefs?.groupSize) setGroupSize(prefs.groupSize);
-
-    const saved = loadSession(params.restaurant, params.table);
-    if (saved) {
-      setSessionId(saved.sessionId);
-      setLang(saved.lang);
-      setMessages(saved.messages);
-      setAlreadyOrdered(saved.alreadyOrdered);
-      setJoinedExisting(saved.joinedExisting);
-      setOrderConfirmed(saved.orderConfirmed);
-      // Carica il menu in background
-      fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=${saved.lang}`)
-        .then(r => r.json())
-        .then((menuData: Dish[]) => {
-          const available = menuData.filter((d: Dish) => d.available);
-          setDishes(available);
-          const firstCat = CAT_ORDER.find(c => available.some((d: Dish) => d.category === c)) ?? 'antipasti';
-          setSelectedCat(firstCat);
-          setScreen('main');
-        })
-        .catch(() => clearSession(params.restaurant, params.table));
-    }
   }, []);
 
   // Salva sessione in localStorage ad ogni cambio messaggi
@@ -204,6 +183,30 @@ export default function App() {
     setStartError(null);
     setLoading(true);
     savePrefs(params.restaurant, { allergies: '', groupSize });
+
+    // Recupera sessione salvata se la lingua coincide
+    const saved = loadSession(params.restaurant, params.table);
+    if (saved && saved.lang === selectedLang) {
+      try {
+        const menuRes = await fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=${selectedLang}`);
+        if (menuRes.ok) {
+          const menuData: Dish[] = await menuRes.json();
+          const available = menuData.filter(d => d.available);
+          setDishes(available);
+          const firstCat = CAT_ORDER.find(c => available.some(d => d.category === c)) ?? 'antipasti';
+          setSelectedCat(firstCat);
+          setSessionId(saved.sessionId);
+          setMessages(saved.messages);
+          setAlreadyOrdered(saved.alreadyOrdered);
+          setJoinedExisting(saved.joinedExisting);
+          setOrderConfirmed(saved.orderConfirmed);
+          setScreen('main');
+          setLoading(false);
+          return;
+        }
+      } catch { /* fallback a nuova sessione */ }
+    }
+
     try {
       const savedPrefs = loadPrefs(params.restaurant);
       const [menuRes, sessionRes] = await Promise.all([
@@ -435,10 +438,11 @@ export default function App() {
                   key={opt.code}
                   style={lang === opt.code ? S.langPickerBtnActive : S.langPickerBtn}
                   onClick={() => {
-                    if (sessionId) {
-                      saveSession(params.restaurant, params.table, { sessionId, lang: opt.code, messages, alreadyOrdered, joinedExisting, orderConfirmed });
-                    }
-                    window.location.reload();
+                    if (sessionId) saveSession(params.restaurant, params.table, { sessionId, lang: opt.code, messages, alreadyOrdered, joinedExisting, orderConfirmed });
+                    setShowLangPicker(false);
+                    setScreen('lang');
+                    setLang(opt.code);
+                    setTranslatedDishes({});
                   }}
                 >
                   {opt.label}
