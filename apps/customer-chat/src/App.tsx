@@ -261,7 +261,7 @@ export default function App() {
       const res = await fetch(`${API}/api/chat/${sessionId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg }),
+        body: JSON.stringify({ message: msg, language: lang }),
       });
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.message, timestamp: new Date().toISOString() }]);
@@ -422,7 +422,9 @@ export default function App() {
     <div style={S.appWrap}>
       {/* Header */}
       <header style={S.header}>
-        <button style={S.backBtn} onClick={() => setShowLangPicker(true)}>🌐</button>
+        <button style={S.backBtn} onClick={() => setShowLangPicker(true)} title="Cambia lingua">
+          {LANG_OPTIONS.find(o => o.code === lang)?.label.split(' ')[0] ?? '🌐'}
+        </button>
         <img src="/logo.png" alt="Gusto" style={S.headerLogo} />
         <div style={S.headerSub2}>Tavolo {params.table}</div>
         {orderConfirmed && <span style={S.orderBadge}>{t('ordered', lang)}</span>}

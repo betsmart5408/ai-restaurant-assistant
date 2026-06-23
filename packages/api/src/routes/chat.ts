@@ -130,7 +130,7 @@ router.post('/session', async (req, res) => {
 router.post('/:sessionId/message', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { message } = req.body;
+    const { message, language } = req.body;
 
     const session = await db.query(
       `SELECT cs.id, cs.language, cs.messages, cs.restaurant_id, cs.table_id,
@@ -154,7 +154,7 @@ router.post('/:sessionId/message', async (req, res) => {
         restaurantId: s.restaurant_id,
         restaurantName: s.restaurant_name,
         tableNumber: s.table_number,
-        language: s.language,
+        language: language || s.language,
         conversationHistory: history,
         existingOrders,
       },
