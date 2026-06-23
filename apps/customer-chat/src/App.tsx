@@ -136,7 +136,7 @@ export default function App() {
 
   // Traduce le descrizioni della categoria visibile
   useEffect(() => {
-    if (lang === 'es' || screen !== 'main') return;
+    if (lang === 'it' || screen !== 'main') return;
     const catDishes = dishes.filter(d => d.category === selectedCat);
     const toTranslate = catDishes.filter(d => d.description && !translatedDishes[d.id]);
     if (toTranslate.length === 0) return;
