@@ -109,40 +109,8 @@ router.get('/:restaurantSlug/dishes/translated', async (req, res) => {
     );
     const dishes = result.rows;
 
-    if (lang === 'es' || dishes.length === 0) {
-      return res.json(dishes);
-    }
-
-    const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French' };
-    const targetLang = langNames[lang] || 'English';
-
-    const compact = dishes.map((d, i) => `${i}|${d.description || ''}`).join('\n');
-    const msg = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      max_tokens: 4096,
-      temperature: 0.1,
-      messages: [{
-        role: 'user',
-        content: `Translate each dish description below to ${targetLang}. Keep the same format: INDEX|TRANSLATED_DESCRIPTION. One per line. Do not change dish names or prices. If description is empty, return INDEX| (empty after pipe).\n\n${compact}`,
-      }],
-    });
-
-    const translated = (msg.choices[0]?.message?.content ?? '').trim().split('\n');
-    const descMap: Record<number, string> = {};
-    for (const line of translated) {
-      const pipe = line.indexOf('|');
-      if (pipe !== -1) {
-        const idx = parseInt(line.slice(0, pipe));
-        if (!isNaN(idx)) descMap[idx] = line.slice(pipe + 1);
-      }
-    }
-
-    const translatedDishes = dishes.map((d, i) => ({
-      ...d,
-      description: descMap[i] !== undefined ? descMap[i] : d.description,
-    }));
-
-    res.json(translatedDishes);
+    // Restituisce il menu in originale — le traduzioni avvengono on-demand per categoria via /translate-batch
+    res.json(dishes);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Translation failed' });
