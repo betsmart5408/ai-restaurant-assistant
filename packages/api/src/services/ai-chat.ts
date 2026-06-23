@@ -164,7 +164,7 @@ function buildSystemPrompt(
   const time = getTimeContext();
   const menuJson = JSON.stringify(dishes.map(d => ({
     id: d.id, name: d.name, price: d.price, category: d.category,
-    description: d.description, allergens: d.allergens,
+    allergens: d.allergens,
   })));
 
   const promos: string[] = [];
