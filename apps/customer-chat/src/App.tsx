@@ -48,19 +48,42 @@ const LANG_OPTIONS = [
   { code: 'en', label: '🇬🇧 English' },
   { code: 'de', label: '🇩🇪 Deutsch' },
   { code: 'es', label: '🇪🇸 Español' },
+  { code: 'fr', label: '🇫🇷 Français' },
+  { code: 'pt', label: '🇵🇹 Português' },
+  { code: 'ru', label: '🇷🇺 Русский' },
+  { code: 'zh', label: '🇨🇳 中文' },
+  { code: 'ja', label: '🇯🇵 日本語' },
+  { code: 'ar', label: '🇸🇦 العربية' },
 ];
 
+const UI: Record<string, Record<string, string>> = {
+  menu:        { it: 'Menu', en: 'Menu', de: 'Speisekarte', es: 'Carta', fr: 'Menu', pt: 'Menu', ru: 'Меню', zh: '菜单', ja: 'メニュー', ar: 'قائمة' },
+  assistant:   { it: 'Assistente', en: 'Assistant', de: 'Assistent', es: 'Asistente', fr: 'Assistant', pt: 'Assistente', ru: 'Ассистент', zh: '助手', ja: 'アシスタント', ar: 'مساعد' },
+  write:       { it: 'Scrivi un messaggio...', en: 'Write a message...', de: 'Nachricht...', es: 'Escribe...', fr: 'Écris un message...', pt: 'Escreva...', ru: 'Написать...', zh: '输入消息...', ja: 'メッセージを入力...', ar: 'اكتب رسالة...' },
+  listening:   { it: '🎤 Sto ascoltando...', en: '🎤 Listening...', de: '🎤 Ich höre zu...', es: '🎤 Escuchando...', fr: '🎤 J\'écoute...', pt: '🎤 Ouvindo...', ru: '🎤 Слушаю...', zh: '🎤 正在聆听...', ja: '🎤 聞いています...', ar: '🎤 أستمع...' },
+  confirm:     { it: '📋 Conferma ordine', en: '📋 Confirm order', de: '📋 Bestellung bestätigen', es: '📋 Confirmar pedido', fr: '📋 Confirmer la commande', pt: '📋 Confirmar pedido', ru: '📋 Подтвердить заказ', zh: '📋 确认订单', ja: '📋 注文確認', ar: '📋 تأكيد الطلب' },
+  modify:      { it: 'Modifica', en: 'Modify', de: 'Ändern', es: 'Modificar', fr: 'Modifier', pt: 'Modificar', ru: 'Изменить', zh: '修改', ja: '修正', ar: 'تعديل' },
+  confirmBtn:  { it: 'Conferma ✓', en: 'Confirm ✓', de: 'Bestätigen ✓', es: 'Confirmar ✓', fr: 'Confirmer ✓', pt: 'Confirmar ✓', ru: 'Подтвердить ✓', zh: '确认 ✓', ja: '確認 ✓', ar: 'تأكيد ✓' },
+  ordered:     { it: '✓ Ordinato', en: '✓ Ordered', de: '✓ Bestellt', es: '✓ Pedido', fr: '✓ Commandé', pt: '✓ Pedido', ru: '✓ Заказано', zh: '✓ 已点', ja: '✓ 注文済', ar: '✓ تم الطلب' },
+  orderOk:     { it: '✅ Ordine ricevuto! Buon appetito!', en: '✅ Order received! Enjoy!', de: '✅ Bestellung erhalten! Guten Appetit!', es: '✅ ¡Pedido recibido! ¡Que lo disfruten!', fr: '✅ Commande reçue ! Bon appétit !', pt: '✅ Pedido recebido! Bom apetite!', ru: '✅ Заказ принят! Приятного аппетита!', zh: '✅ 订单已收到！请慢用！', ja: '✅ ご注文を承りました！どうぞ！', ar: '✅ تم استلام طلبك! بالهناء!' },
+  askMarco:    { it: 'Chiedi a Marco', en: 'Ask Marco', de: 'Marco fragen', es: 'Preguntar a Marco', fr: 'Demander à Marco', pt: 'Perguntar ao Marco', ru: 'Спросить Марко', zh: '询问Marco', ja: 'Marcoに聞く', ar: 'اسأل Marco' },
+  addOrder:    { it: "Aggiungi all'ordine", en: 'Add to order', de: 'Bestellen', es: 'Pedir', fr: 'Commander', pt: 'Adicionar', ru: 'Добавить', zh: '加入订单', ja: '注文に追加', ar: 'أضف للطلب' },
+  sharedTable: { it: 'Sessione tavolo condivisa', en: 'Shared table', de: 'Gemeinsamer Tisch', es: 'Mesa compartida', fr: 'Table partagée', pt: 'Mesa compartilhada', ru: 'Общий стол', zh: '共享桌台', ja: 'テーブル共有', ar: 'طاولة مشتركة' },
+  alreadyOrd:  { it: 'Già ordinato', en: 'Already ordered', de: 'Bereits bestellt', es: 'Ya pedido', fr: 'Déjà commandé', pt: 'Já pedido', ru: 'Уже заказано', zh: '已点', ja: '注文済み', ar: 'تم الطلب' },
+};
+function t(key: string, lang: string) { return UI[key]?.[lang] ?? UI[key]?.['it'] ?? key; }
+
 const CAT_LABELS: Record<string, Record<string, string>> = {
-  antipasti: { it: 'Antipasti', en: 'Starters', de: 'Vorspeisen', es: 'Entrantes' },
-  pizze:     { it: 'Pizze', en: 'Pizzas', de: 'Pizzen', es: 'Pizzas' },
-  primi:     { it: 'Primi Piatti', en: 'Pasta & Risotto', de: 'Erste Gänge', es: 'Primeros Platos' },
-  secondi:   { it: 'Secondi', en: 'Main Courses', de: 'Hauptgerichte', es: 'Segundos Platos' },
-  dolci:     { it: 'Dolci', en: 'Desserts', de: 'Desserts', es: 'Postres' },
-  cocktails: { it: 'Cocktails', en: 'Cocktails', de: 'Cocktails', es: 'Cócteles' },
-  spirits:   { it: 'Spirits & Liquori', en: 'Spirits & Liqueurs', de: 'Spirituosen', es: 'Licores & Spirits' },
-  birre:     { it: 'Birre', en: 'Beers', de: 'Biere', es: 'Cervezas' },
-  vini:      { it: 'Vini', en: 'Wines', de: 'Weine', es: 'Vinos' },
-  soft_drinks: { it: 'Analcolici', en: 'Soft Drinks', de: 'Alkoholfrei', es: 'Refrescos' },
+  antipasti:   { it: 'Antipasti', en: 'Starters', de: 'Vorspeisen', es: 'Entrantes', fr: 'Entrées', pt: 'Entradas', ru: 'Закуски', zh: '前菜', ja: '前菜', ar: 'مقبلات' },
+  pizze:       { it: 'Pizze', en: 'Pizzas', de: 'Pizzen', es: 'Pizzas', fr: 'Pizzas', pt: 'Pizzas', ru: 'Пиццы', zh: '披萨', ja: 'ピザ', ar: 'بيتزا' },
+  primi:       { it: 'Primi Piatti', en: 'Pasta & Risotto', de: 'Erste Gänge', es: 'Primeros Platos', fr: 'Pâtes & Risotto', pt: 'Massas', ru: 'Паста', zh: '主食', ja: 'パスタ', ar: 'معكرونة' },
+  secondi:     { it: 'Secondi', en: 'Main Courses', de: 'Hauptgerichte', es: 'Segundos Platos', fr: 'Plats Principaux', pt: 'Pratos Principais', ru: 'Основные', zh: '主菜', ja: 'メイン', ar: 'أطباق رئيسية' },
+  dolci:       { it: 'Dolci', en: 'Desserts', de: 'Desserts', es: 'Postres', fr: 'Desserts', pt: 'Sobremesas', ru: 'Десерты', zh: '甜点', ja: 'デザート', ar: 'حلويات' },
+  cocktails:   { it: 'Cocktails', en: 'Cocktails', de: 'Cocktails', es: 'Cócteles', fr: 'Cocktails', pt: 'Cocktails', ru: 'Коктейли', zh: '鸡尾酒', ja: 'カクテル', ar: 'كوكتيل' },
+  spirits:     { it: 'Spirits & Liquori', en: 'Spirits & Liqueurs', de: 'Spirituosen', es: 'Licores', fr: 'Spiritueux', pt: 'Destilados', ru: 'Спиртное', zh: '烈酒', ja: 'スピリッツ', ar: 'مشروبات روحية' },
+  birre:       { it: 'Birre', en: 'Beers', de: 'Biere', es: 'Cervezas', fr: 'Bières', pt: 'Cervejas', ru: 'Пиво', zh: '啤酒', ja: 'ビール', ar: 'بيرة' },
+  vini:        { it: 'Vini', en: 'Wines', de: 'Weine', es: 'Vinos', fr: 'Vins', pt: 'Vinhos', ru: 'Вина', zh: '葡萄酒', ja: 'ワイン', ar: 'نبيذ' },
+  soft_drinks: { it: 'Analcolici', en: 'Soft Drinks', de: 'Alkoholfrei', es: 'Refrescos', fr: 'Sans Alcool', pt: 'Refrigerantes', ru: 'Безалкогольные', zh: '软饮', ja: 'ソフトドリンク', ar: 'مشروبات خفيفة' },
 };
 function catLabel(cat: string, lang: string) { return CAT_LABELS[cat]?.[lang] ?? CAT_LABELS[cat]?.['it'] ?? cat; }
 const CAT_ICONS: Record<string, string> = {
@@ -172,6 +195,7 @@ export default function App() {
       setSelectedCat(firstCat);
       setSessionId(sessionData.session_id);
       setMessages([{ role: 'assistant', content: sessionData.welcome_message, timestamp: new Date().toISOString() }]);
+
       setSuggestions(sessionData.suggestions ?? []);
       setJoinedExisting(sessionData.joined_existing ?? false);
       setAlreadyOrdered(sessionData.already_ordered ?? '');
@@ -221,16 +245,14 @@ export default function App() {
       setScreen('main');
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: lang === 'de' ? '✅ Bestellung erhalten! Genießen Sie Ihren Abend!' : lang === 'en' ? '✅ Order received! Enjoy your evening!' : lang === 'es' ? '✅ ¡Pedido recibido! ¡Que lo disfruten!' : '✅ Ordine ricevuto! Buon appetito!',
+        content: t('orderOk', lang),
         timestamp: new Date().toISOString(),
       }]);
       // Check-in automatico dopo 8 minuti
       if (checkInTimerRef.current) clearTimeout(checkInTimerRef.current);
       checkInTimerRef.current = setTimeout(() => {
-        const checkIn = lang === 'en' ? 'How is everything going? Can I bring you anything else?'
-          : lang === 'de' ? 'Wie läuft alles? Kann ich Ihnen noch etwas bringen?'
-          : lang === 'es' ? '¿Cómo va todo? ¿Puedo traerles algo más?'
-          : 'Come va tutto? Posso portarvi qualcos\'altro?';
+        const checkIns: Record<string, string> = { it: "Come va tutto? Posso portarvi qualcos'altro?", en: 'How is everything going? Can I bring you anything else?', de: 'Wie läuft alles? Kann ich Ihnen noch etwas bringen?', es: '¿Cómo va todo? ¿Puedo traerles algo más?', fr: 'Comment ça se passe ? Je peux vous apporter autre chose ?', pt: 'Como está tudo? Posso trazer mais alguma coisa?', ru: 'Как всё идёт? Могу я принести что-нибудь ещё?', zh: '一切都好吗？需要再来点什么吗？', ja: 'いかがですか？何か他にお持ちしましょうか？', ar: 'كيف حال كل شيء؟ هل يمكنني إحضار أي شيء آخر؟' };
+        const checkIn = checkIns[lang] ?? checkIns['it'];
         sendMessage(checkIn);
         setTab('chat');
       }, 8 * 60 * 1000);
@@ -259,7 +281,7 @@ export default function App() {
     if (!SR) { alert('Riconoscimento vocale non supportato in questo browser'); return; }
     if (listening) { recognitionRef.current?.stop(); setListening(false); return; }
     const recognition = new SR();
-    const langMap: Record<string, string> = { it: 'it-IT', en: 'en-US', de: 'de-DE', es: 'es-ES' };
+    const langMap: Record<string, string> = { it: 'it-IT', en: 'en-US', de: 'de-DE', es: 'es-ES', fr: 'fr-FR', pt: 'pt-PT', ru: 'ru-RU', zh: 'zh-CN', ja: 'ja-JP', ar: 'ar-SA' };
     recognition.lang = langMap[lang] ?? 'it-IT';
     recognition.interimResults = false;
     recognition.onresult = (e: any) => {
@@ -278,24 +300,9 @@ export default function App() {
     setSelectedDish(null);
     setTab('chat');
     const isDrink = ['cocktails', 'spirits', 'birre', 'vini', 'soft_drinks'].includes(dish.category);
-    let prompt = '';
-    if (isDrink) {
-      prompt = lang === 'en'
-        ? `Tell me about "${dish.name}": what it tastes like, how it's served, and what food would pair well with it.`
-        : lang === 'de'
-        ? `Erkläre mir "${dish.name}": Geschmack, wie es serviert wird und welche Speisen dazu passen.`
-        : lang === 'es'
-        ? `Cuéntame sobre "${dish.name}": cómo sabe, cómo se sirve y qué platos maridan bien.`
-        : `Parlami di "${dish.name}": com'è, come si serve e con quali piatti si abbina.`;
-    } else {
-      prompt = lang === 'en'
-        ? `Tell me about "${dish.name}": ingredients, flavor, and what drink would you recommend with it.`
-        : lang === 'de'
-        ? `Erkläre mir "${dish.name}": Zutaten, Geschmack und welches Getränk du dazu empfiehlst.`
-        : lang === 'es'
-        ? `Cuéntame sobre "${dish.name}": ingredientes, sabor y qué bebida recomiendas para acompañarlo.`
-        : `Parlami di "${dish.name}": ingredienti, sapore e cosa consigli da bere in abbinamento.`;
-    }
+    const drinkP: Record<string, string> = { it: `Parlami di "${dish.name}": com'è, come si serve e con quali piatti si abbina.`, en: `Tell me about "${dish.name}": taste, serving and food pairing.`, de: `Erkläre mir "${dish.name}": Geschmack, Servierung und passende Speisen.`, es: `Cuéntame sobre "${dish.name}": sabor, servicio y maridaje.`, fr: `Parle-moi de "${dish.name}": goût, service et accord mets.`, pt: `Fala-me de "${dish.name}": sabor, serviço e harmonização.`, ru: `Расскажи о "${dish.name}": вкус, подача и сочетание с едой.`, zh: `告诉我"${dish.name}"的口感、上菜方式和搭配食物。`, ja: `"${dish.name}"の味、提供方法、相性の良い料理を教えてください。`, ar: `أخبرني عن "${dish.name}": المذاق والتقديم والأطباق المناسبة.` };
+    const dishP: Record<string, string> = { it: `Parlami di "${dish.name}": ingredienti, sapore e cosa consigli da bere.`, en: `Tell me about "${dish.name}": ingredients, flavor and drink pairing.`, de: `Erkläre mir "${dish.name}": Zutaten, Geschmack und Getränkeempfehlung.`, es: `Cuéntame sobre "${dish.name}": ingredientes, sabor y bebida recomendada.`, fr: `Parle-moi de "${dish.name}": ingrédients, saveur et boisson conseillée.`, pt: `Fala-me de "${dish.name}": ingredientes, sabor e bebida.`, ru: `Расскажи о "${dish.name}": ингредиенты, вкус и напиток.`, zh: `告诉我"${dish.name}"的食材、口味和推荐饮品。`, ja: `"${dish.name}"の食材、風味、おすすめ飲み物を教えてください。`, ar: `أخبرني عن "${dish.name}": المكونات والمذاق والمشروب الموصى به.` };
+    const prompt = isDrink ? (drinkP[lang] ?? drinkP['it']) : (dishP[lang] ?? dishP['it']);
     sendMessage(prompt);
   }
 
@@ -344,9 +351,7 @@ export default function App() {
     const total = pendingOrder.items.reduce((s, i) => s + i.unit_price * i.qty, 0);
     return (
       <div style={S.confirmScreen}>
-        <h2 style={S.confirmTitle}>
-          {lang === 'de' ? '📋 Bestellung bestätigen' : lang === 'en' ? '📋 Confirm order' : lang === 'es' ? '📋 Confirmar pedido' : '📋 Conferma ordine'}
-        </h2>
+        <h2 style={S.confirmTitle}>{t('confirm', lang)}</h2>
         <div style={S.orderItems}>
           {pendingOrder.items.map((item, i) => (
             <div key={i} style={S.orderItem}>
@@ -357,11 +362,9 @@ export default function App() {
           <div style={S.orderTotal}><strong>Totale</strong><strong>€{total.toFixed(2)}</strong></div>
         </div>
         <div style={S.confirmBtns}>
-          <button style={S.btnCancel} onClick={() => setScreen('main')}>
-            {lang === 'en' ? 'Modify' : lang === 'de' ? 'Ändern' : lang === 'es' ? 'Modificar' : 'Modifica'}
-          </button>
+          <button style={S.btnCancel} onClick={() => setScreen('main')}>{t('modify', lang)}</button>
           <button style={S.btnConfirm} onClick={confirmOrder} disabled={loading}>
-            {loading ? '...' : lang === 'en' ? 'Confirm ✓' : lang === 'de' ? 'Bestätigen ✓' : lang === 'es' ? 'Confirmar ✓' : 'Conferma ✓'}
+            {loading ? '...' : t('confirmBtn', lang)}
           </button>
         </div>
       </div>
@@ -379,16 +382,16 @@ export default function App() {
         <button style={S.backBtn} onClick={() => setScreen('lang')}>←</button>
         <img src="/logo.png" alt="Gusto" style={S.headerLogo} />
         <div style={S.headerSub2}>Tavolo {params.table}</div>
-        {orderConfirmed && <span style={S.orderBadge}>✓ Ordinato</span>}
+        {orderConfirmed && <span style={S.orderBadge}>{t('ordered', lang)}</span>}
       </header>
 
       {/* Banner sessione condivisa */}
       {joinedExisting && (
         <div style={S.sharedBanner}>
-          👥 {lang === 'en' ? 'Shared table' : lang === 'de' ? 'Gemeinsamer Tisch' : lang === 'es' ? 'Mesa compartida' : 'Sessione tavolo condivisa'}
+          👥 {t('sharedTable', lang)}
           {alreadyOrdered && (
             <span style={S.sharedOrdered}>
-              {' '}· {lang === 'en' ? 'Already ordered' : lang === 'de' ? 'Bereits bestellt' : lang === 'es' ? 'Ya pedido' : 'Già ordinato'}: {alreadyOrdered}
+              {' '}· {t('alreadyOrd', lang)}: {alreadyOrdered}
             </span>
           )}
         </div>
@@ -397,10 +400,10 @@ export default function App() {
       {/* Tab bar */}
       <div style={S.tabBar}>
         <button style={tab === 'menu' ? S.tabActive : S.tabInactive} onClick={() => setTab('menu')}>
-          🍽️ {lang === 'en' ? 'Menu' : lang === 'es' ? 'Carta' : 'Menu'}
+          🍽️ {t('menu', lang)}
         </button>
         <button style={tab === 'chat' ? S.tabActive : S.tabInactive} onClick={() => setTab('chat')}>
-          💬 {lang === 'en' ? 'Assistant' : lang === 'de' ? 'Assistent' : lang === 'es' ? 'Asistente' : 'Assistente'}
+          💬 {t('assistant', lang)}
           {messages.length > 1 && tab !== 'chat' && <span style={S.chatDot} />}
         </button>
       </div>
@@ -473,7 +476,7 @@ export default function App() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              placeholder={listening ? '🎤 Sto ascoltando...' : lang === 'en' ? 'Write a message...' : lang === 'de' ? 'Nachricht...' : lang === 'es' ? 'Escribe...' : 'Scrivi un messaggio...'}
+              placeholder={listening ? t('listening', lang) : t('write', lang)}
               disabled={loading}
             />
             <button style={S.sendBtn} onClick={() => sendMessage()} disabled={loading || !input.trim()}>➤</button>
@@ -495,21 +498,15 @@ export default function App() {
               <p style={S.modalDesc}>{translatedDishes[selectedDish.id] ?? selectedDish.description}</p>
             )}
             <button style={S.modalAskBtn} onClick={() => askAboutDish(selectedDish)}>
-              💬 {lang === 'en' ? 'Ask Marco about this dish' : lang === 'de' ? 'Marco fragen' : lang === 'es' ? 'Preguntar a Marco' : 'Chiedi a Marco'}
+              💬 {t('askMarco', lang)}
             </button>
             <button style={S.modalOrderBtn} onClick={() => {
               setSelectedDish(null);
               setTab('chat');
-              const orderPrompt = lang === 'en'
-                ? `I'd like to order the "${selectedDish.name}".`
-                : lang === 'de'
-                ? `Ich möchte "${selectedDish.name}" bestellen.`
-                : lang === 'es'
-                ? `Quisiera pedir "${selectedDish.name}".`
-                : `Vorrei ordinare "${selectedDish.name}".`;
-              sendMessage(orderPrompt);
+              const orderPs: Record<string, string> = { it: `Vorrei ordinare "${selectedDish.name}".`, en: `I'd like to order the "${selectedDish.name}".`, de: `Ich möchte "${selectedDish.name}" bestellen.`, es: `Quisiera pedir "${selectedDish.name}".`, fr: `Je voudrais commander "${selectedDish.name}".`, pt: `Gostaria de pedir "${selectedDish.name}".`, ru: `Я хотел бы заказать "${selectedDish.name}".`, zh: `我想点"${selectedDish.name}"。`, ja: `"${selectedDish.name}"を注文したいです。`, ar: `أريد طلب "${selectedDish.name}".` };
+              sendMessage(orderPs[lang] ?? orderPs['it']);
             }}>
-              🛒 {lang === 'en' ? 'Add to order' : lang === 'de' ? 'Bestellen' : lang === 'es' ? 'Pedir' : 'Aggiungi all\'ordine'}
+              🛒 {t('addOrder', lang)}
             </button>
             <button style={S.modalClose} onClick={() => setSelectedDish(null)}>✕</button>
           </div>
@@ -531,7 +528,7 @@ const S: Record<string, React.CSSProperties> = {
   langScreen: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', gap: 40, padding: 32, background: '#000' },
   coverLogo: { width: 220, objectFit: 'contain' as const },
   pizzaSpinner: { fontSize: 64, animation: 'spin 1.2s linear infinite' },
-  langGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', maxWidth: 320 },
+  langGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 340 },
   langBtn: { padding: '16px 12px', borderRadius: 12, fontSize: 16, fontWeight: 600, background: '#16213e', color: '#eaeaea', border: '1.5px solid #2a2a4a', cursor: 'pointer' },
   tableTag: { color: '#555', fontSize: 13 },
 

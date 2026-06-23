@@ -64,13 +64,25 @@ router.post('/session', async (req, res) => {
       en: `Hello! 👋 I'm Marco, your virtual assistant at ${restaurantName}.\nI'm here to help you choose the best dishes, discover pairings and place your order. Do you have any allergies or intolerances I should know about?`,
       de: `Hallo! 👋 Ich bin Marco, Ihr virtueller Assistent bei ${restaurantName}.\nIch helfe Ihnen, die besten Gerichte zu wählen und zu bestellen. Haben Sie Allergien oder Unverträglichkeiten?`,
       es: `¡Hola! 👋 Soy Marco, tu asistente virtual en ${restaurantName}.\nEstoy aquí para ayudarte a elegir los mejores platos y hacer tu pedido. ¿Tienes alguna alergia o intolerancia?`,
+      fr: `Bonjour! 👋 Je suis Marco, votre assistant virtuel chez ${restaurantName}.\nJe suis là pour vous aider à choisir les meilleurs plats et passer votre commande. Avez-vous des allergies ou intolérances?`,
+      pt: `Olá! 👋 Sou Marco, o seu assistente virtual em ${restaurantName}.\nEstou aqui para ajudá-lo a escolher os melhores pratos e fazer o seu pedido. Tem alguma alergia ou intolerância?`,
+      ru: `Привет! 👋 Я Марко, ваш виртуальный ассистент в ${restaurantName}.\nЯ здесь, чтобы помочь вам выбрать лучшие блюда и сделать заказ. Есть ли у вас аллергии или непереносимость?`,
+      zh: `你好！👋 我是Marco，${restaurantName}的虚拟助手。\n我在这里帮您选择最好的菜肴并下单。您有任何过敏或不耐受症状吗？`,
+      ja: `こんにちは！👋 私はMarco、${restaurantName}のバーチャルアシスタントです。\n最高の料理を選び、ご注文をお手伝いします。アレルギーや食物不耐症はありますか？`,
+      ar: `مرحباً! 👋 أنا Marco، مساعدك الافتراضي في ${restaurantName}.\nأنا هنا لمساعدتك في اختيار أفضل الأطباق وتقديم طلبك. هل لديك أي حساسية أو عدم تحمل؟`,
     };
     const welcomeMsg = welcomeMessages[language] ?? welcomeMessages['it'];
     const defaultSuggestions: Record<string, string[]> = {
-      it: ['Cosa mi consiglia?', 'Ho un\'allergia', 'Menu degustazione'],
+      it: ["Cosa mi consiglia?", "Ho un'allergia", 'Menu degustazione'],
       en: ['What do you recommend?', 'I have an allergy', 'Tasting menu'],
       de: ['Was empfehlen Sie?', 'Ich habe eine Allergie', 'Degustationsmenü'],
       es: ['¿Qué recomienda?', 'Tengo una alergia', 'Menú degustación'],
+      fr: ['Que recommandez-vous?', "J'ai une allergie", 'Menu dégustation'],
+      pt: ['O que recomenda?', 'Tenho uma alergia', 'Menu degustação'],
+      ru: ['Что вы рекомендуете?', 'У меня аллергия', 'Дегустационное меню'],
+      zh: ['您推荐什么？', '我有过敏', '品鉴菜单'],
+      ja: ['何がおすすめですか？', 'アレルギーがあります', 'テイスティングメニュー'],
+      ar: ['ماذا توصي؟', 'لدي حساسية', 'قائمة التذوق'],
     };
     const suggestions = defaultSuggestions[language] ?? defaultSuggestions['it'];
 

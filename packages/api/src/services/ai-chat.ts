@@ -195,6 +195,7 @@ function buildSystemPrompt(
 
   const langName: Record<string, string> = {
     it: 'italiano', en: 'English', de: 'Deutsch', es: 'español', fr: 'français',
+    pt: 'português', ru: 'русский', zh: '中文', ja: '日本語', ar: 'العربية',
   };
 
   return `Sei Marco, il sommelier e chef virtuale di ${restaurantName} — ristorante italiano con anima mediterranea nel cuore di Málaga.
