@@ -120,6 +120,7 @@ export default function App() {
     })
       .then(r => r.json())
       .then((data: { id: string; translated: string }[]) => {
+        if (!Array.isArray(data)) return;
         setTranslatedDishes(prev => {
           const next = { ...prev };
           for (const item of data) next[item.id] = item.translated;
