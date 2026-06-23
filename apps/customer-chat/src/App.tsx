@@ -134,30 +134,41 @@ export default function App() {
     }
   }, [messages, loading]);
 
-  // Traduce le descrizioni della categoria visibile
+  // Traduce tutte le descrizioni in background, categoria per categoria
   useEffect(() => {
-    if (lang === 'it' || screen !== 'main') return;
-    const catDishes = dishes.filter(d => d.category === selectedCat);
-    const toTranslate = catDishes.filter(d => d.description && !translatedDishes[d.id]);
-    if (toTranslate.length === 0) return;
-    setTranslatingCat(selectedCat);
-    fetch(`${API}/api/menu/translate-batch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: toTranslate.map(d => ({ id: d.id, text: d.description })), lang }),
-    })
-      .then(r => r.json())
-      .then((data: { id: string; translated: string }[]) => {
-        if (!Array.isArray(data)) return;
-        setTranslatedDishes(prev => {
-          const next = { ...prev };
-          for (const item of data) next[item.id] = item.translated;
-          return next;
-        });
-      })
-      .catch(() => {})
-      .finally(() => setTranslatingCat(null));
-  }, [selectedCat, screen, lang]);
+    if (lang === 'it' || screen !== 'main' || dishes.length === 0) return;
+    let cancelled = false;
+    async function translateAll() {
+      const categories = CAT_ORDER.filter(c => dishes.some(d => d.category === c));
+      for (const cat of categories) {
+        if (cancelled) break;
+        const toTranslate = dishes.filter(d => d.category === cat && d.description);
+        if (toTranslate.length === 0) continue;
+        setTranslatingCat(cat);
+        try {
+          const res = await fetch(`${API}/api/menu/translate-batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: toTranslate.map(d => ({ id: d.id, text: d.description })), lang }),
+          });
+          const data = await res.json();
+          if (!cancelled && Array.isArray(data)) {
+            setTranslatedDishes(prev => {
+              const next = { ...prev };
+              for (const item of data) next[item.id] = item.translated;
+              return next;
+            });
+          }
+        } catch { /* continua con la prossima categoria */ }
+        setTranslatingCat(null);
+        await new Promise(r => setTimeout(r, 800)); // pausa tra batch per evitare rate limit
+      }
+      setTranslatingCat(null);
+    }
+    setTranslatedDishes({});
+    translateAll();
+    return () => { cancelled = true; };
+  }, [screen, lang, dishes.length]);
 
   async function startSession(selectedLang: string) {
     setLang(selectedLang);
