@@ -40,6 +40,18 @@ function savePrefs(restaurant: string, prefs: SavedPrefs) {
   try { localStorage.setItem(STORAGE_KEY(restaurant), JSON.stringify(prefs)); } catch {}
 }
 
+const SESSION_KEY = (restaurant: string, table: number) => `gusto_session_${restaurant}_${table}`;
+interface SavedSession { sessionId: string; lang: string; messages: Message[]; alreadyOrdered: string; joinedExisting: boolean; orderConfirmed: boolean; }
+function saveSession(restaurant: string, table: number, data: SavedSession) {
+  try { localStorage.setItem(SESSION_KEY(restaurant, table), JSON.stringify(data)); } catch {}
+}
+function loadSession(restaurant: string, table: number): SavedSession | null {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY(restaurant, table)) ?? 'null'); } catch { return null; }
+}
+function clearSession(restaurant: string, table: number) {
+  try { localStorage.removeItem(SESSION_KEY(restaurant, table)); } catch {}
+}
+
 type Screen = 'lang' | 'main' | 'confirm_order';
 type Tab = 'menu' | 'chat';
 
@@ -121,11 +133,38 @@ export default function App() {
   const recognitionRef = useRef<any>(null);
   const checkInTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Carica preferenze salvate al primo render
+  // Carica preferenze e sessione salvata al primo render
   useEffect(() => {
     const prefs = loadPrefs(params.restaurant);
     if (prefs?.groupSize) setGroupSize(prefs.groupSize);
+
+    const saved = loadSession(params.restaurant, params.table);
+    if (saved) {
+      setSessionId(saved.sessionId);
+      setLang(saved.lang);
+      setMessages(saved.messages);
+      setAlreadyOrdered(saved.alreadyOrdered);
+      setJoinedExisting(saved.joinedExisting);
+      setOrderConfirmed(saved.orderConfirmed);
+      // Carica il menu in background
+      fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=${saved.lang}`)
+        .then(r => r.json())
+        .then((menuData: Dish[]) => {
+          const available = menuData.filter((d: Dish) => d.available);
+          setDishes(available);
+          const firstCat = CAT_ORDER.find(c => available.some((d: Dish) => d.category === c)) ?? 'antipasti';
+          setSelectedCat(firstCat);
+          setScreen('main');
+        })
+        .catch(() => clearSession(params.restaurant, params.table));
+    }
   }, []);
+
+  // Salva sessione in localStorage ad ogni cambio messaggi
+  useEffect(() => {
+    if (!sessionId) return;
+    saveSession(params.restaurant, params.table, { sessionId, lang, messages, alreadyOrdered, joinedExisting, orderConfirmed });
+  }, [sessionId, lang, messages, orderConfirmed]);
 
   useEffect(() => {
     if (loading) {
@@ -135,42 +174,30 @@ export default function App() {
     }
   }, [messages, loading]);
 
-  // Traduce tutte le descrizioni in background, categoria per categoria
+  // Traduce le descrizioni della categoria visibile (on-demand)
   useEffect(() => {
-    if (lang === 'es' || screen !== 'main' || dishes.length === 0) return;
-    let cancelled = false;
-    async function translateAll() {
-      const categories = CAT_ORDER.filter(c => dishes.some(d => d.category === c));
-      for (const cat of categories) {
-        if (cancelled) break;
-        const toTranslate = dishes.filter(d => d.category === cat && d.description);
-        if (toTranslate.length === 0) continue;
-        setTranslatingCat(cat);
-        try {
-          const res = await fetch(`${API}/api/menu/translate-batch`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items: toTranslate.map(d => ({ id: d.id, text: d.description })), lang }),
-          });
-          const data = await res.json();
-          if (!cancelled && Array.isArray(data)) {
-            setTranslatedDishes(prev => {
-              const next = { ...prev };
-              for (const item of data) next[item.id] = item.translated;
-              return next;
-            });
-          }
-        } catch { /* continua con la prossima categoria */ }
-        setTranslatingCat(null);
-        await new Promise(r => setTimeout(r, 800)); // pausa tra batch per evitare rate limit
-      }
-      setTranslatingCat(null);
-    }
-    setTranslatedDishes({});
-    setShowLangPicker(false);
-    translateAll();
-    return () => { cancelled = true; };
-  }, [screen, lang, dishes.length]);
+    if (lang === 'es' || screen !== 'main') return;
+    const catDishes = dishes.filter(d => d.category === selectedCat);
+    const toTranslate = catDishes.filter(d => d.description && !translatedDishes[d.id]);
+    if (toTranslate.length === 0) return;
+    setTranslatingCat(selectedCat);
+    fetch(`${API}/api/menu/translate-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: toTranslate.map(d => ({ id: d.id, text: d.description })), lang }),
+    })
+      .then(r => r.json())
+      .then((data: { id: string; translated: string }[]) => {
+        if (!Array.isArray(data)) return;
+        setTranslatedDishes(prev => {
+          const next = { ...prev };
+          for (const item of data) next[item.id] = item.translated;
+          return next;
+        });
+      })
+      .catch(() => {})
+      .finally(() => setTranslatingCat(null));
+  }, [selectedCat, screen, lang]);
 
   async function startSession(selectedLang: string) {
     setLang(selectedLang);
@@ -407,7 +434,12 @@ export default function App() {
                 <button
                   key={opt.code}
                   style={lang === opt.code ? S.langPickerBtnActive : S.langPickerBtn}
-                  onClick={() => { setLang(opt.code); setTranslatedDishes({}); setShowLangPicker(false); }}
+                  onClick={() => {
+                    if (sessionId) {
+                      saveSession(params.restaurant, params.table, { sessionId, lang: opt.code, messages, alreadyOrdered, joinedExisting, orderConfirmed });
+                    }
+                    window.location.reload();
+                  }}
                 >
                   {opt.label}
                 </button>
