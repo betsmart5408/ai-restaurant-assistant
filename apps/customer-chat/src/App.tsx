@@ -93,6 +93,7 @@ export default function App() {
   const [listening, setListening] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastMsgRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const checkInTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -103,7 +104,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (loading) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      lastMsgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }, [messages, loading]);
 
   // Traduce le descrizioni della categoria visibile
@@ -139,7 +144,7 @@ export default function App() {
     try {
       const savedPrefs = loadPrefs(params.restaurant);
       const [menuRes, sessionRes] = await Promise.all([
-        fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=es`),
+        fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=${selectedLang}`),
         fetch(`${API}/api/chat/session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -437,7 +442,7 @@ export default function App() {
         <>
           <div style={S.messages}>
             {messages.map((msg, i) => (
-              <div key={i} style={msg.role === 'user' ? S.bubbleUser : S.bubbleAI}>
+              <div key={i} ref={i === messages.length - 1 ? lastMsgRef : undefined} style={msg.role === 'user' ? S.bubbleUser : S.bubbleAI}>
                 <div style={msg.role === 'user' ? S.bubbleUserInner : S.bubbleAIInner}>
                   {msg.content}
                 </div>
