@@ -440,7 +440,11 @@ export default function App() {
                   key={opt.code}
                   style={lang === opt.code ? S.langPickerBtnActive : S.langPickerBtn}
                   onClick={() => {
-                    if (sessionId) saveSession(params.restaurant, params.table, { sessionId, lang: opt.code, messages, alreadyOrdered, joinedExisting, orderConfirmed });
+                    const WELCOME: Record<string, string> = { it: 'Ciao! 👋 Sono Marco, il tuo assistente virtuale.\nSono qui per aiutarti a scegliere i piatti migliori. Hai allergie o intolleranze?', en: 'Hello! 👋 I\'m Marco, your virtual assistant.\nI\'m here to help you choose the best dishes. Do you have any allergies?', de: 'Hallo! 👋 Ich bin Marco, Ihr virtueller Assistent.\nIch helfe Ihnen beim Wählen. Haben Sie Allergien?', es: '¡Hola! 👋 Soy Marco, tu asistente virtual.\nEstoy aquí para ayudarte. ¿Tienes alguna alergia?', fr: 'Bonjour! 👋 Je suis Marco, votre assistant virtuel.\nJe suis là pour vous aider. Avez-vous des allergies?', pt: 'Olá! 👋 Sou Marco, o seu assistente virtual.\nEstou aqui para ajudá-lo. Tem alguma alergia?', ru: 'Привет! 👋 Я Марко, ваш виртуальный ассистент.\nЕсть ли у вас аллергии?', zh: '你好！👋 我是Marco，您的虚拟助手。\n我在这里帮您选择最好的菜肴。您有过敏症状吗？', ja: 'こんにちは！👋 私はMarcoです。\n最高の料理選びをお手伝いします。アレルギーはありますか？', ar: 'مرحباً! 👋 أنا Marco، مساعدك الافتراضي.\nأنا هنا لمساعدتك. هل لديك أي حساسية؟' };
+                    const newWelcome = { role: 'assistant' as const, content: WELCOME[opt.code] ?? WELCOME['it'], timestamp: new Date().toISOString() };
+                    const newMessages = [newWelcome];
+                    setMessages(newMessages);
+                    if (sessionId) saveSession(params.restaurant, params.table, { sessionId, lang: opt.code, messages: newMessages, alreadyOrdered, joinedExisting, orderConfirmed });
                     setShowLangPicker(false);
                     setLang(opt.code);
                     setTranslatedDishes({});
