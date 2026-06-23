@@ -269,15 +269,15 @@ export async function processChat(ctx: ChatContext, userMessage: string) {
   const orderMatch = assistantMessage.match(/ORDER_JSON:(\{[\s\S]+?\})\s*$/m);
   const orderData = orderMatch ? JSON.parse(orderMatch[1]) : null;
 
-  const suggestionsMatch = assistantMessage.match(/SUGGESTIONS_JSON:(\[[\s\S]+?\])\s*$/m);
+  const suggestionsMatch = assistantMessage.match(/SUGGESTIONS_JSON:\s*(\[[\s\S]+?\])\s*$/m);
   let suggestions: string[] = [];
   if (suggestionsMatch) {
     try { suggestions = JSON.parse(suggestionsMatch[1]); } catch { suggestions = []; }
   }
 
   const visibleMessage = assistantMessage
-    .replace(/ORDER_JSON:\{[\s\S]+?\}\s*$/m, '')
-    .replace(/SUGGESTIONS_JSON:\[[\s\S]+?\]\s*$/m, '')
+    .replace(/ORDER_JSON:\s*\{[\s\S]+?\}\s*$/m, '')
+    .replace(/SUGGESTIONS_JSON:\s*\[[\s\S]+?\]\s*$/m, '')
     .trim();
 
   return { message: visibleMessage, orderData, suggestions };
