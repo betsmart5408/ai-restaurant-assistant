@@ -1,7 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk';
+import Groq from 'groq-sdk';
 import { db } from '../db/client';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 interface MenuDish {
   id: string;
@@ -255,14 +255,17 @@ export async function processChat(ctx: ChatContext, userMessage: string) {
     { role: 'user', content: userMessage },
   ];
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
+  const response = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
     max_tokens: 1024,
-    system: systemPrompt,
-    messages,
+    temperature: 0.7,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      ...messages,
+    ],
   });
 
-  const assistantMessage = response.content[0].type === 'text' ? response.content[0].text : '';
+  const assistantMessage = response.choices[0]?.message?.content ?? '';
 
   const orderMatch = assistantMessage.match(/ORDER_JSON:(\{[\s\S]+?\})\s*$/m);
   const orderData = orderMatch ? JSON.parse(orderMatch[1]) : null;
