@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { db } from '../db/client';
-import Anthropic from '@anthropic-ai/sdk';
+import Groq from 'groq-sdk';
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const router = Router();
 
@@ -53,14 +55,14 @@ router.post('/translate-batch', async (req, res) => {
     const { items, lang }: { items: { id: string; text: string }[]; lang: string } = req.body;
     if (!items?.length || lang === 'es') return res.json(items.map(i => ({ id: i.id, translated: i.text })));
     const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French' };
-    const client = new Anthropic();
     const compact = items.map((item, idx) => `${idx}|${item.text}`).join('\n');
-    const msg = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+    const msg = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
       max_tokens: 2048,
+      temperature: 0.1,
       messages: [{ role: 'user', content: `Translate each line to ${langNames[lang] || 'English'}. Keep format INDEX|TRANSLATION exactly. One per line:\n\n${compact}` }],
     });
-    const lines = (msg.content[0] as { text: string }).text.trim().split('\n');
+    const lines = (msg.choices[0]?.message?.content ?? '').trim().split('\n');
     const result = items.map((item, idx) => {
       const line = lines.find(l => l.startsWith(`${idx}|`));
       return { id: item.id, translated: line ? line.slice(line.indexOf('|') + 1) : item.text };
@@ -78,13 +80,13 @@ router.post('/translate-desc', async (req, res) => {
     const { text, lang } = req.body;
     if (!text || !lang || lang === 'es') return res.json({ translated: text });
     const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French' };
-    const client = new Anthropic();
-    const msg = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+    const msg = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
       max_tokens: 256,
+      temperature: 0.1,
       messages: [{ role: 'user', content: `Translate this dish description to ${langNames[lang] || 'English'}. Reply with ONLY the translated text, nothing else:\n\n${text}` }],
     });
-    res.json({ translated: (msg.content[0] as { text: string }).text.trim() });
+    res.json({ translated: (msg.choices[0]?.message?.content ?? text).trim() });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Translation failed' });
@@ -114,19 +116,18 @@ router.get('/:restaurantSlug/dishes/translated', async (req, res) => {
     const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French' };
     const targetLang = langNames[lang] || 'English';
 
-    // Batch translate descriptions with Claude
-    const client = new Anthropic();
     const compact = dishes.map((d, i) => `${i}|${d.description || ''}`).join('\n');
-    const msg = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+    const msg = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
       max_tokens: 4096,
+      temperature: 0.1,
       messages: [{
         role: 'user',
         content: `Translate each dish description below to ${targetLang}. Keep the same format: INDEX|TRANSLATED_DESCRIPTION. One per line. Do not change dish names or prices. If description is empty, return INDEX| (empty after pipe).\n\n${compact}`,
       }],
     });
 
-    const translated = (msg.content[0] as { text: string }).text.trim().split('\n');
+    const translated = (msg.choices[0]?.message?.content ?? '').trim().split('\n');
     const descMap: Record<number, string> = {};
     for (const line of translated) {
       const pipe = line.indexOf('|');
