@@ -84,6 +84,21 @@ function getTimeContext(): { period: string; it: string; en: string; de: string;
   return { period: 'other', it: 'visita', en: 'visit', de: 'Besuch', es: 'visita' };
 }
 
+function getSuggestionsInstruction(language: string): string {
+  const examples: Record<string, string> = {
+    it: `["Lo voglio ordinare!", "Cosa abbini con questo?", "Menu degustazione per 2"]`,
+    en: `["I'd like to order this!", "What pairs well with this?", "Tasting menu for 2"]`,
+    de: `["Das möchte ich bestellen!", "Was passt dazu?", "Degustationsmenü für 2"]`,
+    es: `["¡Quiero pedirlo!", "¿Qué marida con esto?", "Menú degustación para 2"]`,
+  };
+  const ex = examples[language] ?? examples['it'];
+  return `SUGGERIMENTI RAPIDI (obbligatorio):
+Alla fine di OGNI risposta aggiungi su riga separata:
+SUGGESTIONS_JSON:["opzione1","opzione2","opzione3"]
+Max 3 opzioni brevi (max 5 parole), nella lingua della risposta. Devono essere le cose più utili che il cliente potrebbe voler fare dopo questa risposta.
+Esempio: ${ex}`;
+}
+
 function buildSystemPrompt(
   restaurantName: string,
   dishes: MenuDish[],
@@ -126,31 +141,38 @@ function buildSystemPrompt(
     it: 'italiano', en: 'English', de: 'Deutsch', es: 'español', fr: 'français'
   };
 
-  return `Sei l'assistente virtuale del ${restaurantName}, tavolo ${tableNumber}.
-Rispondo SEMPRE in ${langName[language] ?? language}.
-Ora: ${time[language as keyof typeof time] ?? time.it}.
-Sei cordiale, professionale e conciso (max 3-4 righe salvo richiesta dettagli).
+  return `Sei Marco, il sommelier e chef virtuale di ${restaurantName} — ristorante italiano con anima mediterranea nel cuore di Málaga.
+Hai una personalità calorosa, appassionata e professionale: ami il cibo, conosci ogni piatto e vino a memoria, e vuoi che ogni ospite viva un'esperienza indimenticabile.
+Rispondi SEMPRE in ${langName[language] ?? language}. Tavolo ${tableNumber}. Ora: ${time[language as keyof typeof time] ?? time.it}.
+Tono: amichevole e coinvolgente, mai robotico. Max 4 righe salvo richiesta dettagli.
 
 MENU DISPONIBILE:
 ${menuJson}
 ${promoSection}
 
-REGOLE UPSELLING AVANZATO (applica con naturalezza, mai in modo aggressivo):
-- Servizio ${time.period === 'lunch' ? 'pranzo → suggerisci menu completo rapido (primo + acqua)' : 'cena → punta su esperienza completa (antipasto + vino + dessert)'}
-- Se ordina solo primo → suggerisci UN antipasto O UN dessert (non entrambi)
-- Se nessuna bevanda → suggerisci vino abbinato al piatto ordinato
-- Se ci sono PROMOZIONI ATTIVE → menziona quei piatti come "specialità del giorno" o "consiglio dello chef"
-- Combo: se vedi un abbinamento naturale (es. lasagna + vino rosso) proponi un prezzo bundle (sconto ~10%)
-- Non riproporre qualcosa già ordinato o già rifiutato nella conversazione
-- Max 1 suggerimento per messaggio
+GESTIONE ALLERGIE (priorità assoluta):
+- Nel messaggio di benvenuto chiedi SEMPRE se il cliente ha allergie o intolleranze alimentari.
+- Quando menzionano un'allergia, filtra i suggerimenti ed evidenzia i piatti sicuri. Se un piatto contiene l'allergene dichiarato, avverti esplicitamente.
 
-REGOLE ORDINE:
-- Chiedi sempre conferma con riepilogo prima di finalizzare
-- Dopo conferma esplicita del cliente, aggiungi in fondo (su riga separata):
+REGOLE PIATTI E BEVANDE:
+- Quando descrivi un piatto → spiega ingredienti, sapori, tecnica. Poi suggerisci di aggiungerlo all'ordine o abbina un vino/cocktail.
+- Quando descrivi una bevanda → descrivi profilo aromatico, come si serve, con quali piatti si abbina.
+- Max 1 suggerimento upselling per messaggio, mai aggressivo.
+- Servizio ${time.period === 'lunch' ? 'pranzo → menu rapido (primo + acqua)' : 'cena → esperienza completa (antipasto + vino + dessert)'}.
+- Se ci sono PROMOZIONI ATTIVE → menzionale come "specialità del giorno" o "consiglio dello chef".
+
+MENU DEGUSTAZIONE:
+- Se il cliente chiede un menu degustazione, consiglio dello chef, o menziona budget/numero persone:
+  → Componi un percorso: antipasto + primo + secondo + dessert + vino abbinato.
+  → Indica il totale stimato per persona. Chiedi conferma prima di procedere all'ordine.
+
+ORDINE:
+- Chiedi sempre conferma con riepilogo prima di finalizzare.
+- Dopo conferma esplicita, aggiungi su riga separata:
   ORDER_JSON:{"items":[{"dish_id":"...","dish_name":"...","qty":1,"unit_price":0.0}]}
-- Per allergeni e ingredienti: sii preciso, cita solo quelli del menu
+- Non inventare piatti, prezzi o ingredienti non presenti nel menu.
 
-NON inventare piatti, prezzi o ingredienti non presenti nel menu.`;
+${getSuggestionsInstruction(language)}`;
 }
 
 export async function processChat(ctx: ChatContext, userMessage: string) {
@@ -178,9 +200,22 @@ export async function processChat(ctx: ChatContext, userMessage: string) {
     ? response.content[0].text
     : '';
 
+  // Parse ORDER_JSON
   const orderMatch = assistantMessage.match(/ORDER_JSON:(\{[\s\S]+?\})\s*$/m);
   const orderData = orderMatch ? JSON.parse(orderMatch[1]) : null;
-  const visibleMessage = assistantMessage.replace(/ORDER_JSON:\{[\s\S]+?\}\s*$/m, '').trim();
 
-  return { message: visibleMessage, orderData };
+  // Parse SUGGESTIONS_JSON
+  const suggestionsMatch = assistantMessage.match(/SUGGESTIONS_JSON:(\[[\s\S]+?\])\s*$/m);
+  let suggestions: string[] = [];
+  if (suggestionsMatch) {
+    try { suggestions = JSON.parse(suggestionsMatch[1]); } catch { suggestions = []; }
+  }
+
+  // Strip metadata from visible message
+  const visibleMessage = assistantMessage
+    .replace(/ORDER_JSON:\{[\s\S]+?\}\s*$/m, '')
+    .replace(/SUGGESTIONS_JSON:\[[\s\S]+?\]\s*$/m, '')
+    .trim();
+
+  return { message: visibleMessage, orderData, suggestions };
 }

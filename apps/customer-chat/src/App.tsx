@@ -77,6 +77,7 @@ export default function App() {
   const [translatedDesc, setTranslatedDesc] = useState<string | null>(null);
   const [translatedDishes, setTranslatedDishes] = useState<Record<string, string>>({}); // dish.id -> translated desc
   const [translatingCat, setTranslatingCat] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [startError, setStartError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -125,7 +126,7 @@ export default function App() {
       if (!menuRes.ok) throw new Error(`Menu ${menuRes.status}`);
       if (!sessionRes.ok) throw new Error(`Session ${sessionRes.status}`);
 
-      const [menuData, sessionData]: [Dish[], { session_id: string; welcome_message: string }] =
+      const [menuData, sessionData]: [Dish[], { session_id: string; welcome_message: string; suggestions?: string[] }] =
         await Promise.all([menuRes.json(), sessionRes.json()]);
 
       const available = menuData.filter(d => d.available);
@@ -134,6 +135,7 @@ export default function App() {
       setSelectedCat(firstCat);
       setSessionId(sessionData.session_id);
       setMessages([{ role: 'assistant', content: sessionData.welcome_message, timestamp: new Date().toISOString() }]);
+      setSuggestions(sessionData.suggestions ?? []);
       setScreen('main');
     } catch (err) {
       setStartError(String(err));
@@ -156,6 +158,7 @@ export default function App() {
       });
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.message, timestamp: new Date().toISOString() }]);
+      setSuggestions(data.suggestions ?? []);
       if (data.order_data) { setPendingOrder(data.order_data); setScreen('confirm_order'); }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Errore di rete. Riprova.', timestamp: new Date().toISOString() }]);
@@ -358,6 +361,15 @@ export default function App() {
             )}
             <div ref={bottomRef} />
           </div>
+          {suggestions.length > 0 && !loading && (
+            <div style={S.suggestionsRow}>
+              {suggestions.map((s, i) => (
+                <button key={i} style={S.suggestionChip} onClick={() => { setSuggestions([]); sendMessage(s); }}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
           <div style={S.inputArea}>
             <input
               style={S.input}
@@ -383,7 +395,21 @@ export default function App() {
               <p style={S.modalDesc}>{translatedDishes[selectedDish.id] ?? selectedDish.description}</p>
             )}
             <button style={S.modalAskBtn} onClick={() => askAboutDish(selectedDish)}>
-              💬 {lang === 'en' ? 'Ask the AI about this dish' : lang === 'de' ? 'KI fragen' : lang === 'es' ? 'Preguntar al asistente' : 'Chiedi all\'assistente AI'}
+              💬 {lang === 'en' ? 'Ask Marco about this dish' : lang === 'de' ? 'Marco fragen' : lang === 'es' ? 'Preguntar a Marco' : 'Chiedi a Marco'}
+            </button>
+            <button style={S.modalOrderBtn} onClick={() => {
+              setSelectedDish(null);
+              setTab('chat');
+              const orderPrompt = lang === 'en'
+                ? `I'd like to order the "${selectedDish.name}".`
+                : lang === 'de'
+                ? `Ich möchte "${selectedDish.name}" bestellen.`
+                : lang === 'es'
+                ? `Quisiera pedir "${selectedDish.name}".`
+                : `Vorrei ordinare "${selectedDish.name}".`;
+              sendMessage(orderPrompt);
+            }}>
+              🛒 {lang === 'en' ? 'Add to order' : lang === 'de' ? 'Bestellen' : lang === 'es' ? 'Pedir' : 'Aggiungi all\'ordine'}
             </button>
             <button style={S.modalClose} onClick={() => setSelectedDish(null)}>✕</button>
           </div>
@@ -457,7 +483,10 @@ const S: Record<string, React.CSSProperties> = {
   modalTitle: { fontSize: 22, fontWeight: 700, color: '#eaeaea', textAlign: 'center', marginBottom: 6 },
   modalPrice: { fontSize: 24, fontWeight: 800, color: '#e94560', textAlign: 'center', marginBottom: 14 },
   modalDesc: { fontSize: 14, color: '#c8c8d4', lineHeight: 1.6, textAlign: 'center', marginBottom: 24 },
-  modalAskBtn: { display: 'block', width: '100%', padding: '16px', borderRadius: 14, fontSize: 16, fontWeight: 700, background: '#e94560', color: '#fff', border: 'none', cursor: 'pointer', marginBottom: 12 },
+  suggestionsRow: { display: 'flex', gap: 8, padding: '8px 12px', overflowX: 'auto', flexShrink: 0, scrollbarWidth: 'none' as const },
+  suggestionChip: { flexShrink: 0, padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, background: '#0f3460', color: '#eaeaea', border: '1.5px solid #e94560', cursor: 'pointer', whiteSpace: 'nowrap' as const },
+  modalAskBtn: { display: 'block', width: '100%', padding: '14px', borderRadius: 14, fontSize: 15, fontWeight: 700, background: '#e94560', color: '#fff', border: 'none', cursor: 'pointer', marginBottom: 10 },
+  modalOrderBtn: { display: 'block', width: '100%', padding: '14px', borderRadius: 14, fontSize: 15, fontWeight: 700, background: '#16213e', color: '#eaeaea', border: '1.5px solid #2a2a4a', cursor: 'pointer', marginBottom: 12 },
   modalClose: { position: 'absolute', top: 16, right: 16, background: '#2a2a4a', color: '#a8a8b3', border: 'none', borderRadius: '50%', width: 32, height: 32, fontSize: 14, cursor: 'pointer' },
 
   // Confirm

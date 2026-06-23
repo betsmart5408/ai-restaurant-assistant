@@ -62,6 +62,7 @@ router.post('/session', async (req, res) => {
     res.json({
       session_id: session.rows[0].id,
       welcome_message: welcome.message,
+      suggestions: welcome.suggestions ?? [],
     });
   } catch (err: unknown) {
     const e = err as Error;
@@ -120,6 +121,7 @@ router.post('/:sessionId/message', async (req, res) => {
     res.json({
       message: response.message,
       order_data: response.orderData ?? null,
+      suggestions: response.suggestions ?? [],
     });
   } catch (err) {
     console.error(err);
