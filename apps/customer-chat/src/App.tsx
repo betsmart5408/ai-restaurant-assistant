@@ -272,7 +272,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [input, sessionId, loading]);
+  }, [input, sessionId, loading, lang]);
 
   async function confirmOrder() {
     if (!pendingOrder || !sessionId) return;
@@ -528,7 +528,13 @@ export default function App() {
             ))}
             {loading && (
               <div style={S.bubbleAI}>
-                <div style={S.bubbleAIInner}><span style={S.typing}>● ● ●</span></div>
+                <div style={S.bubbleAIInner}>
+                  <span style={S.typingDots}>
+                    <span style={S.dot1}>●</span>
+                    <span style={S.dot2}>●</span>
+                    <span style={S.dot3}>●</span>
+                  </span>
+                </div>
               </div>
             )}
             <div ref={bottomRef} />
@@ -643,7 +649,10 @@ const S: Record<string, React.CSSProperties> = {
   bubbleAI: { display: 'flex', justifyContent: 'flex-start' },
   bubbleUserInner: { maxWidth: '78%', background: '#0f3460', color: '#eaeaea', borderRadius: '18px 18px 4px 18px', padding: '10px 14px', fontSize: 15, lineHeight: 1.5, whiteSpace: 'pre-wrap' },
   bubbleAIInner: { maxWidth: '82%', background: '#1a1a2e', color: '#eaeaea', borderRadius: '18px 18px 18px 4px', padding: '10px 14px', fontSize: 15, lineHeight: 1.5, border: '1px solid #2a2a4a', whiteSpace: 'pre-wrap' },
-  typing: { color: '#e94560', letterSpacing: 4, fontSize: 12 },
+  typingDots: { display: 'inline-flex', gap: 4, alignItems: 'center' },
+  dot1: { color: '#e94560', fontSize: 10, animation: 'bounce 1.2s infinite', animationDelay: '0s' },
+  dot2: { color: '#e94560', fontSize: 10, animation: 'bounce 1.2s infinite', animationDelay: '0.2s' },
+  dot3: { color: '#e94560', fontSize: 10, animation: 'bounce 1.2s infinite', animationDelay: '0.4s' },
   inputArea: { display: 'flex', gap: 8, padding: '12px 12px 16px', background: '#16213e', borderTop: '1px solid #2a2a4a', flexShrink: 0 },
   input: { flex: 1, background: '#0f0f1a', color: '#eaeaea', border: '1.5px solid #2a2a4a', borderRadius: 24, padding: '10px 16px', fontSize: 15, outline: 'none' },
   sendBtn: { background: '#e94560', color: 'white', borderRadius: '50%', width: 44, height: 44, fontSize: 18, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' },
