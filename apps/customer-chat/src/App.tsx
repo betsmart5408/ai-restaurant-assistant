@@ -445,6 +445,8 @@ export default function App() {
                     const newMessages = [newWelcome];
                     setMessages(newMessages);
                     if (sessionId) saveSession(params.restaurant, params.table, { sessionId, lang: opt.code, messages: newMessages, alreadyOrdered, joinedExisting, orderConfirmed });
+                    const SUGG: Record<string, string[]> = { it: ["Cosa mi consiglia?", "Ho un'allergia", 'Menu degustazione'], en: ['What do you recommend?', 'I have an allergy', 'Tasting menu'], de: ['Was empfehlen Sie?', 'Ich habe eine Allergie', 'Degustationsmenü'], es: ['¿Qué recomienda?', 'Tengo una alergia', 'Menú degustación'], fr: ['Que recommandez-vous?', "J'ai une allergie", 'Menu dégustation'], pt: ['O que recomenda?', 'Tenho uma alergia', 'Menu degustação'], ru: ['Что вы рекомендуете?', 'У меня аллергия', 'Дегустационное меню'], zh: ['您推荐什么？', '我有过敏', '品鉴菜单'], ja: ['何がおすすめですか？', 'アレルギーがあります', 'テイスティングメニュー'], ar: ['ماذا توصي؟', 'لدي حساسية', 'قائمة التذوق'] };
+                    setSuggestions(SUGG[opt.code] ?? SUGG['it']);
                     setShowLangPicker(false);
                     setLang(opt.code);
                     setTranslatedDishes({});
