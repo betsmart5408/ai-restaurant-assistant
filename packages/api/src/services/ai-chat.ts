@@ -256,7 +256,7 @@ export async function processChat(ctx: ChatContext, userMessage: string) {
   ];
 
   const response = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
+    model: 'llama-3.1-8b-instant',
     max_tokens: 1024,
     temperature: 0.7,
     messages: [
