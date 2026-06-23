@@ -440,7 +440,6 @@ export default function App() {
                   onClick={() => {
                     if (sessionId) saveSession(params.restaurant, params.table, { sessionId, lang: opt.code, messages, alreadyOrdered, joinedExisting, orderConfirmed });
                     setShowLangPicker(false);
-                    setScreen('lang');
                     setLang(opt.code);
                     setTranslatedDishes({});
                   }}
