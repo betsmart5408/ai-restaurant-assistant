@@ -151,8 +151,11 @@ export default function App() {
           }),
         }),
       ]);
-      if (!menuRes.ok) throw new Error(`Menu ${menuRes.status}`);
-      if (!sessionRes.ok) throw new Error(`Session ${sessionRes.status}`);
+      if (!menuRes.ok) throw new Error(`Menu error ${menuRes.status}`);
+      if (!sessionRes.ok) {
+        const errBody = await sessionRes.json().catch(() => ({}));
+        throw new Error(`Session ${sessionRes.status}: ${errBody.detail || errBody.error || 'unknown'}`);
+      }
 
       const [menuData, sessionData]: [Dish[], { session_id: string; welcome_message: string; suggestions?: string[]; joined_existing?: boolean; already_ordered?: string }] =
         await Promise.all([menuRes.json(), sessionRes.json()]);

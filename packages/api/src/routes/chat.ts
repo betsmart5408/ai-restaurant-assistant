@@ -44,18 +44,24 @@ router.post('/session', async (req, res) => {
 
     const tableId = table.rows[0].id;
 
-    // ── Cerca sessione attiva per questo tavolo (ultime 6 ore) ──────────────
-    const existing = await db.query(
-      `SELECT id FROM chat_sessions
-       WHERE restaurant_id = $1 AND table_id = $2
-         AND created_at > NOW() - INTERVAL '6 hours'
-       ORDER BY created_at DESC LIMIT 1`,
-      [restaurantId, tableId]
-    );
+    // ── Cerca sessione attiva per questo tavolo ──────────────────────────────
+    let existingSessionId: string | null = null;
+    try {
+      const existing = await db.query(
+        `SELECT id FROM chat_sessions
+         WHERE restaurant_id = $1 AND table_id = $2
+           AND created_at > NOW() - INTERVAL '6 hours'
+         ORDER BY created_at DESC LIMIT 1`,
+        [restaurantId, tableId]
+      );
+      if (existing.rows.length > 0) existingSessionId = existing.rows[0].id;
+    } catch {
+      // created_at potrebbe non esistere — procediamo con nuova sessione
+    }
 
-    if (existing.rows.length > 0) {
+    if (existingSessionId) {
       // ── Unisce alla sessione esistente ────────────────────────────────────
-      const sessionId = existing.rows[0].id;
+      const sessionId = existingSessionId;
       const alreadyOrdered = await getSessionOrders(sessionId);
 
       const joinPrompt = alreadyOrdered

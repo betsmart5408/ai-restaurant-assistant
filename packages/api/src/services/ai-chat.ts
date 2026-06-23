@@ -26,10 +26,13 @@ interface ChatContext {
 // ── Meteo Málaga (open-meteo, gratuito, nessuna API key) ──────────────────────
 async function fetchWeather(): Promise<{ desc: string; mood: string } | null> {
   try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 3000);
     const res = await fetch(
       'https://api.open-meteo.com/v1/forecast?latitude=36.72&longitude=-4.42&current=temperature_2m,weather_code',
-      { signal: AbortSignal.timeout(3000) }
+      { signal: controller.signal }
     );
+    clearTimeout(tid);
     const data = await res.json() as { current: { temperature_2m: number; weather_code: number } };
     const temp = Math.round(data.current.temperature_2m);
     const code = data.current.weather_code;
