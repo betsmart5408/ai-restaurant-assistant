@@ -178,9 +178,23 @@ router.post('/:sessionId/message', async (req, res) => {
       ]), sessionId]
     );
 
+    // Risolve dish_id per nome se mancante (AI non ha più gli id nel prompt)
+    let orderData = response.orderData ?? null;
+    if (orderData?.items) {
+      const resolved = await Promise.all(orderData.items.map(async (item: { dish_id?: string; dish_name: string; qty: number; unit_price: number }) => {
+        if (item.dish_id) return item;
+        const match = await db.query(
+          `SELECT id FROM dishes WHERE restaurant_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1`,
+          [s.restaurant_id, item.dish_name]
+        );
+        return { ...item, dish_id: match.rows[0]?.id ?? null };
+      }));
+      orderData = { items: resolved };
+    }
+
     res.json({
       message: response.message,
-      order_data: response.orderData ?? null,
+      order_data: orderData,
       suggestions: response.suggestions ?? [],
     });
   } catch (err) {

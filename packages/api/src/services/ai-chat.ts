@@ -163,8 +163,7 @@ function buildSystemPrompt(
 ): string {
   const time = getTimeContext();
   const menuJson = JSON.stringify(dishes.map(d => ({
-    id: d.id, name: d.name, price: d.price, category: d.category,
-    allergens: d.allergens,
+    name: d.name, price: d.price, category: d.category,
   })));
 
   const promos: string[] = [];
@@ -230,8 +229,8 @@ MENU DEGUSTAZIONE:
 ORDINE:
 - Chiedi sempre conferma con riepilogo (nomi, quantità, totale) prima di finalizzare.
 - Dopo conferma esplicita del cliente, aggiungi su riga separata:
-  ORDER_JSON:{"items":[{"dish_id":"...","dish_name":"...","qty":1,"unit_price":0.0}]}
-- Non inventare piatti, prezzi o ingredienti non presenti nel menu.
+  ORDER_JSON:{"items":[{"dish_name":"...","qty":1,"unit_price":0.0}]}
+- Non inventare piatti o prezzi non presenti nel menu.
 
 ${getSuggestionsInstruction(language)}`;
 }
@@ -251,13 +250,13 @@ export async function processChat(ctx: ChatContext, userMessage: string) {
   );
 
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
-    ...conversationHistory,
+    ...conversationHistory.slice(-6),
     { role: 'user', content: userMessage },
   ];
 
   const response = await groq.chat.completions.create({
     model: 'llama-3.1-8b-instant',
-    max_tokens: 1024,
+    max_tokens: 600,
     temperature: 0.7,
     messages: [
       { role: 'system', content: systemPrompt },
