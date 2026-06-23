@@ -115,6 +115,7 @@ export default function App() {
   const [joinedExisting, setJoinedExisting] = useState(false);
   const [listening, setListening] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [showLangPicker, setShowLangPicker] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastMsgRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -136,7 +137,7 @@ export default function App() {
 
   // Traduce tutte le descrizioni in background, categoria per categoria
   useEffect(() => {
-    if (lang === 'it' || screen !== 'main' || dishes.length === 0) return;
+    if (lang === 'es' || screen !== 'main' || dishes.length === 0) return;
     let cancelled = false;
     async function translateAll() {
       const categories = CAT_ORDER.filter(c => dishes.some(d => d.category === c));
@@ -166,6 +167,7 @@ export default function App() {
       setTranslatingCat(null);
     }
     setTranslatedDishes({});
+    setShowLangPicker(false);
     translateAll();
     return () => { cancelled = true; };
   }, [screen, lang, dishes.length]);
@@ -390,11 +392,30 @@ export default function App() {
     <div style={S.appWrap}>
       {/* Header */}
       <header style={S.header}>
-        <button style={S.backBtn} onClick={() => setScreen('lang')}>←</button>
+        <button style={S.backBtn} onClick={() => setShowLangPicker(true)}>🌐</button>
         <img src="/logo.png" alt="Gusto" style={S.headerLogo} />
         <div style={S.headerSub2}>Tavolo {params.table}</div>
         {orderConfirmed && <span style={S.orderBadge}>{t('ordered', lang)}</span>}
       </header>
+
+      {/* Language picker overlay */}
+      {showLangPicker && (
+        <div style={S.langPickerOverlay} onClick={() => setShowLangPicker(false)}>
+          <div style={S.langPickerBox} onClick={e => e.stopPropagation()}>
+            <div style={S.langPickerGrid}>
+              {LANG_OPTIONS.map(opt => (
+                <button
+                  key={opt.code}
+                  style={lang === opt.code ? S.langPickerBtnActive : S.langPickerBtn}
+                  onClick={() => { setLang(opt.code); setTranslatedDishes({}); setShowLangPicker(false); }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Banner sessione condivisa */}
       {joinedExisting && (
@@ -614,6 +635,13 @@ const S: Record<string, React.CSSProperties> = {
   modalAskBtn: { display: 'block', width: '100%', padding: '14px', borderRadius: 14, fontSize: 15, fontWeight: 700, background: '#e94560', color: '#fff', border: 'none', cursor: 'pointer', marginBottom: 10 },
   modalOrderBtn: { display: 'block', width: '100%', padding: '14px', borderRadius: 14, fontSize: 15, fontWeight: 700, background: '#16213e', color: '#eaeaea', border: '1.5px solid #2a2a4a', cursor: 'pointer', marginBottom: 12 },
   modalClose: { position: 'absolute', top: 16, right: 16, background: '#2a2a4a', color: '#a8a8b3', border: 'none', borderRadius: '50%', width: 32, height: 32, fontSize: 14, cursor: 'pointer' },
+
+  // Lang picker
+  langPickerOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', zIndex: 200 },
+  langPickerBox: { background: '#16213e', borderRadius: '20px 20px 0 0', padding: '20px 16px 32px', width: '100%', border: '1px solid #2a2a4a' },
+  langPickerGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
+  langPickerBtn: { padding: '12px 10px', borderRadius: 10, fontSize: 14, fontWeight: 600, background: '#0f0f1a', color: '#a8a8b3', border: '1.5px solid #2a2a4a', cursor: 'pointer' },
+  langPickerBtnActive: { padding: '12px 10px', borderRadius: 10, fontSize: 14, fontWeight: 700, background: '#e94560', color: '#fff', border: '1.5px solid #e94560', cursor: 'pointer' },
 
   // Confirm
   confirmScreen: { padding: 24, display: 'flex', flexDirection: 'column', gap: 20, minHeight: '100dvh', background: '#0f0f1a' },
