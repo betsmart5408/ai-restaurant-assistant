@@ -20,6 +20,7 @@ interface ChatContext {
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
   groupSize?: number;
   savedPreferences?: string;
+  existingOrders?: string;
 }
 
 // ── Meteo Málaga (open-meteo, gratuito, nessuna API key) ──────────────────────
@@ -155,6 +156,7 @@ function buildSystemPrompt(
   weather: { desc: string; mood: string } | null,
   groupSize?: number,
   savedPreferences?: string,
+  existingOrders?: string,
 ): string {
   const time = getTimeContext();
   const menuJson = JSON.stringify(dishes.map(d => ({
@@ -186,6 +188,9 @@ function buildSystemPrompt(
   const preferencesSection = savedPreferences
     ? `\nPREFERENZE CLIENTE (già conosciuto): ${savedPreferences}\n→ Ricordalo e adatta subito i tuoi consigli senza richiedere di nuovo le stesse info.` : '';
 
+  const existingOrdersSection = existingOrders
+    ? `\nORDINI GIÀ CONFERMATI AL TAVOLO (da altri clienti): ${existingOrders}\n→ Non riproporre questi piatti. Se il cliente li menziona, digli che sono già stati ordinati da qualcuno al tavolo.` : '';
+
   const langName: Record<string, string> = {
     it: 'italiano', en: 'English', de: 'Deutsch', es: 'español', fr: 'français',
   };
@@ -194,7 +199,7 @@ function buildSystemPrompt(
 Personalità: calorosa, appassionata, professionale. Ami il cibo, conosci ogni piatto e vino a memoria. Vuoi che ogni ospite viva un'esperienza indimenticabile.
 Rispondi SEMPRE in ${langName[language] ?? language}. Tavolo ${tableNumber}. Ora: ${time[language as keyof typeof time] ?? time.it}.
 Tono: amichevole e coinvolgente, mai robotico. Max 4 righe salvo richiesta dettagli.
-${weatherSection}${groupSection}${preferencesSection}
+${weatherSection}${groupSection}${preferencesSection}${existingOrdersSection}
 
 MENU DISPONIBILE:
 ${menuJson}
@@ -230,7 +235,7 @@ ${getSuggestionsInstruction(language)}`;
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 export async function processChat(ctx: ChatContext, userMessage: string) {
-  const { restaurantId, restaurantName, tableNumber, language, conversationHistory, groupSize, savedPreferences } = ctx;
+  const { restaurantId, restaurantName, tableNumber, language, conversationHistory, groupSize, savedPreferences, existingOrders } = ctx;
 
   const [{ dishes, expiring, highStock, topMargin, popular }, weather] = await Promise.all([
     loadRestaurantContext(restaurantId),
@@ -239,7 +244,7 @@ export async function processChat(ctx: ChatContext, userMessage: string) {
 
   const systemPrompt = buildSystemPrompt(
     restaurantName, dishes, expiring, highStock, topMargin, popular,
-    language, tableNumber, weather, groupSize, savedPreferences,
+    language, tableNumber, weather, groupSize, savedPreferences, existingOrders,
   );
 
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [

@@ -88,6 +88,8 @@ export default function App() {
   const [translatingCat, setTranslatingCat] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [groupSize, setGroupSize] = useState<number>(2);
+  const [alreadyOrdered, setAlreadyOrdered] = useState<string>('');
+  const [joinedExisting, setJoinedExisting] = useState(false);
   const [listening, setListening] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -152,7 +154,7 @@ export default function App() {
       if (!menuRes.ok) throw new Error(`Menu ${menuRes.status}`);
       if (!sessionRes.ok) throw new Error(`Session ${sessionRes.status}`);
 
-      const [menuData, sessionData]: [Dish[], { session_id: string; welcome_message: string; suggestions?: string[] }] =
+      const [menuData, sessionData]: [Dish[], { session_id: string; welcome_message: string; suggestions?: string[]; joined_existing?: boolean; already_ordered?: string }] =
         await Promise.all([menuRes.json(), sessionRes.json()]);
 
       const available = menuData.filter(d => d.available);
@@ -162,6 +164,8 @@ export default function App() {
       setSessionId(sessionData.session_id);
       setMessages([{ role: 'assistant', content: sessionData.welcome_message, timestamp: new Date().toISOString() }]);
       setSuggestions(sessionData.suggestions ?? []);
+      setJoinedExisting(sessionData.joined_existing ?? false);
+      setAlreadyOrdered(sessionData.already_ordered ?? '');
       setScreen('main');
     } catch (err) {
       setStartError(String(err));
@@ -369,6 +373,18 @@ export default function App() {
         {orderConfirmed && <span style={S.orderBadge}>✓ Ordinato</span>}
       </header>
 
+      {/* Banner sessione condivisa */}
+      {joinedExisting && (
+        <div style={S.sharedBanner}>
+          👥 {lang === 'en' ? 'Shared table' : lang === 'de' ? 'Gemeinsamer Tisch' : lang === 'es' ? 'Mesa compartida' : 'Sessione tavolo condivisa'}
+          {alreadyOrdered && (
+            <span style={S.sharedOrdered}>
+              {' '}· {lang === 'en' ? 'Already ordered' : lang === 'de' ? 'Bereits bestellt' : lang === 'es' ? 'Ya pedido' : 'Già ordinato'}: {alreadyOrdered}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Tab bar */}
       <div style={S.tabBar}>
         <button style={tab === 'menu' ? S.tabActive : S.tabInactive} onClick={() => setTab('menu')}>
@@ -558,6 +574,10 @@ const S: Record<string, React.CSSProperties> = {
   modalTitle: { fontSize: 22, fontWeight: 700, color: '#eaeaea', textAlign: 'center', marginBottom: 6 },
   modalPrice: { fontSize: 24, fontWeight: 800, color: '#e94560', textAlign: 'center', marginBottom: 14 },
   modalDesc: { fontSize: 14, color: '#c8c8d4', lineHeight: 1.6, textAlign: 'center', marginBottom: 24 },
+  // Shared session banner
+  sharedBanner: { background: '#0f3460', borderBottom: '1px solid #2a2a4a', padding: '8px 14px', fontSize: 12, color: '#a8c8ff', flexShrink: 0, display: 'flex', flexWrap: 'wrap' as const, gap: 4 },
+  sharedOrdered: { color: '#22c55e', fontWeight: 600 },
+
   // Group size selector
   groupSelector: { display: 'flex', alignItems: 'center', gap: 8 },
   groupLabel: { fontSize: 20 },
