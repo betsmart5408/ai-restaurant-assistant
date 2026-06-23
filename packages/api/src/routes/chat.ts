@@ -7,7 +7,7 @@ const router = Router();
 // POST /api/chat/session — crea nuova sessione chat
 router.post('/session', async (req, res) => {
   try {
-    const { restaurant_slug, table_number, language = 'it' } = req.body;
+    const { restaurant_slug, table_number, language = 'it', group_size, saved_preferences } = req.body;
 
     const restaurant = await db.query(
       'SELECT id, name FROM restaurants WHERE slug = $1',
@@ -44,8 +44,10 @@ router.post('/session', async (req, res) => {
         tableNumber: table_number,
         language,
         conversationHistory: [],
+        groupSize: group_size,
+        savedPreferences: saved_preferences,
       },
-      `Ciao! Ho appena scannerizzato il QR del tavolo ${table_number}. Presentati brevemente e mostrami il menu in modo accattivante.`
+      `Ciao! Ho scannerizzato il QR del tavolo ${table_number}. Presentati come Marco e dai il benvenuto al cliente.`
     );
 
     // Salva messaggio di benvenuto in sessione

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Component, ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, Component, ReactNode } from 'react';
 
 export class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
   state = { error: null };
@@ -29,7 +29,16 @@ function getQRParams() {
 
 interface Message { role: 'user' | 'assistant'; content: string; timestamp: string; }
 interface OrderData { items: Array<{ dish_id: string; dish_name: string; qty: number; unit_price: number }>; }
-interface Dish { id: string; name: string; description: string; price: number; category: string; available: boolean; }
+interface Dish { id: string; name: string; description: string; price: number; category: string; available: boolean; image_url?: string; }
+
+const STORAGE_KEY = (restaurant: string) => `gusto_prefs_${restaurant}`;
+interface SavedPrefs { allergies: string; groupSize: number; }
+function loadPrefs(restaurant: string): SavedPrefs | null {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY(restaurant)) ?? 'null'); } catch { return null; }
+}
+function savePrefs(restaurant: string, prefs: SavedPrefs) {
+  try { localStorage.setItem(STORAGE_KEY(restaurant), JSON.stringify(prefs)); } catch {}
+}
 
 type Screen = 'lang' | 'main' | 'confirm_order';
 type Tab = 'menu' | 'chat';
@@ -78,8 +87,18 @@ export default function App() {
   const [translatedDishes, setTranslatedDishes] = useState<Record<string, string>>({}); // dish.id -> translated desc
   const [translatingCat, setTranslatingCat] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [groupSize, setGroupSize] = useState<number>(2);
+  const [listening, setListening] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const checkInTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Carica preferenze salvate al primo render
+  useEffect(() => {
+    const prefs = loadPrefs(params.restaurant);
+    if (prefs?.groupSize) setGroupSize(prefs.groupSize);
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -113,14 +132,21 @@ export default function App() {
     setLang(selectedLang);
     setStartError(null);
     setLoading(true);
+    savePrefs(params.restaurant, { allergies: '', groupSize });
     try {
-      // Menu e sessione in parallelo
+      const savedPrefs = loadPrefs(params.restaurant);
       const [menuRes, sessionRes] = await Promise.all([
         fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=es`),
         fetch(`${API}/api/chat/session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ restaurant_slug: params.restaurant, table_number: params.table, language: selectedLang }),
+          body: JSON.stringify({
+            restaurant_slug: params.restaurant,
+            table_number: params.table,
+            language: selectedLang,
+            group_size: groupSize,
+            saved_preferences: savedPrefs?.allergies || undefined,
+          }),
         }),
       ]);
       if (!menuRes.ok) throw new Error(`Menu ${menuRes.status}`);
@@ -144,10 +170,11 @@ export default function App() {
     }
   }
 
-  async function sendMessage(text?: string) {
+  const sendMessage = useCallback(async (text?: string) => {
     const msg = text ?? input.trim();
     if (!msg || !sessionId || loading) return;
     setInput('');
+    setSuggestions([]);
     setMessages(prev => [...prev, { role: 'user', content: msg, timestamp: new Date().toISOString() }]);
     setLoading(true);
     try {
@@ -165,7 +192,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [input, sessionId, loading]);
 
   async function confirmOrder() {
     if (!pendingOrder || !sessionId) return;
@@ -181,9 +208,19 @@ export default function App() {
       setScreen('main');
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: lang === 'de' ? '✅ Bestellung erhalten!' : lang === 'en' ? '✅ Order received!' : lang === 'es' ? '✅ ¡Pedido recibido!' : '✅ Ordine ricevuto!',
+        content: lang === 'de' ? '✅ Bestellung erhalten! Genießen Sie Ihren Abend!' : lang === 'en' ? '✅ Order received! Enjoy your evening!' : lang === 'es' ? '✅ ¡Pedido recibido! ¡Que lo disfruten!' : '✅ Ordine ricevuto! Buon appetito!',
         timestamp: new Date().toISOString(),
       }]);
+      // Check-in automatico dopo 8 minuti
+      if (checkInTimerRef.current) clearTimeout(checkInTimerRef.current);
+      checkInTimerRef.current = setTimeout(() => {
+        const checkIn = lang === 'en' ? 'How is everything going? Can I bring you anything else?'
+          : lang === 'de' ? 'Wie läuft alles? Kann ich Ihnen noch etwas bringen?'
+          : lang === 'es' ? '¿Cómo va todo? ¿Puedo traerles algo más?'
+          : 'Come va tutto? Posso portarvi qualcos\'altro?';
+        sendMessage(checkIn);
+        setTab('chat');
+      }, 8 * 60 * 1000);
     } catch { alert('Errore conferma ordine'); } finally { setLoading(false); }
   }
 
@@ -202,6 +239,26 @@ export default function App() {
         setTranslatedDesc(data.translated);
       }
     } catch { /* mostra originale */ }
+  }
+
+  function toggleVoice() {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { alert('Riconoscimento vocale non supportato in questo browser'); return; }
+    if (listening) { recognitionRef.current?.stop(); setListening(false); return; }
+    const recognition = new SR();
+    const langMap: Record<string, string> = { it: 'it-IT', en: 'en-US', de: 'de-DE', es: 'es-ES' };
+    recognition.lang = langMap[lang] ?? 'it-IT';
+    recognition.interimResults = false;
+    recognition.onresult = (e: any) => {
+      const transcript: string = e.results[0][0].transcript;
+      setInput(transcript);
+      setListening(false);
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    recognition.start();
+    recognitionRef.current = recognition;
+    setListening(true);
   }
 
   function askAboutDish(dish: Dish) {
@@ -245,11 +302,23 @@ export default function App() {
         {loading ? (
           <div style={S.pizzaSpinner}>🍕</div>
         ) : (
-          <div style={S.langGrid}>
-            {LANG_OPTIONS.map(opt => (
-              <button key={opt.code} style={S.langBtn} onClick={() => startSession(opt.code)}>{opt.label}</button>
-            ))}
-          </div>
+          <>
+            <div style={S.groupSelector}>
+              <span style={S.groupLabel}>👥</span>
+              {[1, 2, 3, 4, 5].map(n => (
+                <button
+                  key={n}
+                  style={groupSize === n ? S.groupBtnActive : S.groupBtn}
+                  onClick={() => setGroupSize(n)}
+                >{n === 5 ? '5+' : n}</button>
+              ))}
+            </div>
+            <div style={S.langGrid}>
+              {LANG_OPTIONS.map(opt => (
+                <button key={opt.code} style={S.langBtn} onClick={() => startSession(opt.code)}>{opt.label}</button>
+              ))}
+            </div>
+          </>
         )}
 
         <p style={S.tableTag}>Tavolo {params.table}</p>
@@ -371,12 +440,15 @@ export default function App() {
             </div>
           )}
           <div style={S.inputArea}>
+            <button style={listening ? S.micBtnActive : S.micBtn} onClick={toggleVoice} title="Parla">
+              {listening ? '🔴' : '🎤'}
+            </button>
             <input
               style={S.input}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              placeholder={lang === 'en' ? 'Write a message...' : lang === 'de' ? 'Nachricht...' : lang === 'es' ? 'Escribe...' : 'Scrivi un messaggio...'}
+              placeholder={listening ? '🎤 Sto ascoltando...' : lang === 'en' ? 'Write a message...' : lang === 'de' ? 'Nachricht...' : lang === 'es' ? 'Escribe...' : 'Scrivi un messaggio...'}
               disabled={loading}
             />
             <button style={S.sendBtn} onClick={() => sendMessage()} disabled={loading || !input.trim()}>➤</button>
@@ -388,7 +460,10 @@ export default function App() {
       {selectedDish && (
         <div style={S.modalOverlay} onClick={() => setSelectedDish(null)}>
           <div style={S.modalBox} onClick={e => e.stopPropagation()}>
-            <div style={S.modalIcon}>{CAT_ICONS[selectedDish.category]}</div>
+            {selectedDish.image_url
+              ? <img src={selectedDish.image_url} alt={selectedDish.name} style={S.modalImg} />
+              : <div style={S.modalIcon}>{CAT_ICONS[selectedDish.category]}</div>
+            }
             <h2 style={S.modalTitle}>{selectedDish.name}</h2>
             <div style={S.modalPrice}>€{parseFloat(String(selectedDish.price ?? 0)).toFixed(2)}</div>
             {(translatedDishes[selectedDish.id] ?? selectedDish.description) && (
@@ -483,8 +558,22 @@ const S: Record<string, React.CSSProperties> = {
   modalTitle: { fontSize: 22, fontWeight: 700, color: '#eaeaea', textAlign: 'center', marginBottom: 6 },
   modalPrice: { fontSize: 24, fontWeight: 800, color: '#e94560', textAlign: 'center', marginBottom: 14 },
   modalDesc: { fontSize: 14, color: '#c8c8d4', lineHeight: 1.6, textAlign: 'center', marginBottom: 24 },
+  // Group size selector
+  groupSelector: { display: 'flex', alignItems: 'center', gap: 8 },
+  groupLabel: { fontSize: 20 },
+  groupBtn: { width: 40, height: 40, borderRadius: '50%', fontSize: 15, fontWeight: 600, background: '#16213e', color: '#a8a8b3', border: '1.5px solid #2a2a4a', cursor: 'pointer' },
+  groupBtnActive: { width: 40, height: 40, borderRadius: '50%', fontSize: 15, fontWeight: 700, background: '#e94560', color: '#fff', border: '1.5px solid #e94560', cursor: 'pointer' },
+
+  // Voice input
+  micBtn: { background: '#16213e', color: '#a8a8b3', border: '1.5px solid #2a2a4a', borderRadius: '50%', width: 44, height: 44, fontSize: 18, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
+  micBtnActive: { background: '#e94560', color: '#fff', border: '1.5px solid #e94560', borderRadius: '50%', width: 44, height: 44, fontSize: 18, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', animation: 'spin 1.5s linear infinite' },
+
+  // Suggestions
   suggestionsRow: { display: 'flex', gap: 8, padding: '8px 12px', overflowX: 'auto', flexShrink: 0, scrollbarWidth: 'none' as const },
   suggestionChip: { flexShrink: 0, padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, background: '#0f3460', color: '#eaeaea', border: '1.5px solid #e94560', cursor: 'pointer', whiteSpace: 'nowrap' as const },
+
+  // Modal
+  modalImg: { width: '100%', height: 180, objectFit: 'cover' as const, borderRadius: 14, marginBottom: 12 },
   modalAskBtn: { display: 'block', width: '100%', padding: '14px', borderRadius: 14, fontSize: 15, fontWeight: 700, background: '#e94560', color: '#fff', border: 'none', cursor: 'pointer', marginBottom: 10 },
   modalOrderBtn: { display: 'block', width: '100%', padding: '14px', borderRadius: 14, fontSize: 15, fontWeight: 700, background: '#16213e', color: '#eaeaea', border: '1.5px solid #2a2a4a', cursor: 'pointer', marginBottom: 12 },
   modalClose: { position: 'absolute', top: 16, right: 16, background: '#2a2a4a', color: '#a8a8b3', border: 'none', borderRadius: '50%', width: 32, height: 32, fontSize: 14, cursor: 'pointer' },
