@@ -57,7 +57,7 @@ router.post('/translate-batch', async (req, res) => {
     const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French' };
     const compact = items.map((item, idx) => `${idx}|${item.text}`).join('\n');
     const msg = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       max_tokens: 2048,
       temperature: 0.1,
       messages: [{ role: 'user', content: `Translate each line to ${langNames[lang] || 'English'}. Keep format INDEX|TRANSLATION exactly. One per line:\n\n${compact}` }],
@@ -81,7 +81,7 @@ router.post('/translate-desc', async (req, res) => {
     if (!text || !lang || lang === 'es') return res.json({ translated: text });
     const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French' };
     const msg = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       max_tokens: 256,
       temperature: 0.1,
       messages: [{ role: 'user', content: `Translate this dish description to ${langNames[lang] || 'English'}. Reply with ONLY the translated text, nothing else:\n\n${text}` }],
