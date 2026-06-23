@@ -59,38 +59,35 @@ router.post('/session', async (req, res) => {
       // created_at potrebbe non esistere — procediamo con nuova sessione
     }
 
+    const welcomeMessages: Record<string, string> = {
+      it: `Ciao! 👋 Sono Marco, il tuo assistente virtuale da ${restaurantName}.\nSono qui per aiutarti a scegliere i piatti migliori, scoprire abbinamenti e ordinare. Hai allergie o intolleranze di cui dovrei sapere?`,
+      en: `Hello! 👋 I'm Marco, your virtual assistant at ${restaurantName}.\nI'm here to help you choose the best dishes, discover pairings and place your order. Do you have any allergies or intolerances I should know about?`,
+      de: `Hallo! 👋 Ich bin Marco, Ihr virtueller Assistent bei ${restaurantName}.\nIch helfe Ihnen, die besten Gerichte zu wählen und zu bestellen. Haben Sie Allergien oder Unverträglichkeiten?`,
+      es: `¡Hola! 👋 Soy Marco, tu asistente virtual en ${restaurantName}.\nEstoy aquí para ayudarte a elegir los mejores platos y hacer tu pedido. ¿Tienes alguna alergia o intolerancia?`,
+    };
+    const welcomeMsg = welcomeMessages[language] ?? welcomeMessages['it'];
+    const defaultSuggestions: Record<string, string[]> = {
+      it: ['Cosa mi consiglia?', 'Ho un\'allergia', 'Menu degustazione'],
+      en: ['What do you recommend?', 'I have an allergy', 'Tasting menu'],
+      de: ['Was empfehlen Sie?', 'Ich habe eine Allergie', 'Degustationsmenü'],
+      es: ['¿Qué recomienda?', 'Tengo una alergia', 'Menú degustación'],
+    };
+    const suggestions = defaultSuggestions[language] ?? defaultSuggestions['it'];
+
     if (existingSessionId) {
-      // ── Unisce alla sessione esistente ────────────────────────────────────
       const sessionId = existingSessionId;
       const alreadyOrdered = await getSessionOrders(sessionId);
-
-      const joinPrompt = alreadyOrdered
-        ? `Mi sono appena unito al tavolo ${table_number} scansionando il QR. Al tavolo è già stato ordinato: ${alreadyOrdered}. Salutami brevemente come Marco e chiedimi cosa voglio aggiungere (senza riproporre ciò che è già stato ordinato).`
-        : `Mi sono appena unito al tavolo ${table_number} scansionando il QR. Il tavolo non ha ancora ordinato niente. Salutami come Marco e aiutami a scegliere.`;
-
-      const join = await processChat(
-        {
-          restaurantId,
-          restaurantName,
-          tableNumber: table_number,
-          language,
-          conversationHistory: [],
-          groupSize: group_size,
-          savedPreferences: saved_preferences,
-          existingOrders: alreadyOrdered,
-        },
-        joinPrompt
-      );
-
+      const joinMsg = alreadyOrdered
+        ? `${welcomeMsg}\n\n_Al tavolo è già stato ordinato: ${alreadyOrdered}_`
+        : welcomeMsg;
       await db.query(
         `UPDATE chat_sessions SET messages = messages || $1::jsonb WHERE id = $2`,
-        [JSON.stringify([{ role: 'assistant', content: join.message, timestamp: new Date().toISOString() }]), sessionId]
+        [JSON.stringify([{ role: 'assistant', content: joinMsg, timestamp: new Date().toISOString() }]), sessionId]
       );
-
       return res.json({
         session_id: sessionId,
-        welcome_message: join.message,
-        suggestions: join.suggestions ?? [],
+        welcome_message: joinMsg,
+        suggestions,
         joined_existing: true,
         already_ordered: alreadyOrdered,
       });
@@ -99,32 +96,14 @@ router.post('/session', async (req, res) => {
     // ── Crea nuova sessione ───────────────────────────────────────────────────
     const session = await db.query(
       `INSERT INTO chat_sessions (restaurant_id, table_id, language, messages)
-       VALUES ($1, $2, $3, '[]') RETURNING id`,
-      [restaurantId, tableId, language]
-    );
-
-    const welcome = await processChat(
-      {
-        restaurantId,
-        restaurantName,
-        tableNumber: table_number,
-        language,
-        conversationHistory: [],
-        groupSize: group_size,
-        savedPreferences: saved_preferences,
-      },
-      `Ciao! Ho scannerizzato il QR del tavolo ${table_number}. Presentati come Marco e dai il benvenuto al cliente.`
-    );
-
-    await db.query(
-      `UPDATE chat_sessions SET messages = messages || $1::jsonb WHERE id = $2`,
-      [JSON.stringify([{ role: 'assistant', content: welcome.message, timestamp: new Date().toISOString() }]), session.rows[0].id]
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [restaurantId, tableId, language, JSON.stringify([{ role: 'assistant', content: welcomeMsg, timestamp: new Date().toISOString() }])]
     );
 
     res.json({
       session_id: session.rows[0].id,
-      welcome_message: welcome.message,
-      suggestions: welcome.suggestions ?? [],
+      welcome_message: welcomeMsg,
+      suggestions,
       joined_existing: false,
       already_ordered: '',
     });
