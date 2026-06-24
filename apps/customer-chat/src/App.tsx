@@ -440,11 +440,7 @@ export default function App() {
                   key={opt.code}
                   style={lang === opt.code ? S.langPickerBtnActive : S.langPickerBtn}
                   onClick={() => {
-                    const WELCOME: Record<string, string> = { it: 'Ciao! 👋 Sono Marco, il tuo assistente virtuale.\nSono qui per aiutarti a scegliere i piatti migliori. Hai allergie o intolleranze?', en: 'Hello! 👋 I\'m Marco, your virtual assistant.\nI\'m here to help you choose the best dishes. Do you have any allergies?', de: 'Hallo! 👋 Ich bin Marco, Ihr virtueller Assistent.\nIch helfe Ihnen beim Wählen. Haben Sie Allergien?', es: '¡Hola! 👋 Soy Marco, tu asistente virtual.\nEstoy aquí para ayudarte. ¿Tienes alguna alergia?', fr: 'Bonjour! 👋 Je suis Marco, votre assistant virtuel.\nJe suis là pour vous aider. Avez-vous des allergies?', pt: 'Olá! 👋 Sou Marco, o seu assistente virtual.\nEstou aqui para ajudá-lo. Tem alguma alergia?', ru: 'Привет! 👋 Я Марко, ваш виртуальный ассистент.\nЕсть ли у вас аллергии?', zh: '你好！👋 我是Marco，您的虚拟助手。\n我在这里帮您选择最好的菜肴。您有过敏症状吗？', ja: 'こんにちは！👋 私はMarcoです。\n最高の料理選びをお手伝いします。アレルギーはありますか？', ar: 'مرحباً! 👋 أنا Marco، مساعدك الافتراضي.\nأنا هنا لمساعدتك. هل لديك أي حساسية؟' };
-                    const newWelcome = { role: 'assistant' as const, content: WELCOME[opt.code] ?? WELCOME['it'], timestamp: new Date().toISOString() };
-                    const newMessages = [newWelcome];
-                    setMessages(newMessages);
-                    if (sessionId) saveSession(params.restaurant, params.table, { sessionId, lang: opt.code, messages: newMessages, alreadyOrdered, joinedExisting, orderConfirmed });
+                    if (sessionId) saveSession(params.restaurant, params.table, { sessionId, lang: opt.code, messages, alreadyOrdered, joinedExisting, orderConfirmed });
                     const SUGG: Record<string, string[]> = { it: ["Cosa mi consiglia?", "Ho un'allergia", 'Menu degustazione'], en: ['What do you recommend?', 'I have an allergy', 'Tasting menu'], de: ['Was empfehlen Sie?', 'Ich habe eine Allergie', 'Degustationsmenü'], es: ['¿Qué recomienda?', 'Tengo una alergia', 'Menú degustación'], fr: ['Que recommandez-vous?', "J'ai une allergie", 'Menu dégustation'], pt: ['O que recomenda?', 'Tenho uma alergia', 'Menu degustação'], ru: ['Что вы рекомендуете?', 'У меня аллергия', 'Дегустационное меню'], zh: ['您推荐什么？', '我有过敏', '品鉴菜单'], ja: ['何がおすすめですか？', 'アレルギーがあります', 'テイスティングメニュー'], ar: ['ماذا توصي؟', 'لدي حساسية', 'قائمة التذوق'] };
                     setSuggestions(SUGG[opt.code] ?? SUGG['it']);
                     setShowLangPicker(false);
@@ -679,7 +675,7 @@ const S: Record<string, React.CSSProperties> = {
   micBtnActive: { background: '#e94560', color: '#fff', border: '1.5px solid #e94560', borderRadius: '50%', width: 44, height: 44, fontSize: 18, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', animation: 'spin 1.5s linear infinite' },
 
   // Suggestions
-  suggestionsRow: { display: 'flex', gap: 8, padding: '8px 12px', overflowX: 'auto', flexShrink: 0, scrollbarWidth: 'none' as const },
+  suggestionsRow: { display: 'flex', gap: 8, padding: '8px 12px', overflowX: 'auto', flexShrink: 0, scrollbarWidth: 'none' as const, position: 'relative', zIndex: 10 },
   suggestionChip: { flexShrink: 0, padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, background: '#0f3460', color: '#eaeaea', border: '1.5px solid #e94560', cursor: 'pointer', whiteSpace: 'nowrap' as const },
 
   // Modal
