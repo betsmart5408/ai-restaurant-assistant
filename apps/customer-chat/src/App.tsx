@@ -88,8 +88,9 @@ function isReturningCustomer(history: CustomerHistory | null): boolean {
   return diffHours >= 12;
 }
 
-type Screen = 'lang' | 'main' | 'confirm_order';
+type Screen = 'lang' | 'main' | 'confirm_order' | 'saved_dishes';
 type Tab = 'menu' | 'chat';
+interface SavedDishItem { dish: Dish; qty: number; }
 
 const LANG_OPTIONS = [
   { code: 'it', label: '🇮🇹 Italiano' },
@@ -115,7 +116,11 @@ const UI: Record<string, Record<string, string>> = {
   ordered:     { it: '✓ Ordinato', en: '✓ Ordered', de: '✓ Bestellt', es: '✓ Pedido', fr: '✓ Commandé', pt: '✓ Pedido', ru: '✓ Заказано', zh: '✓ 已点', ja: '✓ 注文済', ar: '✓ تم الطلب' },
   orderOk:     { it: '✅ Ordine ricevuto! Buon appetito!', en: '✅ Order received! Enjoy!', de: '✅ Bestellung erhalten! Guten Appetit!', es: '✅ ¡Pedido recibido! ¡Que lo disfruten!', fr: '✅ Commande reçue ! Bon appétit !', pt: '✅ Pedido recebido! Bom apetite!', ru: '✅ Заказ принят! Приятного аппетита!', zh: '✅ 订单已收到！请慢用！', ja: '✅ ご注文を承りました！どうぞ！', ar: '✅ تم استلام طلبك! بالهناء!' },
   askMarco:    { it: 'Chiedi a Marco', en: 'Ask Marco', de: 'Marco fragen', es: 'Preguntar a Marco', fr: 'Demander à Marco', pt: 'Perguntar ao Marco', ru: 'Спросить Марко', zh: '询问Marco', ja: 'Marcoに聞く', ar: 'اسأل Marco' },
-  addOrder:    { it: "Aggiungi all'ordine", en: 'Add to order', de: 'Bestellen', es: 'Pedir', fr: 'Commander', pt: 'Adicionar', ru: 'Добавить', zh: '加入订单', ja: '注文に追加', ar: 'أضف للطلب' },
+  addOrder:    { it: '💾 Salva piatto', en: '💾 Save dish', de: '💾 Merken', es: '💾 Guardar plato', fr: '💾 Sauvegarder', pt: '💾 Guardar prato', ru: '💾 Сохранить', zh: '💾 保存菜品', ja: '💾 保存する', ar: '💾 احفظ الطبق' },
+  savedList:   { it: '🍽️ I tuoi piatti salvati', en: '🍽️ Your saved dishes', de: '🍽️ Gemerkte Gerichte', es: '🍽️ Tus platos guardados', fr: '🍽️ Vos plats sauvegardés', pt: '🍽️ Os seus pratos guardados', ru: '🍽️ Сохранённые блюда', zh: '🍽️ 已保存的菜肴', ja: '🍽️ 保存した料理', ar: '🍽️ أطباقك المحفوظة' },
+  savedEmpty:  { it: 'Nessun piatto salvato', en: 'No saved dishes', de: 'Keine Gerichte gemerkt', es: 'Ningún plato guardado', fr: 'Aucun plat sauvegardé', pt: 'Nenhum prato guardado', ru: 'Нет сохранённых блюд', zh: '没有保存的菜肴', ja: '保存した料理はありません', ar: 'لا توجد أطباق محفوظة' },
+  savedNote:   { it: '⚠️ Il personale prenderà il tuo ordine al tavolo', en: '⚠️ Staff will take your order at the table', de: '⚠️ Das Personal nimmt Ihre Bestellung am Tisch auf', es: '⚠️ El personal tomará su pedido en la mesa', fr: '⚠️ Le personnel prendra votre commande à table', pt: '⚠️ O pessoal tomará o seu pedido na mesa', ru: '⚠️ Персонал примет ваш заказ за столом', zh: '⚠️ 服务员将在桌边为您点餐', ja: '⚠️ スタッフがテーブルでご注文を承ります', ar: '⚠️ سيأخذ الموظفون طلبك على الطاولة' },
+  total:       { it: 'Totale stimato', en: 'Estimated total', de: 'Geschätztes Gesamt', es: 'Total estimado', fr: 'Total estimé', pt: 'Total estimado', ru: 'Примерная сумма', zh: '预计总计', ja: '合計（目安）', ar: 'المجموع التقديري' },
   sharedTable: { it: 'Sessione tavolo condivisa', en: 'Shared table', de: 'Gemeinsamer Tisch', es: 'Mesa compartida', fr: 'Table partagée', pt: 'Mesa compartilhada', ru: 'Общий стол', zh: '共享桌台', ja: 'テーブル共有', ar: 'طاولة مشتركة' },
   alreadyOrd:  { it: 'Già ordinato', en: 'Already ordered', de: 'Bereits bestellt', es: 'Ya pedido', fr: 'Déjà commandé', pt: 'Já pedido', ru: 'Уже заказано', zh: '已点', ja: '注文済み', ar: 'تم الطلب' },
 };
@@ -151,6 +156,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<OrderData | null>(null);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
+  const [savedDishes, setSavedDishes] = useState<SavedDishItem[]>([]);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [selectedCat, setSelectedCat] = useState<string>('antipasti');
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
@@ -469,6 +475,54 @@ export default function App() {
     );
   }
 
+  // ─── Piatti salvati ───────────────────────────────────────
+  if (screen === 'saved_dishes') {
+    const total = savedDishes.reduce((s, i) => s + parseFloat(String(i.dish.price)) * i.qty, 0);
+    return (
+      <div style={S.confirmScreen}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+          <button style={S.backBtn} onClick={() => setScreen('main')}>←</button>
+          <h2 style={{ ...S.confirmTitle, margin: 0 }}>{t('savedList', lang)}</h2>
+        </div>
+        <div style={{ background: '#1a1a2e', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#f59e0b' }}>
+          {t('savedNote', lang)}
+        </div>
+        {savedDishes.length === 0 ? (
+          <p style={{ color: '#a8a8b3', textAlign: 'center', marginTop: 32 }}>{t('savedEmpty', lang)}</p>
+        ) : (
+          <div style={S.orderItems}>
+            {savedDishes.map((item, i) => (
+              <div key={i} style={{ ...S.orderItem, flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 600 }}>{item.qty}× {item.dish.name}</span>
+                  <span style={{ color: '#e94560', fontWeight: 700 }}>€{(parseFloat(String(item.dish.price)) * item.qty).toFixed(2)}</span>
+                </div>
+                {(translatedDishes[item.dish.id] ?? item.dish.description) && (
+                  <span style={{ fontSize: 12, color: '#a8a8b3' }}>{translatedDishes[item.dish.id] ?? item.dish.description}</span>
+                )}
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <button style={S.qtyBtn} onClick={() => setSavedDishes(prev => {
+                    const updated = prev.map(x => x.dish.id === item.dish.id ? { ...x, qty: x.qty - 1 } : x);
+                    return updated.filter(x => x.qty > 0);
+                  })}>−</button>
+                  <span style={{ color: '#eaeaea', minWidth: 20, textAlign: 'center' }}>{item.qty}</span>
+                  <button style={S.qtyBtn} onClick={() => setSavedDishes(prev =>
+                    prev.map(x => x.dish.id === item.dish.id ? { ...x, qty: x.qty + 1 } : x)
+                  )}>+</button>
+                </div>
+              </div>
+            ))}
+            <div style={S.orderTotal}>
+              <strong>{t('total', lang)}</strong>
+              <strong style={{ color: '#e94560' }}>€{total.toFixed(2)}</strong>
+            </div>
+          </div>
+        )}
+        <button style={{ ...S.btnConfirm, marginTop: 16 }} onClick={() => setScreen('main')}>← {t('menu', lang)}</button>
+      </div>
+    );
+  }
+
   // ─── Dettaglio piatto (modal) ──────────────────────────────
   const cats = CAT_ORDER.filter(c => dishes.some(d => d.category === c));
   const visibleDishes = dishes.filter(d => d.category === selectedCat);
@@ -482,7 +536,11 @@ export default function App() {
         </button>
         <img src="/logo.png" alt="Gusto" style={S.headerLogo} />
         <div style={S.headerSub2}>Tavolo {params.table}</div>
-        {orderConfirmed && <span style={S.orderBadge}>{t('ordered', lang)}</span>}
+        {savedDishes.length > 0 && (
+          <button style={S.savedBadgeBtn} onClick={() => setScreen('saved_dishes')}>
+            🍽️ <span style={S.savedBadgeCount}>{savedDishes.reduce((s, i) => s + i.qty, 0)}</span>
+          </button>
+        )}
       </header>
 
       {/* Language picker overlay */}
@@ -633,12 +691,14 @@ export default function App() {
               💬 {t('askMarco', lang)}
             </button>
             <button style={S.modalOrderBtn} onClick={() => {
+              setSavedDishes(prev => {
+                const existing = prev.find(i => i.dish.id === selectedDish.id);
+                if (existing) return prev.map(i => i.dish.id === selectedDish.id ? { ...i, qty: i.qty + 1 } : i);
+                return [...prev, { dish: selectedDish, qty: 1 }];
+              });
               setSelectedDish(null);
-              setTab('chat');
-              const orderPs: Record<string, string> = { it: `Vorrei ordinare "${selectedDish.name}".`, en: `I'd like to order the "${selectedDish.name}".`, de: `Ich möchte "${selectedDish.name}" bestellen.`, es: `Quisiera pedir "${selectedDish.name}".`, fr: `Je voudrais commander "${selectedDish.name}".`, pt: `Gostaria de pedir "${selectedDish.name}".`, ru: `Я хотел бы заказать "${selectedDish.name}".`, zh: `我想点"${selectedDish.name}"。`, ja: `"${selectedDish.name}"を注文したいです。`, ar: `أريد طلب "${selectedDish.name}".` };
-              sendMessage(orderPs[lang] ?? orderPs['it']);
             }}>
-              🛒 {t('addOrder', lang)}
+              {t('addOrder', lang)}
             </button>
             <button style={S.modalClose} onClick={() => setSelectedDish(null)}>✕</button>
           </div>
@@ -755,4 +815,7 @@ const S: Record<string, React.CSSProperties> = {
   confirmBtns: { display: 'flex', gap: 12 },
   btnCancel: { flex: 1, padding: '14px', borderRadius: 12, fontSize: 16, background: '#1a1a2e', color: '#a8a8b3', border: '1.5px solid #2a2a4a', cursor: 'pointer' },
   btnConfirm: { flex: 2, padding: '14px', borderRadius: 12, fontSize: 16, fontWeight: 700, background: '#e94560', color: 'white', border: 'none', cursor: 'pointer' },
+  savedBadgeBtn: { background: '#e94560', border: 'none', borderRadius: 20, padding: '6px 12px', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 },
+  savedBadgeCount: { background: '#fff', color: '#e94560', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 },
+  qtyBtn: { background: '#2a2a4a', color: '#eaeaea', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 };

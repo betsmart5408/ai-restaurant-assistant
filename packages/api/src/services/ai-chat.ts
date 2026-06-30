@@ -27,6 +27,10 @@ interface ChatContext {
   previousDishes?: string[];
 }
 
+// ── Cache contesto ristorante (5 min) ─────────────────────────────────────────
+const contextCache = new Map<string, { data: Awaited<ReturnType<typeof loadRestaurantContext>>; ts: number }>();
+const weatherCache: { data: { desc: string; mood: string } | null; ts: number } = { data: null, ts: 0 };
+
 // ── Meteo Málaga (open-meteo, gratuito, nessuna API key) ──────────────────────
 async function fetchWeather(): Promise<{ desc: string; mood: string } | null> {
   try {
@@ -250,10 +254,21 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
   const { restaurantId, restaurantName, tableNumber, language, conversationHistory, groupSize, savedPreferences, existingOrders, returningCustomer, previousDishes } = ctx;
   const groq = getGroqClient(groqApiKey);
 
-  const [{ dishes, expiring, highStock, topMargin, popular }, weather] = await Promise.all([
-    loadRestaurantContext(restaurantId),
-    fetchWeather(),
-  ]);
+  // Cache contesto ristorante per 5 minuti
+  const now = Date.now();
+  let ctxData = contextCache.get(restaurantId);
+  if (!ctxData || now - ctxData.ts > 5 * 60 * 1000) {
+    const fresh = await loadRestaurantContext(restaurantId);
+    ctxData = { data: fresh, ts: now };
+    contextCache.set(restaurantId, ctxData);
+  }
+  const { dishes, expiring, highStock, topMargin, popular } = ctxData.data;
+
+  // Cache meteo per 15 minuti, non bloccante
+  let weather = weatherCache.data;
+  if (now - weatherCache.ts > 15 * 60 * 1000) {
+    fetchWeather().then(w => { weatherCache.data = w; weatherCache.ts = Date.now(); }).catch(() => {});
+  }
 
   const systemPrompt = buildSystemPrompt(
     restaurantName, dishes, expiring, highStock, topMargin, popular,
