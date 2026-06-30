@@ -30,18 +30,22 @@ function getQRParams() {
 interface Message { role: 'user' | 'assistant'; content: string; timestamp: string; }
 interface Dish { id: string; name: string; description: string; price: number; category: string; available: boolean; image_url?: string; }
 
-// Converte **bold** e *italic* in testo semplice con stile inline per i bubble chat
+// Converte **bold**, *italic*, _italic_ e \n in React nodes
 function renderMarkdown(text: string): React.ReactNode[] {
-  const parts = text.split(/(\*{1,2}[^*]+\*{1,2})/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i}>{part.slice(2, -2)}</strong>;
-    }
-    if (part.startsWith('*') && part.endsWith('*')) {
-      return <em key={i}>{part.slice(1, -1)}</em>;
-    }
-    return part;
-  });
+  const result: React.ReactNode[] = [];
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_|\n)/g;
+  let last = 0, i = 0, match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > last) result.push(text.slice(last, match.index));
+    const m = match[0];
+    if (m === '\n') result.push(<br key={i} />);
+    else if (m.startsWith('**')) result.push(<strong key={i}>{m.slice(2, -2)}</strong>);
+    else result.push(<em key={i}>{m.slice(1, -1)}</em>);
+    last = match.index + m.length;
+    i++;
+  }
+  if (last < text.length) result.push(text.slice(last));
+  return result;
 }
 
 const STORAGE_KEY = (restaurant: string) => `gusto_prefs_${restaurant}`;
@@ -447,7 +451,6 @@ export default function App() {
           </>
         )}
 
-        <p style={S.tableTag}>Tavolo {params.table}</p>
       </div>
     );
   }
@@ -512,7 +515,7 @@ export default function App() {
           {LANG_OPTIONS.find(o => o.code === lang)?.label.split(' ')[0] ?? '🌐'}
         </button>
         <img src="/logo.png" alt="Gusto" style={S.headerLogo} />
-        <div style={S.headerSub2}>Tavolo {params.table}</div>
+        <div style={S.headerSub2}>{params.restaurant.replace(/-/g, ' ')}</div>
         {savedDishes.length > 0 && (
           <button style={S.savedBadgeBtn} onClick={() => setScreen('saved_dishes')}>
             🛒 <span style={S.savedBadgeCount}>{savedDishes.reduce((s, i) => s + i.qty, 0)}</span>
@@ -530,7 +533,9 @@ export default function App() {
                   key={opt.code}
                   style={lang === opt.code ? S.langPickerBtnActive : S.langPickerBtn}
                   onClick={() => {
-                    if (sessionId) saveSession(params.restaurant, params.table, { sessionId, lang: opt.code, messages, alreadyOrdered, joinedExisting });
+                    if (opt.code === lang) { setShowLangPicker(false); return; }
+                    // Cancella sessione localStorage: al prossimo refresh parte nella lingua corretta
+                    clearSession(params.restaurant, params.table);
                     const SUGG: Record<string, string[]> = { it: ["Cosa mi consiglia?", "Ho un'allergia", 'Menu degustazione'], en: ['What do you recommend?', 'I have an allergy', 'Tasting menu'], de: ['Was empfehlen Sie?', 'Ich habe eine Allergie', 'Degustationsmenü'], es: ['¿Qué recomienda?', 'Tengo una alergia', 'Menú degustación'], fr: ['Que recommandez-vous?', "J'ai une allergie", 'Menu dégustation'], pt: ['O que recomenda?', 'Tenho uma alergia', 'Menu degustação'], ru: ['Что вы рекомендуете?', 'У меня аллергия', 'Дегустационное меню'], zh: ['您推荐什么？', '我有过敏', '品鉴菜单'], ja: ['何がおすすめですか？', 'アレルギーがあります', 'テイスティングメニュー'], ar: ['ماذا توصي؟', 'لدي حساسية', 'قائمة التذوق'] };
                     setSuggestions(SUGG[opt.code] ?? SUGG['it']);
                     setShowLangPicker(false);

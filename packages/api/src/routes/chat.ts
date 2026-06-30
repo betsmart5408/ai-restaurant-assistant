@@ -112,11 +112,25 @@ router.post('/session', async (req, res) => {
     };
     const suggestions = defaultSuggestions[language] ?? defaultSuggestions['it'];
 
+    const alreadyOrderedLabels: Record<string, string> = {
+      it: 'Al tavolo è già stato scelto',
+      en: 'Others at the table have already chosen',
+      de: 'Am Tisch wurde bereits gewählt',
+      es: 'En la mesa ya han elegido',
+      fr: 'À la table, on a déjà choisi',
+      pt: 'Na mesa já escolheram',
+      ru: 'За столом уже выбрали',
+      zh: '桌上已经选择了',
+      ja: 'テーブルではすでに選ばれています',
+      ar: 'تم الاختيار بالفعل على الطاولة',
+    };
+
     if (existingSessionId) {
       const sessionId = existingSessionId;
       const alreadyOrdered = await getSessionOrders(sessionId);
+      const orderedLabel = alreadyOrderedLabels[language] ?? alreadyOrderedLabels['it'];
       const joinMsg = alreadyOrdered
-        ? `${welcomeMsg}\n\n_Al tavolo è già stato ordinato: ${alreadyOrdered}_`
+        ? `${welcomeMsg}\n\n_${orderedLabel}: ${alreadyOrdered}_`
         : welcomeMsg;
       await db.query(
         `UPDATE chat_sessions SET messages = messages || $1::jsonb WHERE id = $2`,
