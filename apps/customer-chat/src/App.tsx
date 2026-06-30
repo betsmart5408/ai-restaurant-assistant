@@ -42,6 +42,21 @@ function savePrefs(restaurant: string, prefs: SavedPrefs) {
 
 const SESSION_KEY = (restaurant: string, table: number) => `gusto_session_${restaurant}_${table}`;
 const HISTORY_KEY = (restaurant: string) => `gusto_history_${restaurant}`;
+const SAVED_DISHES_KEY = (restaurant: string, table: number) => `gusto_saved_${restaurant}_${table}`;
+
+interface SavedDishesStore { items: SavedDishItem[]; savedAt: string; }
+function saveDishList(restaurant: string, table: number, items: SavedDishItem[]) {
+  try { localStorage.setItem(SAVED_DISHES_KEY(restaurant, table), JSON.stringify({ items, savedAt: new Date().toISOString() })); } catch {}
+}
+function loadDishList(restaurant: string, table: number): SavedDishItem[] {
+  try {
+    const raw: SavedDishesStore = JSON.parse(localStorage.getItem(SAVED_DISHES_KEY(restaurant, table)) ?? 'null');
+    if (!raw) return [];
+    const hours = (Date.now() - new Date(raw.savedAt).getTime()) / 3600000;
+    if (hours >= 12) { localStorage.removeItem(SAVED_DISHES_KEY(restaurant, table)); return []; }
+    return raw.items ?? [];
+  } catch { return []; }
+}
 interface SavedSession { sessionId: string; lang: string; messages: Message[]; alreadyOrdered: string; joinedExisting: boolean; orderConfirmed: boolean; savedAt?: string; }
 interface CustomerHistory { lastVisitAt: string; mentionedDishes: string[]; lang: string; }
 
@@ -156,7 +171,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<OrderData | null>(null);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
-  const [savedDishes, setSavedDishes] = useState<SavedDishItem[]>([]);
+  const [savedDishes, setSavedDishes] = useState<SavedDishItem[]>(() => loadDishList(getQRParams().restaurant, getQRParams().table));
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [selectedCat, setSelectedCat] = useState<string>('antipasti');
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
@@ -186,6 +201,11 @@ export default function App() {
     if (!sessionId) return;
     saveSession(params.restaurant, params.table, { sessionId, lang, messages, alreadyOrdered, joinedExisting, orderConfirmed });
   }, [sessionId, lang, messages, orderConfirmed]);
+
+  // Salva piatti selezionati in localStorage ad ogni cambio
+  useEffect(() => {
+    saveDishList(params.restaurant, params.table, savedDishes);
+  }, [savedDishes]);
 
   useEffect(() => {
     if (loading) {
