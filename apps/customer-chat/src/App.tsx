@@ -196,6 +196,7 @@ export default function App() {
   const [translatedDishes, setTranslatedDishes] = useState<Record<string, string>>({}); // dish.id -> translated desc
   const [translatingCat, setTranslatingCat] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [lastDiscussedDish, setLastDiscussedDish] = useState<Dish | null>(null);
   const [groupSize, setGroupSize] = useState<number>(2);
   const [alreadyOrdered, setAlreadyOrdered] = useState('');
   const [joinedExisting, setJoinedExisting] = useState(false);
@@ -363,11 +364,12 @@ export default function App() {
     }
   }
 
-  const sendMessage = useCallback(async (text?: string) => {
+  const sendMessage = useCallback(async (text?: string, keepDish?: boolean) => {
     const msg = text ?? input.trim();
     if (!msg || !sessionId || loading) return;
     setInput('');
     setSuggestions([]);
+    if (!keepDish) setLastDiscussedDish(null);
     setMessages(prev => [...prev, { role: 'user', content: msg, timestamp: new Date().toISOString() }]);
     setLoading(true);
     try {
@@ -426,11 +428,12 @@ export default function App() {
   function askAboutDish(dish: Dish) {
     setSelectedDish(null);
     setTab('chat');
+    setLastDiscussedDish(dish);
     const isDrink = ['cocktails', 'spirits', 'birre', 'vini', 'soft_drinks'].includes(dish.category);
     const drinkP: Record<string, string> = { it: `Parlami di "${dish.name}": com'è, come si serve e con quali piatti si abbina.`, en: `Tell me about "${dish.name}": taste, serving and food pairing.`, de: `Erkläre mir "${dish.name}": Geschmack, Servierung und passende Speisen.`, es: `Cuéntame sobre "${dish.name}": sabor, servicio y maridaje.`, fr: `Parle-moi de "${dish.name}": goût, service et accord mets.`, pt: `Fala-me de "${dish.name}": sabor, serviço e harmonização.`, ru: `Расскажи о "${dish.name}": вкус, подача и сочетание с едой.`, zh: `告诉我"${dish.name}"的口感、上菜方式和搭配食物。`, ja: `"${dish.name}"の味、提供方法、相性の良い料理を教えてください。`, ar: `أخبرني عن "${dish.name}": المذاق والتقديم والأطباق المناسبة.` };
     const dishP: Record<string, string> = { it: `Parlami di "${dish.name}": ingredienti, sapore e cosa consigli da bere.`, en: `Tell me about "${dish.name}": ingredients, flavor and drink pairing.`, de: `Erkläre mir "${dish.name}": Zutaten, Geschmack und Getränkeempfehlung.`, es: `Cuéntame sobre "${dish.name}": ingredientes, sabor y bebida recomendada.`, fr: `Parle-moi de "${dish.name}": ingrédients, saveur et boisson conseillée.`, pt: `Fala-me de "${dish.name}": ingredientes, sabor e bebida.`, ru: `Расскажи о "${dish.name}": ингредиенты, вкус и напиток.`, zh: `告诉我"${dish.name}"的食材、口味和推荐饮品。`, ja: `"${dish.name}"の食材、風味、おすすめ飲み物を教えてください。`, ar: `أخبرني عن "${dish.name}": المكونات والمذاق والمشروب الموصى به.` };
     const prompt = isDrink ? (drinkP[lang] ?? drinkP['it']) : (dishP[lang] ?? dishP['it']);
-    sendMessage(prompt);
+    sendMessage(prompt, true);
   }
 
   // ─── Lingua / Loading / Errore ────────────────────────────
@@ -651,6 +654,24 @@ export default function App() {
               ))}
             </div>
           )}
+          {lastDiscussedDish && !loading && (
+            <div style={S.saveDishBar}>
+              <button
+                style={savedDishes.some(i => i.dish.id === lastDiscussedDish.id) ? S.saveDishBtnSaved : S.saveDishBtn}
+                onClick={() => {
+                  setSavedDishes(prev => {
+                    const existing = prev.find(i => i.dish.id === lastDiscussedDish!.id);
+                    if (existing) return prev.map(i => i.dish.id === lastDiscussedDish!.id ? { ...i, qty: i.qty + 1 } : i);
+                    return [...prev, { dish: lastDiscussedDish!, qty: 1 }];
+                  });
+                }}
+              >
+                {savedDishes.some(i => i.dish.id === lastDiscussedDish.id)
+                  ? `${t('ordered', lang)} ${lastDiscussedDish.name}`
+                  : `💾 ${t('addOrder', lang)}: ${lastDiscussedDish.name}`}
+              </button>
+            </div>
+          )}
           <div style={S.inputArea}>
             <button style={listening ? S.micBtnActive : S.micBtn} onClick={toggleVoice} title="Parla">
               {listening ? '🔴' : '🎤'}
@@ -813,5 +834,8 @@ const S: Record<string, React.CSSProperties> = {
   savedBadgeCount: { background: '#e94560', color: '#fff', borderRadius: '50%', width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, marginLeft: 4 },
   myDishesBtn: { background: 'none', border: '1.5px solid #e94560', borderRadius: 20, padding: '5px 12px', color: '#e94560', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, whiteSpace: 'nowrap' as const },
   deleteBtn: { background: 'none', border: 'none', color: '#e94560', fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1, flexShrink: 0 },
+  saveDishBar: { padding: '8px 12px', background: '#0f0f1a', borderTop: '1px solid #2a2a4a', flexShrink: 0 },
+  saveDishBtn: { width: '100%', padding: '12px', borderRadius: 12, fontSize: 15, fontWeight: 700, background: '#16213e', color: '#eaeaea', border: '1.5px solid #e94560', cursor: 'pointer' },
+  saveDishBtnSaved: { width: '100%', padding: '12px', borderRadius: 12, fontSize: 15, fontWeight: 700, background: '#1a3a1a', color: '#22c55e', border: '1.5px solid #22c55e', cursor: 'pointer' },
   qtyBtn: { background: '#2a2a4a', color: '#eaeaea', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 };
