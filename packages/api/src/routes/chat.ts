@@ -127,21 +127,16 @@ router.post('/session', async (req, res) => {
 
     if (existingSessionId) {
       const sessionId = existingSessionId;
-      const alreadyOrdered = await getSessionOrders(sessionId);
-      const orderedLabel = alreadyOrderedLabels[language] ?? alreadyOrderedLabels['it'];
-      const joinMsg = alreadyOrdered
-        ? `${welcomeMsg}\n\n_${orderedLabel}: ${alreadyOrdered}_`
-        : welcomeMsg;
       await db.query(
         `UPDATE chat_sessions SET messages = messages || $1::jsonb WHERE id = $2`,
-        [JSON.stringify([{ role: 'assistant', content: joinMsg, timestamp: new Date().toISOString() }]), sessionId]
+        [JSON.stringify([{ role: 'assistant', content: welcomeMsg, timestamp: new Date().toISOString() }]), sessionId]
       );
       return res.json({
         session_id: sessionId,
-        welcome_message: joinMsg,
+        welcome_message: welcomeMsg,
         suggestions,
         joined_existing: true,
-        already_ordered: alreadyOrdered,
+        already_ordered: '',
       });
     }
 
