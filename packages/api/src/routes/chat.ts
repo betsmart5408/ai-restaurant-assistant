@@ -26,7 +26,7 @@ async function getSessionOrders(sessionId: string): Promise<string> {
 // POST /api/chat/session — get-or-create sessione condivisa per tavolo
 router.post('/session', async (req, res) => {
   try {
-    const { restaurant_slug, table_number, language = 'it', group_size, saved_preferences } = req.body;
+    const { restaurant_slug, table_number, language = 'it', group_size, saved_preferences, returning_customer, previous_dishes } = req.body;
 
     const restaurant = await db.query(
       'SELECT id, name, groq_api_key FROM restaurants WHERE slug = $1',
@@ -59,17 +59,43 @@ router.post('/session', async (req, res) => {
       // created_at potrebbe non esistere — procediamo con nuova sessione
     }
 
-    const welcomeMessages: Record<string, string> = {
-      it: `Ciao! 👋 Sono Marco, il tuo assistente virtuale da ${restaurantName}.\nSono qui per aiutarti a scegliere i piatti migliori, scoprire abbinamenti e ordinare. Hai allergie o intolleranze di cui dovrei sapere?`,
-      en: `Hello! 👋 I'm Marco, your virtual assistant at ${restaurantName}.\nI'm here to help you choose the best dishes, discover pairings and place your order. Do you have any allergies or intolerances I should know about?`,
-      de: `Hallo! 👋 Ich bin Marco, Ihr virtueller Assistent bei ${restaurantName}.\nIch helfe Ihnen, die besten Gerichte zu wählen und zu bestellen. Haben Sie Allergien oder Unverträglichkeiten?`,
-      es: `¡Hola! 👋 Soy Marco, tu asistente virtual en ${restaurantName}.\nEstoy aquí para ayudarte a elegir los mejores platos y hacer tu pedido. ¿Tienes alguna alergia o intolerancia?`,
-      fr: `Bonjour! 👋 Je suis Marco, votre assistant virtuel chez ${restaurantName}.\nJe suis là pour vous aider à choisir les meilleurs plats et passer votre commande. Avez-vous des allergies ou intolérances?`,
-      pt: `Olá! 👋 Sou Marco, o seu assistente virtual em ${restaurantName}.\nEstou aqui para ajudá-lo a escolher os melhores pratos e fazer o seu pedido. Tem alguma alergia ou intolerância?`,
-      ru: `Привет! 👋 Я Марко, ваш виртуальный ассистент в ${restaurantName}.\nЯ здесь, чтобы помочь вам выбрать лучшие блюда и сделать заказ. Есть ли у вас аллергии или непереносимость?`,
-      zh: `你好！👋 我是Marco，${restaurantName}的虚拟助手。\n我在这里帮您选择最好的菜肴并下单。您有任何过敏或不耐受症状吗？`,
-      ja: `こんにちは！👋 私はMarco、${restaurantName}のバーチャルアシスタントです。\n最高の料理を選び、ご注文をお手伝いします。アレルギーや食物不耐症はありますか？`,
-      ar: `مرحباً! 👋 أنا Marco، مساعدك الافتراضي في ${restaurantName}.\nأنا هنا لمساعدتك في اختيار أفضل الأطباق وتقديم طلبك. هل لديك أي حساسية أو عدم تحمل؟`,
+    const dishList = Array.isArray(previous_dishes) && previous_dishes.length > 0
+      ? previous_dishes.slice(0, 5).join(', ')
+      : null;
+
+    const welcomeMessages: Record<string, string> = returning_customer && dishList ? {
+      it: `Bentornato! 😊 Che bello rivederti da ${restaurantName}!\nL'ultima volta avevi scelto: **${dishList}** — spero ti siano piaciuti! Oggi posso consigliarti qualcosa di speciale, o vuoi scoprire le novità del menu?`,
+      en: `Welcome back! 😊 Great to see you again at ${restaurantName}!\nLast time you tried: **${dishList}** — hope you enjoyed them! Can I recommend something special today, or would you like to see what's new?`,
+      de: `Willkommen zurück! 😊 Schön, Sie wieder bei ${restaurantName} zu sehen!\nBeim letzten Mal hatten Sie: **${dishList}** — hat es Ihnen gefallen? Darf ich heute etwas Besonderes empfehlen?`,
+      es: `¡Bienvenido de nuevo! 😊 ¡Qué alegría verte otra vez en ${restaurantName}!\nLa última vez probaste: **${dishList}** — ¡espero que te haya gustado! ¿Puedo recomendarte algo especial hoy?`,
+      fr: `Bon retour! 😊 Ravi de vous revoir chez ${restaurantName}!\nLa dernière fois vous avez choisi: **${dishList}** — j'espère que vous avez apprécié! Puis-je vous recommander quelque chose de spécial aujourd'hui?`,
+      pt: `Bem-vindo de volta! 😊 Que bom vê-lo novamente em ${restaurantName}!\nDa última vez você experimentou: **${dishList}** — espero que tenha gostado! Posso recomendar algo especial hoje?`,
+      ru: `С возвращением! 😊 Рады снова видеть вас в ${restaurantName}!\nВ прошлый раз вы выбирали: **${dishList}** — надеюсь, вам понравилось! Могу порекомендовать что-то особенное сегодня?`,
+      zh: `欢迎回来！😊 很高兴再次在${restaurantName}见到您！\n上次您点了：**${dishList}** — 希望您喜欢！今天我能为您推荐什么特别的吗？`,
+      ja: `おかえりなさい！😊 ${restaurantName}でまたお会いできて嬉しいです！\n前回は：**${dishList}** をお選びになりました — お気に召しましたか？今日は何か特別なものをおすすめしましょうか？`,
+      ar: `أهلاً بعودتك! 😊 يسعدنا رؤيتك مجدداً في ${restaurantName}!\nفي آخر زيارة اخترت: **${dishList}** — آمل أنك استمتعت! هل يمكنني أن أوصي بشيء مميز اليوم؟`,
+    } : returning_customer ? {
+      it: `Bentornato! 😊 Che bello rivederti da ${restaurantName}!\nSono Marco, il tuo assistente virtuale. Cosa ti va oggi — vuoi esplorare il menu o hai già qualcosa in mente?`,
+      en: `Welcome back! 😊 Great to see you again at ${restaurantName}!\nI'm Marco, your virtual assistant. What are you in the mood for today?`,
+      de: `Willkommen zurück! 😊 Schön, Sie wieder bei ${restaurantName} zu sehen!\nIch bin Marco. Was darf ich Ihnen heute empfehlen?`,
+      es: `¡Bienvenido de nuevo! 😊 ¡Qué alegría verte en ${restaurantName}!\nSoy Marco. ¿Qué te apetece hoy?`,
+      fr: `Bon retour! 😊 Ravi de vous revoir chez ${restaurantName}!\nJe suis Marco. Qu'est-ce qui vous fait envie aujourd'hui?`,
+      pt: `Bem-vindo de volta! 😊 Que bom vê-lo em ${restaurantName}!\nSou Marco. O que lhe apetece hoje?`,
+      ru: `С возвращением! 😊 Рады снова видеть вас в ${restaurantName}!\nЯ Марко. Что вам сегодня угодно?`,
+      zh: `欢迎回来！😊 很高兴再次在${restaurantName}见到您！\n我是Marco。今天想吃什么？`,
+      ja: `おかえりなさい！😊 ${restaurantName}でまたお会いできて嬉しいです！\n私はMarcoです。今日は何がお好みですか？`,
+      ar: `أهلاً بعودتك! 😊 يسعدنا رؤيتك مجدداً في ${restaurantName}!\nأنا Marco. ماذا تريد اليوم؟`,
+    } : {
+      it: `Ciao! 👋 Sono Marco, il tuo assistente virtuale da ${restaurantName}.\nSono qui per aiutarti a scoprire i piatti migliori e rispondere a qualsiasi domanda. Hai allergie o intolleranze di cui dovrei sapere?`,
+      en: `Hello! 👋 I'm Marco, your virtual assistant at ${restaurantName}.\nI'm here to help you discover the best dishes and answer any questions. Do you have any allergies or intolerances I should know about?`,
+      de: `Hallo! 👋 Ich bin Marco, Ihr virtueller Assistent bei ${restaurantName}.\nIch helfe Ihnen, die besten Gerichte zu entdecken. Haben Sie Allergien oder Unverträglichkeiten?`,
+      es: `¡Hola! 👋 Soy Marco, tu asistente virtual en ${restaurantName}.\nEstoy aquí para ayudarte a descubrir los mejores platos. ¿Tienes alguna alergia o intolerancia?`,
+      fr: `Bonjour! 👋 Je suis Marco, votre assistant virtuel chez ${restaurantName}.\nJe suis là pour vous aider à découvrir les meilleurs plats. Avez-vous des allergies ou intolérances?`,
+      pt: `Olá! 👋 Sou Marco, o seu assistente virtual em ${restaurantName}.\nEstou aqui para ajudá-lo a descobrir os melhores pratos. Tem alguma alergia ou intolerância?`,
+      ru: `Привет! 👋 Я Марко, ваш виртуальный ассистент в ${restaurantName}.\nЯ здесь, чтобы помочь вам открыть лучшие блюда. Есть ли у вас аллергии?`,
+      zh: `你好！👋 我是Marco，${restaurantName}的虚拟助手。\n我在这里帮您发现最好的菜肴。您有任何过敏或不耐受症状吗？`,
+      ja: `こんにちは！👋 私はMarco、${restaurantName}のバーチャルアシスタントです。\n最高の料理を見つけるお手伝いをします。アレルギーや食物不耐症はありますか？`,
+      ar: `مرحباً! 👋 أنا Marco، مساعدك الافتراضي في ${restaurantName}.\nأنا هنا لمساعدتك في اكتشاف أفضل الأطباق. هل لديك أي حساسية؟`,
     };
     const welcomeMsg = welcomeMessages[language] ?? welcomeMessages['it'];
     const defaultSuggestions: Record<string, string[]> = {

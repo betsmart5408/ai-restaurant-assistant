@@ -23,6 +23,8 @@ interface ChatContext {
   groupSize?: number;
   savedPreferences?: string;
   existingOrders?: string;
+  returningCustomer?: boolean;
+  previousDishes?: string[];
 }
 
 // ── Meteo Málaga (open-meteo, gratuito, nessuna API key) ──────────────────────
@@ -162,6 +164,8 @@ function buildSystemPrompt(
   groupSize?: number,
   savedPreferences?: string,
   existingOrders?: string,
+  returningCustomer?: boolean,
+  previousDishes?: string[],
 ): string {
   const time = getTimeContext();
   const menuJson = JSON.stringify(dishes.map(d => ({
@@ -195,6 +199,9 @@ function buildSystemPrompt(
   const existingOrdersSection = existingOrders
     ? `\nORDINI GIÀ CONFERMATI AL TAVOLO (da altri clienti): ${existingOrders}\n→ Non riproporre questi piatti. Se il cliente li menziona, digli che sono già stati ordinati da qualcuno al tavolo.` : '';
 
+  const returningSection = returningCustomer
+    ? `\nCLIENTE DI RITORNO:${previousDishes && previousDishes.length > 0 ? `\n- Ultima visita ha mostrato interesse per: ${previousDishes.join(', ')}\n- Menzionalo naturalmente: "Come ti è piaciuta la carbonara l'ultima volta?" o simile.\n- Suggerisci qualcosa di diverso rispetto a quello che ha già provato, o un abbinamento nuovo.` : '\n- È già stato qui ma non abbiamo dettagli sui piatti precedenti.\n- Accennalo calorosamente: "Bentornato! Cosa ti va oggi?"'}` : '';
+
   const langName: Record<string, string> = {
     it: 'italiano', en: 'English', de: 'Deutsch', es: 'español', fr: 'français',
     pt: 'português', ru: 'русский', zh: '中文', ja: '日本語', ar: 'العربية',
@@ -204,7 +211,7 @@ function buildSystemPrompt(
 Personalità: calorosa, appassionata, professionale. Ami il cibo, conosci ogni piatto e vino a memoria. Vuoi che ogni ospite viva un'esperienza indimenticabile.
 Rispondi SEMPRE in ${langName[language] ?? language}. Tavolo ${tableNumber}. Ora: ${time[language as keyof typeof time] ?? time.it}.
 Tono: amichevole e coinvolgente, mai robotico. Max 4 righe salvo richiesta dettagli.
-${weatherSection}${groupSection}${preferencesSection}${existingOrdersSection}
+${weatherSection}${groupSection}${preferencesSection}${existingOrdersSection}${returningSection}
 
 MENU DISPONIBILE:
 ${menuJson}
@@ -240,7 +247,7 @@ ${getSuggestionsInstruction(language)}`;
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 export async function processChat(ctx: ChatContext, userMessage: string, groqApiKey?: string) {
-  const { restaurantId, restaurantName, tableNumber, language, conversationHistory, groupSize, savedPreferences, existingOrders } = ctx;
+  const { restaurantId, restaurantName, tableNumber, language, conversationHistory, groupSize, savedPreferences, existingOrders, returningCustomer, previousDishes } = ctx;
   const groq = getGroqClient(groqApiKey);
 
   const [{ dishes, expiring, highStock, topMargin, popular }, weather] = await Promise.all([
@@ -251,6 +258,7 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
   const systemPrompt = buildSystemPrompt(
     restaurantName, dishes, expiring, highStock, topMargin, popular,
     language, tableNumber, weather, groupSize, savedPreferences, existingOrders,
+    returningCustomer, previousDishes,
   );
 
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [

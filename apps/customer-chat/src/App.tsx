@@ -41,15 +41,51 @@ function savePrefs(restaurant: string, prefs: SavedPrefs) {
 }
 
 const SESSION_KEY = (restaurant: string, table: number) => `gusto_session_${restaurant}_${table}`;
-interface SavedSession { sessionId: string; lang: string; messages: Message[]; alreadyOrdered: string; joinedExisting: boolean; orderConfirmed: boolean; }
+const HISTORY_KEY = (restaurant: string) => `gusto_history_${restaurant}`;
+interface SavedSession { sessionId: string; lang: string; messages: Message[]; alreadyOrdered: string; joinedExisting: boolean; orderConfirmed: boolean; savedAt?: string; }
+interface CustomerHistory { lastVisitAt: string; mentionedDishes: string[]; lang: string; }
+
 function saveSession(restaurant: string, table: number, data: SavedSession) {
-  try { localStorage.setItem(SESSION_KEY(restaurant, table), JSON.stringify(data)); } catch {}
+  try { localStorage.setItem(SESSION_KEY(restaurant, table), JSON.stringify({ ...data, savedAt: new Date().toISOString() })); } catch {}
 }
 function loadSession(restaurant: string, table: number): SavedSession | null {
   try { return JSON.parse(localStorage.getItem(SESSION_KEY(restaurant, table)) ?? 'null'); } catch { return null; }
 }
 function clearSession(restaurant: string, table: number) {
   try { localStorage.removeItem(SESSION_KEY(restaurant, table)); } catch {}
+}
+
+// Estrae i piatti menzionati dai messaggi dell'assistente (nomi in grassetto o dopo "consiglio")
+function extractMentionedDishes(messages: Message[]): string[] {
+  const dishes = new Set<string>();
+  for (const m of messages) {
+    if (m.role !== 'assistant') continue;
+    // Cattura parole in grassetto **nome** o *nome*
+    const bold = m.content.matchAll(/\*{1,2}([^*\n]{3,40})\*{1,2}/g);
+    for (const match of bold) dishes.add(match[1].trim());
+  }
+  return [...dishes].slice(0, 10);
+}
+
+function saveCustomerHistory(restaurant: string, messages: Message[], lang: string) {
+  try {
+    const history: CustomerHistory = {
+      lastVisitAt: new Date().toISOString(),
+      mentionedDishes: extractMentionedDishes(messages),
+      lang,
+    };
+    localStorage.setItem(HISTORY_KEY(restaurant), JSON.stringify(history));
+  } catch {}
+}
+
+function loadCustomerHistory(restaurant: string): CustomerHistory | null {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY(restaurant)) ?? 'null'); } catch { return null; }
+}
+
+function isReturningCustomer(history: CustomerHistory | null): boolean {
+  if (!history) return false;
+  const diffHours = (Date.now() - new Date(history.lastVisitAt).getTime()) / 3600000;
+  return diffHours >= 12;
 }
 
 type Screen = 'lang' | 'main' | 'confirm_order';
@@ -184,28 +220,45 @@ export default function App() {
     setLoading(true);
     savePrefs(params.restaurant, { allergies: '', groupSize });
 
-    // Recupera sessione salvata se la lingua coincide
+    // Controlla sessione salvata e storico cliente
     const saved = loadSession(params.restaurant, params.table);
-    if (saved && saved.lang === selectedLang) {
-      try {
-        const menuRes = await fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=${selectedLang}`);
-        if (menuRes.ok) {
-          const menuData: Dish[] = await menuRes.json();
-          const available = menuData.filter(d => d.available);
-          setDishes(available);
-          const firstCat = CAT_ORDER.find(c => available.some(d => d.category === c)) ?? 'antipasti';
-          setSelectedCat(firstCat);
-          setSessionId(saved.sessionId);
-          setMessages(saved.messages);
-          setAlreadyOrdered(saved.alreadyOrdered);
-          setJoinedExisting(saved.joinedExisting);
-          setOrderConfirmed(saved.orderConfirmed);
-          setScreen('main');
-          setLoading(false);
-          return;
-        }
-      } catch { /* fallback a nuova sessione */ }
+    const history = loadCustomerHistory(params.restaurant);
+    const returning = isReturningCustomer(history);
+
+    // Sessione attiva (< 12h) nella stessa lingua → ripristina
+    if (saved && saved.lang === selectedLang && !returning) {
+      const savedHours = saved.savedAt ? (Date.now() - new Date(saved.savedAt).getTime()) / 3600000 : 99;
+      if (savedHours < 12) {
+        try {
+          const menuRes = await fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=${selectedLang}`);
+          if (menuRes.ok) {
+            const menuData: Dish[] = await menuRes.json();
+            const available = menuData.filter(d => d.available);
+            setDishes(available);
+            const firstCat = CAT_ORDER.find(c => available.some(d => d.category === c)) ?? 'antipasti';
+            setSelectedCat(firstCat);
+            setSessionId(saved.sessionId);
+            setMessages(saved.messages);
+            setAlreadyOrdered(saved.alreadyOrdered);
+            setJoinedExisting(saved.joinedExisting);
+            setOrderConfirmed(saved.orderConfirmed);
+            setScreen('main');
+            setLoading(false);
+            return;
+          }
+        } catch { /* fallback a nuova sessione */ }
+      }
     }
+
+    // Se c'è una sessione vecchia, salva lo storico prima di ripartire
+    if (saved?.messages?.length) {
+      saveCustomerHistory(params.restaurant, saved.messages, saved.lang);
+      clearSession(params.restaurant, params.table);
+    }
+
+    // Ricarica lo storico aggiornato (potrebbe essere appena salvato)
+    const freshHistory = loadCustomerHistory(params.restaurant);
+    const isReturning = isReturningCustomer(freshHistory);
 
     try {
       const savedPrefs = loadPrefs(params.restaurant);
@@ -220,6 +273,8 @@ export default function App() {
             language: selectedLang,
             group_size: groupSize,
             saved_preferences: savedPrefs?.allergies || undefined,
+            returning_customer: isReturning,
+            previous_dishes: isReturning ? (freshHistory?.mentionedDishes ?? []) : [],
           }),
         }),
       ]);
