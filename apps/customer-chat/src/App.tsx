@@ -291,9 +291,15 @@ export default function App() {
             const firstCat = CAT_ORDER.find(c => available.some(d => d.category === c)) ?? 'antipasti';
             setSelectedCat(firstCat);
             setSessionId(saved.sessionId);
-            setMessages(saved.messages);
-            setAlreadyOrdered(saved.alreadyOrdered ?? '');
-            setJoinedExisting(saved.joinedExisting ?? false);
+            // Rimuove eventuale testo "già ordinato" dai messaggi salvati
+            const cleanedMessages = saved.messages.map(m =>
+              m.role === 'assistant'
+                ? { ...m, content: m.content.replace(/\n\n_[^_]*già[^_]*_$/i, '').replace(/\n\n_[^_]*already[^_]*_$/i, '').replace(/\n\n_[^_]*bereits[^_]*_$/i, '').trim() }
+                : m
+            );
+            setMessages(cleanedMessages);
+            setAlreadyOrdered('');
+            setJoinedExisting(false);
             setScreen('main');
             setLoading(false);
             return;
