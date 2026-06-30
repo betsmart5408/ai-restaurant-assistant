@@ -31,7 +31,11 @@ interface Message { role: 'user' | 'assistant'; content: string; timestamp: stri
 interface Dish { id: string; name: string; description: string; price: number; category: string; available: boolean; image_url?: string; }
 
 // Converte **bold**, *italic*, _italic_ e \n in React nodes
-function renderMarkdown(text: string): React.ReactNode[] {
+function renderMarkdown(
+  text: string,
+  dishes?: { id: string; name: string; description: string; price: number; category: string; available: boolean; image_url?: string }[],
+  onDishClick?: (dish: { id: string; name: string; description: string; price: number; category: string; available: boolean; image_url?: string }) => void
+): React.ReactNode[] {
   const result: React.ReactNode[] = [];
   const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_|\n)/g;
   let last = 0, i = 0, match: RegExpExecArray | null;
@@ -39,8 +43,19 @@ function renderMarkdown(text: string): React.ReactNode[] {
     if (match.index > last) result.push(text.slice(last, match.index));
     const m = match[0];
     if (m === '\n') result.push(<br key={i} />);
-    else if (m.startsWith('**')) result.push(<strong key={i}>{m.slice(2, -2)}</strong>);
-    else result.push(<em key={i}>{m.slice(1, -1)}</em>);
+    else if (m.startsWith('**')) {
+      const name = m.slice(2, -2);
+      const matched = dishes?.find(d => d.name.toLowerCase() === name.toLowerCase());
+      if (matched && onDishClick) {
+        result.push(
+          <button key={i} onClick={() => onDishClick(matched)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#e94560', fontWeight: 700, fontSize: 'inherit', textDecoration: 'underline', fontStyle: 'normal', display: 'inline' }}>
+            {name}
+          </button>
+        );
+      } else {
+        result.push(<strong key={i}>{name}</strong>);
+      }
+    } else result.push(<em key={i}>{m.slice(1, -1)}</em>);
     last = match.index + m.length;
     i++;
   }
@@ -157,6 +172,7 @@ const UI: Record<string, Record<string, string>> = {
   alreadyOrd:  { it: 'Già ordinato', en: 'Already ordered', de: 'Bereits bestellt', es: 'Ya pedido', fr: 'Déjà commandé', pt: 'Já pedido', ru: 'Уже заказано', zh: '已点', ja: '注文済み', ar: 'تم الطلب' },
   myDishes:    { it: 'I miei piatti', en: 'My dishes', de: 'Meine Gerichte', es: 'Mis platos', fr: 'Mes plats', pt: 'Os meus pratos', ru: 'Мои блюда', zh: '我的菜肴', ja: '私の料理', ar: 'أطباقي' },
   remove:      { it: 'Rimuovi', en: 'Remove', de: 'Entfernen', es: 'Eliminar', fr: 'Supprimer', pt: 'Remover', ru: 'Удалить', zh: '删除', ja: '削除', ar: 'إزالة' },
+  savedDish:   { it: '✓ Salvato', en: '✓ Saved', de: '✓ Gespeichert', es: '✓ Guardado', fr: '✓ Sauvegardé', pt: '✓ Guardado', ru: '✓ Сохранено', zh: '✓ 已保存', ja: '✓ 保存済み', ar: '✓ محفوظ' },
 };
 function t(key: string, lang: string) { return UI[key]?.[lang] ?? UI[key]?.['it'] ?? key; }
 
@@ -628,7 +644,7 @@ export default function App() {
             {messages.map((msg, i) => (
               <div key={i} ref={i === messages.length - 1 ? lastMsgRef : undefined} style={msg.role === 'user' ? S.bubbleUser : S.bubbleAI}>
                 <div style={msg.role === 'user' ? S.bubbleUserInner : S.bubbleAIInner}>
-                  {msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content}
+                  {msg.role === 'assistant' ? renderMarkdown(msg.content, dishes, openDish) : msg.content}
                 </div>
               </div>
             ))}
@@ -657,18 +673,17 @@ export default function App() {
           {lastDiscussedDish && !loading && (
             <div style={S.saveDishBar}>
               <button
-                style={savedDishes.some(i => i.dish.id === lastDiscussedDish.id) ? S.saveDishBtnSaved : S.saveDishBtn}
+                style={S.saveDishBtn}
                 onClick={() => {
                   setSavedDishes(prev => {
                     const existing = prev.find(i => i.dish.id === lastDiscussedDish!.id);
                     if (existing) return prev.map(i => i.dish.id === lastDiscussedDish!.id ? { ...i, qty: i.qty + 1 } : i);
                     return [...prev, { dish: lastDiscussedDish!, qty: 1 }];
                   });
+                  setLastDiscussedDish(null);
                 }}
               >
-                {savedDishes.some(i => i.dish.id === lastDiscussedDish.id)
-                  ? `${t('ordered', lang)} ${lastDiscussedDish.name}`
-                  : `💾 ${t('addOrder', lang)}: ${lastDiscussedDish.name}`}
+                💾 {t('addOrder', lang)}: {lastDiscussedDish.name}
               </button>
             </div>
           )}
@@ -836,6 +851,5 @@ const S: Record<string, React.CSSProperties> = {
   deleteBtn: { background: 'none', border: 'none', color: '#e94560', fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1, flexShrink: 0 },
   saveDishBar: { padding: '8px 12px', background: '#0f0f1a', borderTop: '1px solid #2a2a4a', flexShrink: 0 },
   saveDishBtn: { width: '100%', padding: '12px', borderRadius: 12, fontSize: 15, fontWeight: 700, background: '#16213e', color: '#eaeaea', border: '1.5px solid #e94560', cursor: 'pointer' },
-  saveDishBtnSaved: { width: '100%', padding: '12px', borderRadius: 12, fontSize: 15, fontWeight: 700, background: '#1a3a1a', color: '#22c55e', border: '1.5px solid #22c55e', cursor: 'pointer' },
   qtyBtn: { background: '#2a2a4a', color: '#eaeaea', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 };
