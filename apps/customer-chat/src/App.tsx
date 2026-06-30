@@ -28,8 +28,21 @@ function getQRParams() {
 }
 
 interface Message { role: 'user' | 'assistant'; content: string; timestamp: string; }
-interface OrderData { items: Array<{ dish_id: string; dish_name: string; qty: number; unit_price: number }>; }
 interface Dish { id: string; name: string; description: string; price: number; category: string; available: boolean; image_url?: string; }
+
+// Converte **bold** e *italic* in testo semplice con stile inline per i bubble chat
+function renderMarkdown(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*{1,2}[^*]+\*{1,2})/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={i}>{part.slice(1, -1)}</em>;
+    }
+    return part;
+  });
+}
 
 const STORAGE_KEY = (restaurant: string) => `gusto_prefs_${restaurant}`;
 interface SavedPrefs { allergies: string; groupSize: number; }
@@ -57,7 +70,7 @@ function loadDishList(restaurant: string, table: number): SavedDishItem[] {
     return raw.items ?? [];
   } catch { return []; }
 }
-interface SavedSession { sessionId: string; lang: string; messages: Message[]; alreadyOrdered: string; joinedExisting: boolean; orderConfirmed: boolean; savedAt?: string; }
+interface SavedSession { sessionId: string; lang: string; messages: Message[]; alreadyOrdered: string; joinedExisting: boolean; savedAt?: string; }
 interface CustomerHistory { lastVisitAt: string; mentionedDishes: string[]; lang: string; }
 
 function saveSession(restaurant: string, table: number, data: SavedSession) {
@@ -103,7 +116,7 @@ function isReturningCustomer(history: CustomerHistory | null): boolean {
   return diffHours >= 12;
 }
 
-type Screen = 'lang' | 'main' | 'confirm_order' | 'saved_dishes';
+type Screen = 'lang' | 'main' | 'saved_dishes';
 type Tab = 'menu' | 'chat';
 interface SavedDishItem { dish: Dish; qty: number; }
 
@@ -169,8 +182,6 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [pendingOrder, setPendingOrder] = useState<OrderData | null>(null);
-  const [orderConfirmed, setOrderConfirmed] = useState(false);
   const [savedDishes, setSavedDishes] = useState<SavedDishItem[]>(() => loadDishList(getQRParams().restaurant, getQRParams().table));
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [selectedCat, setSelectedCat] = useState<string>('antipasti');
@@ -180,7 +191,7 @@ export default function App() {
   const [translatingCat, setTranslatingCat] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [groupSize, setGroupSize] = useState<number>(2);
-  const [alreadyOrdered, setAlreadyOrdered] = useState<string>('');
+  const [alreadyOrdered, setAlreadyOrdered] = useState('');
   const [joinedExisting, setJoinedExisting] = useState(false);
   const [listening, setListening] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -188,7 +199,6 @@ export default function App() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastMsgRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-  const checkInTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Carica preferenze salvate al primo render
   useEffect(() => {
@@ -199,11 +209,13 @@ export default function App() {
   // Salva sessione in localStorage ad ogni cambio messaggi
   useEffect(() => {
     if (!sessionId) return;
-    saveSession(params.restaurant, params.table, { sessionId, lang, messages, alreadyOrdered, joinedExisting, orderConfirmed });
-  }, [sessionId, lang, messages, orderConfirmed]);
+    saveSession(params.restaurant, params.table, { sessionId, lang, messages, alreadyOrdered, joinedExisting });
+  }, [sessionId, lang, messages]);
 
-  // Salva piatti selezionati in localStorage ad ogni cambio
+  // Salva piatti selezionati in localStorage ad ogni cambio (non al primo render)
+  const savedDishesInitRef = useRef(true);
   useEffect(() => {
+    if (savedDishesInitRef.current) { savedDishesInitRef.current = false; return; }
     saveDishList(params.restaurant, params.table, savedDishes);
   }, [savedDishes]);
 
@@ -265,9 +277,8 @@ export default function App() {
             setSelectedCat(firstCat);
             setSessionId(saved.sessionId);
             setMessages(saved.messages);
-            setAlreadyOrdered(saved.alreadyOrdered);
-            setJoinedExisting(saved.joinedExisting);
-            setOrderConfirmed(saved.orderConfirmed);
+            setAlreadyOrdered(saved.alreadyOrdered ?? '');
+            setJoinedExisting(saved.joinedExisting ?? false);
             setScreen('main');
             setLoading(false);
             return;
@@ -347,41 +358,12 @@ export default function App() {
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.message, timestamp: new Date().toISOString() }]);
       setSuggestions(data.suggestions ?? []);
-      if (data.order_data) { setPendingOrder(data.order_data); setScreen('confirm_order'); }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Errore di rete. Riprova.', timestamp: new Date().toISOString() }]);
     } finally {
       setLoading(false);
     }
   }, [input, sessionId, loading, lang]);
-
-  async function confirmOrder() {
-    if (!pendingOrder || !sessionId) return;
-    setLoading(true);
-    try {
-      await fetch(`${API}/api/orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, items: pendingOrder.items, language: lang }),
-      });
-      setOrderConfirmed(true);
-      setPendingOrder(null);
-      setScreen('main');
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: t('orderOk', lang),
-        timestamp: new Date().toISOString(),
-      }]);
-      // Check-in automatico dopo 8 minuti
-      if (checkInTimerRef.current) clearTimeout(checkInTimerRef.current);
-      checkInTimerRef.current = setTimeout(() => {
-        const checkIns: Record<string, string> = { it: "Come va tutto? Posso portarvi qualcos'altro?", en: 'How is everything going? Can I bring you anything else?', de: 'Wie läuft alles? Kann ich Ihnen noch etwas bringen?', es: '¿Cómo va todo? ¿Puedo traerles algo más?', fr: 'Comment ça se passe ? Je peux vous apporter autre chose ?', pt: 'Como está tudo? Posso trazer mais alguma coisa?', ru: 'Как всё идёт? Могу я принести что-нибудь ещё?', zh: '一切都好吗？需要再来点什么吗？', ja: 'いかがですか？何か他にお持ちしましょうか？', ar: 'كيف حال كل شيء؟ هل يمكنني إحضار أي شيء آخر؟' };
-        const checkIn = checkIns[lang] ?? checkIns['it'];
-        sendMessage(checkIn);
-        setTab('chat');
-      }, 8 * 60 * 1000);
-    } catch { alert('Errore conferma ordine'); } finally { setLoading(false); }
-  }
 
   async function openDish(dish: Dish) {
     setSelectedDish(dish);
@@ -470,31 +452,6 @@ export default function App() {
     );
   }
 
-  // ─── Conferma ordine ──────────────────────────────────────
-  if (screen === 'confirm_order' && pendingOrder) {
-    const total = pendingOrder.items.reduce((s, i) => s + i.unit_price * i.qty, 0);
-    return (
-      <div style={S.confirmScreen}>
-        <h2 style={S.confirmTitle}>{t('confirm', lang)}</h2>
-        <div style={S.orderItems}>
-          {pendingOrder.items.map((item, i) => (
-            <div key={i} style={S.orderItem}>
-              <span>{item.qty}× {item.dish_name}</span>
-              <span>€{(item.unit_price * item.qty).toFixed(2)}</span>
-            </div>
-          ))}
-          <div style={S.orderTotal}><strong>Totale</strong><strong>€{total.toFixed(2)}</strong></div>
-        </div>
-        <div style={S.confirmBtns}>
-          <button style={S.btnCancel} onClick={() => setScreen('main')}>{t('modify', lang)}</button>
-          <button style={S.btnConfirm} onClick={confirmOrder} disabled={loading}>
-            {loading ? '...' : t('confirmBtn', lang)}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // ─── Piatti salvati ───────────────────────────────────────
   if (screen === 'saved_dishes') {
     const total = savedDishes.reduce((s, i) => s + parseFloat(String(i.dish.price)) * i.qty, 0);
@@ -558,7 +515,7 @@ export default function App() {
         <div style={S.headerSub2}>Tavolo {params.table}</div>
         {savedDishes.length > 0 && (
           <button style={S.savedBadgeBtn} onClick={() => setScreen('saved_dishes')}>
-            🍽️ <span style={S.savedBadgeCount}>{savedDishes.reduce((s, i) => s + i.qty, 0)}</span>
+            🛒 <span style={S.savedBadgeCount}>{savedDishes.reduce((s, i) => s + i.qty, 0)}</span>
           </button>
         )}
       </header>
@@ -573,7 +530,7 @@ export default function App() {
                   key={opt.code}
                   style={lang === opt.code ? S.langPickerBtnActive : S.langPickerBtn}
                   onClick={() => {
-                    if (sessionId) saveSession(params.restaurant, params.table, { sessionId, lang: opt.code, messages, alreadyOrdered, joinedExisting, orderConfirmed });
+                    if (sessionId) saveSession(params.restaurant, params.table, { sessionId, lang: opt.code, messages, alreadyOrdered, joinedExisting });
                     const SUGG: Record<string, string[]> = { it: ["Cosa mi consiglia?", "Ho un'allergia", 'Menu degustazione'], en: ['What do you recommend?', 'I have an allergy', 'Tasting menu'], de: ['Was empfehlen Sie?', 'Ich habe eine Allergie', 'Degustationsmenü'], es: ['¿Qué recomienda?', 'Tengo una alergia', 'Menú degustación'], fr: ['Que recommandez-vous?', "J'ai une allergie", 'Menu dégustation'], pt: ['O que recomenda?', 'Tenho uma alergia', 'Menu degustação'], ru: ['Что вы рекомендуете?', 'У меня аллергия', 'Дегустационное меню'], zh: ['您推荐什么？', '我有过敏', '品鉴菜单'], ja: ['何がおすすめですか？', 'アレルギーがあります', 'テイスティングメニュー'], ar: ['ماذا توصي؟', 'لدي حساسية', 'قائمة التذوق'] };
                     setSuggestions(SUGG[opt.code] ?? SUGG['it']);
                     setShowLangPicker(false);
@@ -651,7 +608,7 @@ export default function App() {
             {messages.map((msg, i) => (
               <div key={i} ref={i === messages.length - 1 ? lastMsgRef : undefined} style={msg.role === 'user' ? S.bubbleUser : S.bubbleAI}>
                 <div style={msg.role === 'user' ? S.bubbleUserInner : S.bubbleAIInner}>
-                  {msg.content}
+                  {msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content}
                 </div>
               </div>
             ))}
@@ -704,8 +661,8 @@ export default function App() {
             }
             <h2 style={S.modalTitle}>{selectedDish.name}</h2>
             <div style={S.modalPrice}>€{parseFloat(String(selectedDish.price ?? 0)).toFixed(2)}</div>
-            {(translatedDishes[selectedDish.id] ?? selectedDish.description) && (
-              <p style={S.modalDesc}>{translatedDishes[selectedDish.id] ?? selectedDish.description}</p>
+            {(translatedDesc ?? translatedDishes[selectedDish.id] ?? selectedDish.description) && (
+              <p style={S.modalDesc}>{translatedDesc ?? translatedDishes[selectedDish.id] ?? selectedDish.description}</p>
             )}
             <button style={S.modalAskBtn} onClick={() => askAboutDish(selectedDish)}>
               💬 {t('askMarco', lang)}

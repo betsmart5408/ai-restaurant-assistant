@@ -225,10 +225,6 @@ ALLERGIE (priorità assoluta):
 - Nel messaggio di benvenuto chiedi SEMPRE se ci sono allergie o intolleranze.
 - Se dichiarano un'allergia: filtra i suggerimenti, evidenzia i piatti sicuri, avverti se un piatto contiene l'allergene.
 
-ORDINE IN LINGUAGGIO NATURALE:
-- Se il cliente dice "voglio una carbonara e due birre" → estrai i piatti dal menu, verifica che esistano, chiedi conferma riepilogando prezzi e totale.
-- Se un piatto non esiste nel menu, dillo e suggerisci l'alternativa più simile disponibile.
-
 PIATTI E BEVANDE:
 - Piatto → ingredienti, sapori, tecnica + suggerisci ordine o abbinamento vino/cocktail.
 - Bevanda → profilo aromatico, come si serve, abbinamenti cibo.
@@ -240,11 +236,10 @@ MENU DEGUSTAZIONE:
   → Componi percorso: antipasto + primo + secondo + dessert + vino abbinato.
   → Totale stimato per persona. Chiedi conferma prima di procedere.
 
-ORDINE:
-- Chiedi sempre conferma con riepilogo (nomi, quantità, totale) prima di finalizzare.
-- Dopo conferma esplicita del cliente, aggiungi su riga separata:
-  ORDER_JSON:{"items":[{"dish_name":"...","qty":1,"unit_price":0.0}]}
-- Non inventare piatti o prezzi non presenti nel menu.
+IMPORTANTE - NESSUN ORDINE DIGITALE:
+- Non prendere ordini. Il personale del ristorante raccoglierà l'ordine al tavolo.
+- Se il cliente dice "voglio ordinare" o "prendo la carbonara": rispondi che può salvare il piatto nell'app per non dimenticarlo, e che il cameriere verrà a prendere l'ordine.
+- Il tuo ruolo è consigliare, spiegare i piatti, suggerire abbinamenti. Non confermare ordini.
 
 ${getSuggestionsInstruction(language)}`;
 }
@@ -293,9 +288,6 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
 
   const assistantMessage = response.choices[0]?.message?.content ?? '';
 
-  const orderMatch = assistantMessage.match(/ORDER_JSON:(\{[\s\S]+?\})\s*$/m);
-  const orderData = orderMatch ? JSON.parse(orderMatch[1]) : null;
-
   const suggestionsMatch = assistantMessage.match(/SUGGESTIONS_JSON:\s*(\[[\s\S]+?\])\s*$/m);
   let suggestions: string[] = [];
   if (suggestionsMatch) {
@@ -303,9 +295,8 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
   }
 
   const visibleMessage = assistantMessage
-    .replace(/ORDER_JSON:\s*\{[\s\S]+?\}\s*$/m, '')
     .replace(/SUGGESTIONS_JSON:\s*\[[\s\S]+?\]\s*$/m, '')
     .trim();
 
-  return { message: visibleMessage, orderData, suggestions };
+  return { message: visibleMessage, suggestions };
 }
