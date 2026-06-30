@@ -21,7 +21,7 @@ const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 function getQRParams() {
   const p = new URLSearchParams(window.location.search);
   return {
-    restaurant: p.get('restaurant') ?? 'da-mario',
+    restaurant: p.get('restaurant') ?? 'gusto-alcazabilla',
     table: parseInt(p.get('table') ?? '1'),
     lang: p.get('lang') ?? navigator.language.slice(0, 2) ?? 'it',
   };
