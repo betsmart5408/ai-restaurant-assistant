@@ -184,8 +184,19 @@ router.post('/:restaurantSlug/dishes', async (req, res) => {
 // PATCH /api/menu/:restaurantSlug/dishes/:dishId — aggiorna disponibilità
 router.patch('/:restaurantSlug/dishes/:dishId', async (req, res) => {
   try {
-    const { dishId } = req.params;
-    const { available, price, description } = req.body;
+    const { restaurantSlug, dishId } = req.params;
+    const { available, price, description, name, category, cost } = req.body;
+
+    // Verifica che il piatto appartenga al ristorante indicato nello slug
+    const ownership = await db.query(
+      `SELECT d.id FROM dishes d
+       JOIN restaurants r ON r.id = d.restaurant_id
+       WHERE d.id = $1 AND r.slug = $2`,
+      [dishId, restaurantSlug]
+    );
+    if (ownership.rows.length === 0) {
+      return res.status(404).json({ error: 'Dish not found for this restaurant' });
+    }
 
     const fields: string[] = [];
     const values: unknown[] = [];
@@ -194,6 +205,9 @@ router.patch('/:restaurantSlug/dishes/:dishId', async (req, res) => {
     if (available !== undefined) { fields.push(`available = $${idx++}`); values.push(available); }
     if (price !== undefined) { fields.push(`price = $${idx++}`); values.push(price); }
     if (description !== undefined) { fields.push(`description = $${idx++}`); values.push(description); }
+    if (name !== undefined) { fields.push(`name = $${idx++}`); values.push(name); }
+    if (category !== undefined) { fields.push(`category = $${idx++}`); values.push(category); }
+    if (cost !== undefined) { fields.push(`cost = $${idx++}`); values.push(cost); }
 
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
 

@@ -172,6 +172,10 @@ router.post('/:sessionId/message', async (req, res) => {
     const { sessionId } = req.params;
     const { message, language } = req.body;
 
+    if (!message || !String(message).trim()) {
+      return res.status(400).json({ error: 'Il messaggio non può essere vuoto' });
+    }
+
     const session = await db.query(
       `SELECT cs.id, cs.language, cs.messages, cs.restaurant_id, cs.table_id,
               r.name as restaurant_name, r.groq_api_key, t.number as table_number

@@ -47,12 +47,20 @@ export default function App() {
   }, [fetchOrders]);
 
   async function updateStatus(orderId: string, status: string) {
-    await fetch(`${API}/api/orders/${orderId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    fetchOrders();
+    try {
+      const res = await fetch(`${API}/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        console.error(`Aggiornamento stato fallito: ${res.status}`);
+        return;
+      }
+      fetchOrders();
+    } catch (err) {
+      console.error('Errore aggiornamento stato ordine:', err);
+    }
   }
 
   return (

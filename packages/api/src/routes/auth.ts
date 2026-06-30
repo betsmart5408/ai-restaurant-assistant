@@ -13,6 +13,15 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'restaurant_name, email e password sono obbligatori' });
   }
 
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Indirizzo email non valido' });
+  }
+
+  if (String(password).length < 8) {
+    return res.status(400).json({ error: 'La password deve avere almeno 8 caratteri' });
+  }
+
   const client = await db.connect();
   try {
     await client.query('BEGIN');

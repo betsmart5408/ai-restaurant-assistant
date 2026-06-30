@@ -353,7 +353,7 @@ export default function App() {
                     try {
                       const method = menuForm.id ? 'PATCH' : 'POST';
                       const url = menuForm.id
-                        ? `${API}/api/menu/da-mario/dishes/${menuForm.id}`
+                        ? `${API}/api/menu/${selectedRest?.slug}/dishes/${menuForm.id}`
                         : `${API}/api/menu/${selectedRest?.slug}/dishes`;
                       await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(menuForm) });
                       setMenuForm(null);
@@ -471,8 +471,8 @@ export default function App() {
               {margins.map((d) => (
                 <div key={d.id} style={S.tableRow}>
                   <span style={{ fontWeight: 600 }}>{d.name}</span>
-                  <span>€{d.price?.toFixed(2)}</span>
-                  <span>€{d.cost?.toFixed(2)}</span>
+                  <span>€{(d.price ?? 0).toFixed(2)}</span>
+                  <span>€{(d.cost ?? 0).toFixed(2)}</span>
                   <span style={{ color: d.margin_pct > 60 ? '#22c55e' : d.margin_pct > 40 ? '#f59e0b' : '#ef4444', fontWeight: 700 }}>
                     {d.margin_pct}%
                   </span>

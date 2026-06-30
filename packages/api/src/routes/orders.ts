@@ -10,6 +10,11 @@ router.post('/', async (req, res) => {
   try {
     const { restaurant_id, table_id, session_id, items, language } = req.body;
 
+    if (!Array.isArray(items) || items.length === 0) {
+      client.release();
+      return res.status(400).json({ error: 'items deve essere un array non vuoto' });
+    }
+
     await client.query('BEGIN');
 
     const total = items.reduce(
@@ -101,6 +106,10 @@ router.patch('/:orderId/status', async (req, res) => {
       'UPDATE orders SET status = $1 WHERE id = $2 RETURNING *',
       [status, orderId]
     );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
 
     res.json(result.rows[0]);
   } catch (err) {

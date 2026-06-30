@@ -231,12 +231,19 @@ export default function App() {
     }
   }, [messages, loading]);
 
+  // Cleanup SpeechRecognition all'unmount
+  useEffect(() => {
+    return () => { recognitionRef.current?.stop(); };
+  }, []);
+
   // Traduce le descrizioni della categoria visibile (on-demand)
   useEffect(() => {
     if (lang === 'es' || screen !== 'main') return;
     const catDishes = dishes.filter(d => d.category === selectedCat);
     const toTranslate = catDishes.filter(d => d.description && !translatedDishes[d.id]);
     if (toTranslate.length === 0) return;
+
+    let cancelled = false;
     setTranslatingCat(selectedCat);
     fetch(`${API}/api/menu/translate-batch`, {
       method: 'POST',
@@ -245,7 +252,7 @@ export default function App() {
     })
       .then(r => r.json())
       .then((data: { id: string; translated: string }[]) => {
-        if (!Array.isArray(data)) return;
+        if (cancelled || !Array.isArray(data)) return;
         setTranslatedDishes(prev => {
           const next = { ...prev };
           for (const item of data) next[item.id] = item.translated;
@@ -253,7 +260,9 @@ export default function App() {
         });
       })
       .catch(() => {})
-      .finally(() => setTranslatingCat(null));
+      .finally(() => { if (!cancelled) setTranslatingCat(null); });
+
+    return () => { cancelled = true; setTranslatingCat(null); };
   }, [selectedCat, screen, lang]);
 
   async function startSession(selectedLang: string) {
