@@ -683,7 +683,7 @@ export default function App() {
                   setLastDiscussedDish(null);
                 }}
               >
-                💾 {t('addOrder', lang)}: {lastDiscussedDish.name}
+                {t('addOrder', lang)}: {lastDiscussedDish.name}
               </button>
             </div>
           )}
