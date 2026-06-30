@@ -155,6 +155,8 @@ const UI: Record<string, Record<string, string>> = {
   total:       { it: 'Totale stimato', en: 'Estimated total', de: 'Geschätztes Gesamt', es: 'Total estimado', fr: 'Total estimé', pt: 'Total estimado', ru: 'Примерная сумма', zh: '预计总计', ja: '合計（目安）', ar: 'المجموع التقديري' },
   sharedTable: { it: 'Sessione tavolo condivisa', en: 'Shared table', de: 'Gemeinsamer Tisch', es: 'Mesa compartida', fr: 'Table partagée', pt: 'Mesa compartilhada', ru: 'Общий стол', zh: '共享桌台', ja: 'テーブル共有', ar: 'طاولة مشتركة' },
   alreadyOrd:  { it: 'Già ordinato', en: 'Already ordered', de: 'Bereits bestellt', es: 'Ya pedido', fr: 'Déjà commandé', pt: 'Já pedido', ru: 'Уже заказано', zh: '已点', ja: '注文済み', ar: 'تم الطلب' },
+  myDishes:    { it: 'I miei piatti', en: 'My dishes', de: 'Meine Gerichte', es: 'Mis platos', fr: 'Mes plats', pt: 'Os meus pratos', ru: 'Мои блюда', zh: '我的菜肴', ja: '私の料理', ar: 'أطباقي' },
+  remove:      { it: 'Rimuovi', en: 'Remove', de: 'Entfernen', es: 'Eliminar', fr: 'Supprimer', pt: 'Remover', ru: 'Удалить', zh: '删除', ja: '削除', ar: 'إزالة' },
 };
 function t(key: string, lang: string) { return UI[key]?.[lang] ?? UI[key]?.['it'] ?? key; }
 
@@ -481,23 +483,30 @@ export default function App() {
         ) : (
           <div style={S.orderItems}>
             {savedDishes.map((item, i) => (
-              <div key={i} style={{ ...S.orderItem, flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 600 }}>{item.qty}× {item.dish.name}</span>
-                  <span style={{ color: '#e94560', fontWeight: 700 }}>€{(parseFloat(String(item.dish.price)) * item.qty).toFixed(2)}</span>
+              <div key={i} style={{ ...S.orderItem, flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'flex-start', gap: 8 }}>
+                  <span style={{ fontWeight: 700, fontSize: 16, color: '#eaeaea', flex: 1 }}>{item.dish.name}</span>
+                  <button
+                    style={S.deleteBtn}
+                    onClick={() => setSavedDishes(prev => prev.filter(x => x.dish.id !== item.dish.id))}
+                    title={t('remove', lang)}
+                  >✕</button>
                 </div>
                 {(translatedDishes[item.dish.id] ?? item.dish.description) && (
-                  <span style={{ fontSize: 12, color: '#a8a8b3' }}>{translatedDishes[item.dish.id] ?? item.dish.description}</span>
+                  <span style={{ fontSize: 13, color: '#a8a8b3', lineHeight: 1.4 }}>{translatedDishes[item.dish.id] ?? item.dish.description}</span>
                 )}
-                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                  <button style={S.qtyBtn} onClick={() => setSavedDishes(prev => {
-                    const updated = prev.map(x => x.dish.id === item.dish.id ? { ...x, qty: x.qty - 1 } : x);
-                    return updated.filter(x => x.qty > 0);
-                  })}>−</button>
-                  <span style={{ color: '#eaeaea', minWidth: 20, textAlign: 'center' }}>{item.qty}</span>
-                  <button style={S.qtyBtn} onClick={() => setSavedDishes(prev =>
-                    prev.map(x => x.dish.id === item.dish.id ? { ...x, qty: x.qty + 1 } : x)
-                  )}>+</button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 4 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button style={S.qtyBtn} onClick={() => setSavedDishes(prev => {
+                      const updated = prev.map(x => x.dish.id === item.dish.id ? { ...x, qty: x.qty - 1 } : x);
+                      return updated.filter(x => x.qty > 0);
+                    })}>−</button>
+                    <span style={{ color: '#eaeaea', minWidth: 20, textAlign: 'center', fontWeight: 600 }}>{item.qty}</span>
+                    <button style={S.qtyBtn} onClick={() => setSavedDishes(prev =>
+                      prev.map(x => x.dish.id === item.dish.id ? { ...x, qty: x.qty + 1 } : x)
+                    )}>+</button>
+                  </div>
+                  <span style={{ color: '#e94560', fontWeight: 700, fontSize: 16 }}>€{(parseFloat(String(item.dish.price)) * item.qty).toFixed(2)}</span>
                 </div>
               </div>
             ))}
@@ -524,12 +533,12 @@ export default function App() {
           {LANG_OPTIONS.find(o => o.code === lang)?.label.split(' ')[0] ?? '🌐'}
         </button>
         <img src="/logo.png" alt="Gusto" style={S.headerLogo} />
-        <div style={S.headerSub2}>{params.restaurant.replace(/-/g, ' ')}</div>
-        {savedDishes.length > 0 && (
-          <button style={S.savedBadgeBtn} onClick={() => setScreen('saved_dishes')}>
-            🛒 <span style={S.savedBadgeCount}>{savedDishes.reduce((s, i) => s + i.qty, 0)}</span>
-          </button>
-        )}
+        <button style={S.myDishesBtn} onClick={() => setScreen('saved_dishes')}>
+          🍽️ {t('myDishes', lang)}
+          {savedDishes.length > 0 && (
+            <span style={S.savedBadgeCount}>{savedDishes.reduce((s, i) => s + i.qty, 0)}</span>
+          )}
+        </button>
       </header>
 
       {/* Language picker overlay */}
@@ -557,18 +566,6 @@ export default function App() {
               ))}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Banner sessione condivisa */}
-      {joinedExisting && (
-        <div style={S.sharedBanner}>
-          👥 {t('sharedTable', lang)}
-          {alreadyOrdered && (
-            <span style={S.sharedOrdered}>
-              {' '}· {t('alreadyOrd', lang)}: {alreadyOrdered}
-            </span>
-          )}
         </div>
       )}
 
@@ -807,6 +804,8 @@ const S: Record<string, React.CSSProperties> = {
   btnCancel: { flex: 1, padding: '14px', borderRadius: 12, fontSize: 16, background: '#1a1a2e', color: '#a8a8b3', border: '1.5px solid #2a2a4a', cursor: 'pointer' },
   btnConfirm: { flex: 2, padding: '14px', borderRadius: 12, fontSize: 16, fontWeight: 700, background: '#e94560', color: 'white', border: 'none', cursor: 'pointer' },
   savedBadgeBtn: { background: '#e94560', border: 'none', borderRadius: 20, padding: '6px 12px', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 },
-  savedBadgeCount: { background: '#fff', color: '#e94560', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 },
+  savedBadgeCount: { background: '#e94560', color: '#fff', borderRadius: '50%', width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, marginLeft: 4 },
+  myDishesBtn: { background: 'none', border: '1.5px solid #e94560', borderRadius: 20, padding: '5px 12px', color: '#e94560', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, whiteSpace: 'nowrap' as const },
+  deleteBtn: { background: 'none', border: 'none', color: '#e94560', fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1, flexShrink: 0 },
   qtyBtn: { background: '#2a2a4a', color: '#eaeaea', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 };
