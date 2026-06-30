@@ -135,7 +135,7 @@ function isReturningCustomer(history: CustomerHistory | null): boolean {
   return diffHours >= 12;
 }
 
-type Screen = 'lang' | 'main' | 'saved_dishes';
+type Screen = 'lang' | 'home' | 'main' | 'saved_dishes';
 type Tab = 'menu' | 'chat';
 interface SavedDishItem { dish: Dish; qty: number; }
 
@@ -173,6 +173,10 @@ const UI: Record<string, Record<string, string>> = {
   myDishes:    { it: 'I miei piatti', en: 'My dishes', de: 'Meine Gerichte', es: 'Mis platos', fr: 'Mes plats', pt: 'Os meus pratos', ru: 'Мои блюда', zh: '我的菜肴', ja: '私の料理', ar: 'أطباقي' },
   remove:      { it: 'Rimuovi', en: 'Remove', de: 'Entfernen', es: 'Eliminar', fr: 'Supprimer', pt: 'Remover', ru: 'Удалить', zh: '删除', ja: '削除', ar: 'إزالة' },
   savedDish:   { it: '✓ Salvato', en: '✓ Saved', de: '✓ Gespeichert', es: '✓ Guardado', fr: '✓ Sauvegardé', pt: '✓ Guardado', ru: '✓ Сохранено', zh: '✓ 已保存', ja: '✓ 保存済み', ar: '✓ محفوظ' },
+  homeMenu:    { it: '🍽️ Menu', en: '🍽️ Menu', de: '🍽️ Speisekarte', es: '🍽️ Carta', fr: '🍽️ Menu', pt: '🍽️ Menu', ru: '🍽️ Меню', zh: '🍽️ 菜单', ja: '🍽️ メニュー', ar: '🍽️ قائمة' },
+  homeAllergy: { it: '⚠️ Allergie o Intolleranze', en: '⚠️ Allergies & Intolerances', de: '⚠️ Allergien & Unverträglichkeiten', es: '⚠️ Alergias e Intolerancias', fr: '⚠️ Allergies & Intolérances', pt: '⚠️ Alergias & Intolerâncias', ru: '⚠️ Аллергии и непереносимость', zh: '⚠️ 过敏与不耐受', ja: '⚠️ アレルギーと不耐性', ar: '⚠️ الحساسية وعدم التحمل' },
+  homeAI:      { it: '💬 Assistente AI', en: '💬 AI Assistant', de: '💬 KI-Assistent', es: '💬 Asistente IA', fr: '💬 Assistant IA', pt: '💬 Assistente IA', ru: '💬 ИИ-Ассистент', zh: '💬 AI助手', ja: '💬 AIアシスタント', ar: '💬 المساعد الذكي' },
+  allergyMsg:  { it: 'Ho un\'allergia o intolleranza alimentare, puoi aiutarmi?', en: 'I have a food allergy or intolerance, can you help me?', de: 'Ich habe eine Lebensmittelallergie, können Sie mir helfen?', es: 'Tengo una alergia alimentaria, ¿puedes ayudarme?', fr: 'J\'ai une allergie alimentaire, pouvez-vous m\'aider?', pt: 'Tenho uma alergia alimentar, pode ajudar-me?', ru: 'У меня пищевая аллергия, можете помочь?', zh: '我有食物过敏，能帮助我吗？', ja: '食物アレルギーがあります、助けてもらえますか？', ar: 'لدي حساسية غذائية، هل يمكنك مساعدتي؟' },
 };
 function t(key: string, lang: string) { return UI[key]?.[lang] ?? UI[key]?.['it'] ?? key; }
 
@@ -317,7 +321,7 @@ export default function App() {
             setMessages(cleanedMessages);
             setAlreadyOrdered('');
             setJoinedExisting(false);
-            setScreen('main');
+            setScreen('home');
             setLoading(false);
             return;
           }
@@ -372,7 +376,7 @@ export default function App() {
       setSuggestions(sessionData.suggestions ?? []);
       setJoinedExisting(sessionData.joined_existing ?? false);
       setAlreadyOrdered(sessionData.already_ordered ?? '');
-      setScreen('main');
+      setScreen('home');
     } catch (err) {
       setStartError(String(err));
     } finally {
@@ -487,6 +491,38 @@ export default function App() {
           </>
         )}
 
+      </div>
+    );
+  }
+
+  // ─── Home / Benvenuto ─────────────────────────────────────
+  if (screen === 'home') {
+    return (
+      <div style={S.homeScreen}>
+        {/* Logo grande centrato come sfondo visivo */}
+        <div style={S.homeLogoWrap}>
+          <img src="/logo.png" alt="Gusto" style={S.homeLogo} />
+        </div>
+        {/* Tasti principali */}
+        <div style={S.homeButtons}>
+          <button style={S.homeBtn} onClick={() => { setScreen('main'); setTab('menu'); }}>
+            {t('homeMenu', lang)}
+          </button>
+          <button style={S.homeBtn} onClick={() => {
+            setScreen('main');
+            setTab('chat');
+            setTimeout(() => sendMessage(t('allergyMsg', lang), true), 100);
+          }}>
+            {t('homeAllergy', lang)}
+          </button>
+          <button style={{ ...S.homeBtn, ...S.homeBtnAI }} onClick={() => { setScreen('main'); setTab('chat'); }}>
+            {t('homeAI', lang)}
+          </button>
+        </div>
+        {/* Cambio lingua */}
+        <button style={S.homeLangBtn} onClick={() => { setScreen('lang'); }}>
+          {LANG_OPTIONS.find(o => o.code === lang)?.label ?? '🌐'} ▾
+        </button>
       </div>
     );
   }
@@ -741,6 +777,15 @@ export default function App() {
 // ─── Styles ───────────────────────────────────────────────
 const S: Record<string, React.CSSProperties> = {
   appWrap: { display: 'flex', flexDirection: 'column', height: '100dvh', background: '#0f0f1a', overflow: 'hidden' },
+
+  // Home screen
+  homeScreen: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', minHeight: '100dvh', background: '#000', padding: '0 0 40px', position: 'relative' as const, overflow: 'hidden' },
+  homeLogoWrap: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', position: 'relative' as const },
+  homeLogo: { width: '75%', maxWidth: 320, objectFit: 'contain' as const, opacity: 0.92, filter: 'drop-shadow(0 0 40px rgba(233,69,96,0.3))' },
+  homeButtons: { display: 'flex', flexDirection: 'column' as const, gap: 14, width: '100%', padding: '0 28px', marginBottom: 8 },
+  homeBtn: { width: '100%', padding: '18px 20px', borderRadius: 16, fontSize: 17, fontWeight: 700, background: 'rgba(22,33,62,0.92)', color: '#eaeaea', border: '1.5px solid #2a2a4a', cursor: 'pointer', backdropFilter: 'blur(8px)', textAlign: 'center' as const, letterSpacing: 0.3 },
+  homeBtnAI: { background: 'rgba(233,69,96,0.15)', border: '1.5px solid #e94560', color: '#fff' },
+  homeLangBtn: { marginTop: 18, background: 'none', border: 'none', color: '#a8a8b3', fontSize: 15, cursor: 'pointer', padding: '8px 16px' },
   loadingScreen: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', gap: 16, background: '#0f0f1a' },
   spinner: { width: 48, height: 48, border: '4px solid #2a2a4a', borderTop: '4px solid #e94560', borderRadius: '50%', animation: 'spin 1s linear infinite' },
   loadingText: { fontSize: 18, fontWeight: 600, color: '#eaeaea' },
