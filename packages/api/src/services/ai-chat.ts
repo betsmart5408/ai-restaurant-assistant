@@ -1,7 +1,9 @@
 import Groq from 'groq-sdk';
 import { db } from '../db/client';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+function getGroqClient(apiKey?: string) {
+  return new Groq({ apiKey: apiKey || process.env.GROQ_API_KEY });
+}
 
 interface MenuDish {
   id: string;
@@ -237,8 +239,9 @@ ${getSuggestionsInstruction(language)}`;
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
-export async function processChat(ctx: ChatContext, userMessage: string) {
+export async function processChat(ctx: ChatContext, userMessage: string, groqApiKey?: string) {
   const { restaurantId, restaurantName, tableNumber, language, conversationHistory, groupSize, savedPreferences, existingOrders } = ctx;
+  const groq = getGroqClient(groqApiKey);
 
   const [{ dishes, expiring, highStock, topMargin, popular }, weather] = await Promise.all([
     loadRestaurantContext(restaurantId),

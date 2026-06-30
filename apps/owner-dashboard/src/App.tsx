@@ -5,7 +5,7 @@ import {
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 
-type Tab = 'today' | 'weekly' | 'inventory' | 'margins' | 'forecast' | 'menu';
+type Tab = 'today' | 'weekly' | 'inventory' | 'margins' | 'forecast' | 'menu' | 'settings';
 interface Restaurant { id: string; name: string; slug: string; }
 
 interface TodayData {
@@ -34,6 +34,10 @@ export default function App() {
   const [menu, setMenu] = useState<Dish[]>([]);
   const [menuForm, setMenuForm] = useState<Partial<Dish> | null>(null);
   const [menuSaving, setMenuSaving] = useState(false);
+  const [settingsKey, setSettingsKey] = useState('');
+  const [settingsStatus, setSettingsStatus] = useState<{ has_key: boolean; groq_api_key: string | null } | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [selectedRest, setSelectedRest] = useState<Restaurant | null>(null);
@@ -74,6 +78,9 @@ export default function App() {
       } else if (t === 'menu') {
         const res = await fetch(`${API}/api/menu/${selectedRest?.slug}/dishes`);
         setMenu(await res.json());
+      } else if (t === 'settings') {
+        const res = await fetch(`${API}/api/dashboard/${selectedRest?.id}/settings`);
+        setSettingsStatus(await res.json());
       } else if (t === 'forecast') {
         const [f, p] = await Promise.all([
           fetch(`${API}/api/forecast/${selectedRest?.id}`).then(r => r.json()),
@@ -118,6 +125,7 @@ export default function App() {
             ['margins', '💰 Margini'],
           ['forecast', '🔮 Forecast'],
           ['menu', '📋 Menu'],
+          ['settings', '⚙️ Impostazioni'],
           ] as [Tab, string][]).map(([key, label]) => (
             <button
               key={key}
@@ -387,6 +395,68 @@ export default function App() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* ── IMPOSTAZIONI ─────────────────────────────────── */}
+        {tab === 'settings' && (
+          <div style={S.content}>
+            <h1 style={S.pageTitle}>Impostazioni</h1>
+            <div style={S.formCard}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>🤖 Chiave API Groq (AI gratuita)</h2>
+              <p style={{ color: '#64748b', fontSize: 14, marginBottom: 16 }}>
+                Crea un account gratuito su <strong>console.groq.com</strong>, genera una API key e incollala qui.
+                In questo modo l'AI del tuo ristorante usa il tuo piano gratuito Groq — senza costi aggiuntivi.
+              </p>
+              {settingsStatus?.has_key && (
+                <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 14, color: '#166534' }}>
+                  ✅ Chiave attiva: <code>{settingsStatus.groq_api_key}</code>
+                </div>
+              )}
+              <label style={S.formLabel}>
+                Nuova chiave API (inizia con <code>gsk_</code>)
+                <input
+                  style={S.formInput}
+                  type="password"
+                  placeholder="gsk_..."
+                  value={settingsKey}
+                  onChange={e => { setSettingsKey(e.target.value); setSettingsMsg(''); }}
+                />
+              </label>
+              {settingsMsg && (
+                <div style={{ marginTop: 8, fontSize: 14, color: settingsMsg.startsWith('✅') ? '#166534' : '#ef4444' }}>
+                  {settingsMsg}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                <button style={S.btnPrimary} disabled={settingsSaving || !settingsKey} onClick={async () => {
+                  setSettingsSaving(true);
+                  setSettingsMsg('');
+                  try {
+                    const res = await fetch(`${API}/api/dashboard/${selectedRest?.id}/settings`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ groq_api_key: settingsKey }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                      setSettingsMsg('✅ Chiave salvata con successo!');
+                      setSettingsKey('');
+                      const updated = await fetch(`${API}/api/dashboard/${selectedRest?.id}/settings`);
+                      setSettingsStatus(await updated.json());
+                    } else {
+                      setSettingsMsg(`❌ ${data.error}`);
+                    }
+                  } catch {
+                    setSettingsMsg('❌ Errore di rete, riprova.');
+                  } finally {
+                    setSettingsSaving(false);
+                  }
+                }}>
+                  {settingsSaving ? 'Salvataggio...' : 'Salva chiave'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

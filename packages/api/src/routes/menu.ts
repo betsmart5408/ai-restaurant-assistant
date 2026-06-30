@@ -2,7 +2,17 @@ import { Router } from 'express';
 import { db } from '../db/client';
 import Groq from 'groq-sdk';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+function getGroqClient(apiKey?: string | null) {
+  return new Groq({ apiKey: apiKey || process.env.GROQ_API_KEY });
+}
+
+async function getRestaurantGroqKey(slug?: string): Promise<string | null> {
+  if (!slug) return null;
+  try {
+    const r = await db.query('SELECT groq_api_key FROM restaurants WHERE slug = $1', [slug]);
+    return r.rows[0]?.groq_api_key || null;
+  } catch { return null; }
+}
 
 const router = Router();
 
@@ -52,10 +62,12 @@ router.get('/:restaurantSlug', async (req, res) => {
 // POST /api/menu/translate-batch — traduce un array di descrizioni {id, text}
 router.post('/translate-batch', async (req, res) => {
   try {
-    const { items, lang }: { items: { id: string; text: string }[]; lang: string } = req.body;
+    const { items, lang, restaurant_slug }: { items: { id: string; text: string }[]; lang: string; restaurant_slug?: string } = req.body;
     if (!items?.length || lang === 'es') return res.json(items.map(i => ({ id: i.id, translated: i.text })));
     const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese (Simplified)', ja: 'Japanese', ar: 'Arabic' };
     const compact = items.map((item, idx) => `${idx}|${item.text}`).join('\n');
+    const groqKey = await getRestaurantGroqKey(restaurant_slug);
+    const groq = getGroqClient(groqKey);
     const msg = await groq.chat.completions.create({
       model: 'llama-3.1-8b-instant',
       max_tokens: 2048,
@@ -77,9 +89,11 @@ router.post('/translate-batch', async (req, res) => {
 // POST /api/menu/translate-desc — traduce una singola descrizione
 router.post('/translate-desc', async (req, res) => {
   try {
-    const { text, lang } = req.body;
+    const { text, lang, restaurant_slug } = req.body;
     if (!text || !lang || lang === 'es') return res.json({ translated: text });
     const langNames: Record<string, string> = { en: 'English', de: 'German', fr: 'French', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese (Simplified)', ja: 'Japanese', ar: 'Arabic', es: 'Spanish' };
+    const groqKey = await getRestaurantGroqKey(restaurant_slug);
+    const groq = getGroqClient(groqKey);
     const msg = await groq.chat.completions.create({
       model: 'llama-3.1-8b-instant',
       max_tokens: 256,

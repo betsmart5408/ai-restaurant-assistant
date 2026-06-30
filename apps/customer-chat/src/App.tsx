@@ -163,7 +163,7 @@ export default function App() {
     fetch(`${API}/api/menu/translate-batch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: toTranslate.map(d => ({ id: d.id, text: d.description })), lang }),
+      body: JSON.stringify({ items: toTranslate.map(d => ({ id: d.id, text: d.description })), lang, restaurant_slug: params.restaurant }),
     })
       .then(r => r.json())
       .then((data: { id: string; translated: string }[]) => {
@@ -310,7 +310,7 @@ export default function App() {
       const res = await fetch(`${API}/api/menu/translate-desc`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: dish.description, lang }),
+        body: JSON.stringify({ text: dish.description, lang, restaurant_slug: params.restaurant }),
       });
       if (res.ok) {
         const data = await res.json();

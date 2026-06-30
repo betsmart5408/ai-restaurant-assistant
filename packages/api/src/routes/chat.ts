@@ -29,12 +29,12 @@ router.post('/session', async (req, res) => {
     const { restaurant_slug, table_number, language = 'it', group_size, saved_preferences } = req.body;
 
     const restaurant = await db.query(
-      'SELECT id, name FROM restaurants WHERE slug = $1',
+      'SELECT id, name, groq_api_key FROM restaurants WHERE slug = $1',
       [restaurant_slug]
     );
     if (restaurant.rows.length === 0) return res.status(404).json({ error: 'Restaurant not found' });
 
-    const { id: restaurantId, name: restaurantName } = restaurant.rows[0];
+    const { id: restaurantId, name: restaurantName, groq_api_key } = restaurant.rows[0];
 
     const table = await db.query(
       'SELECT id FROM tables WHERE restaurant_id = $1 AND number = $2',
@@ -134,7 +134,7 @@ router.post('/:sessionId/message', async (req, res) => {
 
     const session = await db.query(
       `SELECT cs.id, cs.language, cs.messages, cs.restaurant_id, cs.table_id,
-              r.name as restaurant_name, t.number as table_number
+              r.name as restaurant_name, r.groq_api_key, t.number as table_number
        FROM chat_sessions cs
        JOIN restaurants r ON r.id = cs.restaurant_id
        JOIN tables t ON t.id = cs.table_id
@@ -158,7 +158,8 @@ router.post('/:sessionId/message', async (req, res) => {
         conversationHistory: history,
         existingOrders,
       },
-      message
+      message,
+      s.groq_api_key || undefined
     );
 
     await db.query(

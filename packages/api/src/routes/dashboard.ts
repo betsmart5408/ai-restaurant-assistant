@@ -124,4 +124,39 @@ router.get('/:restaurantId/margins', async (req, res) => {
   }
 });
 
+// GET /api/dashboard/:restaurantId/settings — legge impostazioni
+router.get('/:restaurantId/settings', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT groq_api_key FROM restaurants WHERE id = $1`,
+      [req.params.restaurantId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    const key = result.rows[0].groq_api_key;
+    // Maschera la chiave per sicurezza
+    res.json({ groq_api_key: key ? `${key.slice(0, 8)}${'•'.repeat(20)}` : null, has_key: !!key });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/dashboard/:restaurantId/settings — salva API key
+router.put('/:restaurantId/settings', async (req, res) => {
+  try {
+    const { groq_api_key } = req.body;
+    if (!groq_api_key || !groq_api_key.startsWith('gsk_')) {
+      return res.status(400).json({ error: 'Chiave non valida. Deve iniziare con gsk_' });
+    }
+    await db.query(
+      `UPDATE restaurants SET groq_api_key = $1 WHERE id = $2`,
+      [groq_api_key.trim(), req.params.restaurantId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
