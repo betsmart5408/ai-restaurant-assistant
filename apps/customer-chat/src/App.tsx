@@ -240,7 +240,7 @@ export default function App() {
 
   // Traduce le descrizioni della categoria visibile (on-demand)
   useEffect(() => {
-    if (lang === 'es' || screen !== 'main') return;
+    if (lang === 'it' || screen !== 'main') return;
     const catDishes = dishes.filter(d => d.category === selectedCat);
     const toTranslate = catDishes.filter(d => d.description && !translatedDishes[d.id]);
     if (toTranslate.length === 0) return;
@@ -383,7 +383,7 @@ export default function App() {
   async function openDish(dish: Dish) {
     setSelectedDish(dish);
     setTranslatedDesc(null);
-    if (lang === 'es' || !dish.description) return;
+    if (lang === 'it' || !dish.description) return;
     try {
       const res = await fetch(`${API}/api/menu/translate-desc`, {
         method: 'POST',
