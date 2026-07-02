@@ -12,6 +12,8 @@ import forecastRoutes from './routes/forecast';
 import authRoutes from './routes/auth';
 import posRoutes from './routes/pos';
 import adminRoutes from './routes/superadmin';
+import billingRoutes from './routes/billing';
+import uploadRoutes from './routes/upload';
 import { startAlertScheduler } from './services/alerts';
 
 const app = express();
@@ -31,6 +33,8 @@ app.use(cors({
   },
   credentials: true,
 }));
+// Webhook Stripe deve ricevere raw body PRIMA di express.json()
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
@@ -45,6 +49,8 @@ app.use('/api/alerts', alertsRoutes);
 app.use('/api/forecast', forecastRoutes);
 app.use('/api/pos', posRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/billing', billingRoutes);
+app.use('/api/upload', uploadRoutes);
 
 app.listen(PORT, () => {
   console.log(`API server running on http://localhost:${PORT}`);

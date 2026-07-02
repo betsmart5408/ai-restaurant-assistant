@@ -210,7 +210,7 @@ router.post('/:sessionId/message', async (req, res) => {
     );
 
     // Risolve dish_id per nome se mancante (AI non ha più gli id nel prompt)
-    let orderData = response.orderData ?? null;
+    let orderData = (response as any).orderData ?? null;
     if (orderData?.items) {
       const resolved = await Promise.all(orderData.items.map(async (item: { dish_id?: string; dish_name: string; qty: number; unit_price: number }) => {
         if (item.dish_id) return item;
