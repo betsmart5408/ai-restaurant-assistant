@@ -69,12 +69,17 @@ router.post('/portal', requireAuth, async (req: Request, res: Response) => {
 
 // GET /api/billing/status — stato abbonamento corrente
 router.get('/status', requireAuth, async (req: Request, res: Response) => {
-  const result = await db.query(
-    `SELECT plan, subscription_status, trial_ends_at, monthly_price, suspended_at
-     FROM restaurants WHERE id = $1`,
-    [req.auth!.restaurantId]
-  );
-  res.json(result.rows[0] ?? {});
+  try {
+    const result = await db.query(
+      `SELECT plan, subscription_status, trial_ends_at, monthly_price, suspended_at
+       FROM restaurants WHERE id = $1`,
+      [req.auth!.restaurantId]
+    );
+    res.json(result.rows[0] ?? {});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // POST /api/billing/webhook — webhook Stripe (raw body)

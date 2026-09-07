@@ -6,15 +6,14 @@ const router = Router();
 
 // POST /api/orders — crea ordine da chat
 router.post('/', async (req, res) => {
+  const { restaurant_id, table_id, session_id, items, language } = req.body;
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'items deve essere un array non vuoto' });
+  }
+
   const client = await db.connect();
   try {
-    const { restaurant_id, table_id, session_id, items, language } = req.body;
-
-    if (!Array.isArray(items) || items.length === 0) {
-      client.release();
-      return res.status(400).json({ error: 'items deve essere un array non vuoto' });
-    }
-
     await client.query('BEGIN');
 
     const total = items.reduce(
