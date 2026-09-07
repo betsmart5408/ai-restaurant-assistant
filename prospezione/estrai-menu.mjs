@@ -294,11 +294,32 @@ function immaginiDiMenu(html, base) {
   return trovate.slice(0, 5);
 }
 
-async function estraiPiattiDaImmagini(urls, chiave) {
+function istruzioniImg() { return 'Queste immagini sono il menu di un ristorante. ' + ISTRUZIONI; }
+
+// Scarica un'immagine e la restituisce in base64, con il suo tipo.
+// Salta quelle troppo grandi (i modelli le rifiutano oltre ~5 MB).
+async function scaricaImmagine(url) {
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20000), redirect: 'follow' });
+    if (!r.ok) return null;
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length < 1024 || buf.length > 4_800_000) return null;   // troppo piccola (icona) o troppo grande
+    let tipo = (r.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (!/^image\/(jpeg|png|webp|gif)$/.test(tipo)) {
+      if (/\.png(\?|$)/i.test(url)) tipo = 'image/png';
+      else if (/\.webp(\?|$)/i.test(url)) tipo = 'image/webp';
+      else tipo = 'image/jpeg';
+    }
+    return { media_type: tipo, data: buf.toString('base64') };
+  } catch { return null; }
+}
+
+// ── Menu-immagine con Groq (llama-4) ────────────────────────────────────────
+async function piattiDaImmaginiGroq(urls, chiave) {
   const modello = await scegliModelloVisione(chiave);
-  if (!modello) throw new Error('menu in immagine ma nessun modello di visione disponibile con questa chiave');
+  if (!modello) return null;   // questa chiave non ha un modello che vede
   const contenuto = [
-    { type: 'text', text: 'Queste immagini sono il menu di un ristorante. ' + ISTRUZIONI },
+    { type: 'text', text: istruzioniImg() },
     ...urls.map(u => ({ type: 'image_url', image_url: { url: u } })),
   ];
   let r, corpoErrore = '';
@@ -320,6 +341,73 @@ async function estraiPiattiDaImmagini(urls, chiave) {
   const dati = jsonDaTesto((await r.json()).choices?.[0]?.message?.content ?? '');
   if (!dati) throw new Error('il modello di visione non ha restituito un menu leggibile');
   return normalizzaPiatti(dati.piatti);
+}
+
+// ── Menu-immagine con Anthropic (Claude) ────────────────────────────────────
+// Groq gratis a volte non ha un modello che vede. Claude sì, e legge i menu
+// fotografati molto bene. Costa qualche centesimo a menu: si usa solo come
+// ripiego, quando il testo non basta.
+const MODELLO_CLAUDE_IMG = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
+
+async function piattiDaImmaginiAnthropic(urls) {
+  const chiave = daFileEnv('ANTHROPIC_API_KEY');
+  if (!chiave || chiave.length < 20) return null;   // nessuna chiave Anthropic vera
+
+  const immagini = [];
+  for (const u of urls.slice(0, 4)) {
+    const img = await scaricaImmagine(u);
+    if (img) immagini.push({ type: 'image', source: { type: 'base64', ...img } });
+  }
+  if (immagini.length === 0) throw new Error('immagini del menu non scaricabili');
+
+  let r, corpoErrore = '';
+  for (let tentativo = 1; tentativo <= 4; tentativo++) {
+    r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': chiave,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: MODELLO_CLAUDE_IMG,
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: [{ type: 'text', text: istruzioniImg() }, ...immagini] }],
+      }),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (r.ok) break;
+    corpoErrore = await r.text();
+    if ((r.status !== 429 && r.status !== 529) || tentativo === 4) break;
+    const secondi = Math.min(Number(r.headers.get('retry-after')) || 15 * tentativo, 90);
+    process.stdout.write(`(limite Claude: aspetto ${Math.round(secondi)}s) `);
+    await attesa(secondi * 1000);
+  }
+  if (!r.ok) throw new Error(`Claude visione ${r.status}: ${corpoErrore.slice(0, 140)}`);
+  const corpo = await r.json();
+  const testo = (corpo.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+  const dati = jsonDaTesto(testo);
+  if (!dati) throw new Error('Claude non ha restituito un menu leggibile');
+  return normalizzaPiatti(dati.piatti);
+}
+
+// Prova prima Groq (gratis), poi Claude (a pagamento) come ripiego.
+async function estraiPiattiDaImmagini(urls, chiave) {
+  let erroreGroq = '';
+  try {
+    const g = await piattiDaImmaginiGroq(urls, chiave);
+    if (g && g.length) return g;
+  } catch (e) { erroreGroq = e.message; }
+
+  try {
+    const a = await piattiDaImmaginiAnthropic(urls);
+    if (a && a.length) { process.stdout.write('[Claude] '); return a; }
+    if (a === null && erroreGroq) throw new Error(erroreGroq);
+    if (a === null) throw new Error('menu in immagine: Groq non ha un modello di visione e manca ANTHROPIC_API_KEY nel .env');
+    return a;
+  } catch (e) {
+    throw new Error(erroreGroq && erroreGroq !== e.message ? `${erroreGroq}; poi ${e.message}` : e.message);
+  }
 }
 
 // ── Indici di menu ──────────────────────────────────────────────────────────
