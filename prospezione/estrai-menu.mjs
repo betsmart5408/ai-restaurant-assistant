@@ -162,13 +162,24 @@ async function scegliModelloVisione(chiave) {
 
 // Estrae il primo array/oggetto JSON da un testo che potrebbe avere altro attorno
 // (a volte il modello aggiunge "Ecco il JSON:" o lo mette in un blocco ```).
+// Se il JSON e' troncato (risposta tagliata dal limite di token) prova a
+// ripararlo: tiene fino all'ultimo piatto completo e richiude le parentesi.
 function jsonDaTesto(raw) {
   if (!raw) return null;
   const senzaFence = raw.replace(/```(?:json)?/gi, '');
   const i = senzaFence.indexOf('{');
+  if (i === -1) return null;
   const j = senzaFence.lastIndexOf('}');
-  if (i === -1 || j <= i) return null;
-  try { return JSON.parse(senzaFence.slice(i, j + 1)); } catch { return null; }
+  if (j > i) {
+    try { return JSON.parse(senzaFence.slice(i, j + 1)); } catch { /* provo a riparare */ }
+  }
+  // Riparazione di un array troncato: "...{...},{...},{ nome incompl
+  const frammento = senzaFence.slice(i);
+  const ultimoOggetto = frammento.lastIndexOf('},');
+  if (ultimoOggetto > 0) {
+    try { return JSON.parse(frammento.slice(0, ultimoOggetto + 1) + ']}'); } catch { /* niente */ }
+  }
+  return null;
 }
 
 // ── Da HTML a testo leggibile ───────────────────────────────────────────────
@@ -371,7 +382,7 @@ async function piattiDaImmaginiAnthropic(urls) {
       },
       body: JSON.stringify({
         model: MODELLO_CLAUDE_IMG,
-        max_tokens: 4096,
+        max_tokens: 8192,
         messages: [{ role: 'user', content: [{ type: 'text', text: istruzioniImg() }, ...immagini] }],
       }),
       signal: AbortSignal.timeout(120000),
@@ -408,6 +419,50 @@ async function estraiPiattiDaImmagini(urls, chiave) {
   } catch (e) {
     throw new Error(erroreGroq && erroreGroq !== e.message ? `${erroreGroq}; poi ${e.message}` : e.message);
   }
+}
+
+// ── PDF che è una scansione ─────────────────────────────────────────────────
+// Se pdfjs non ci cava testo (menu fotografato dentro un PDF), mandiamo il PDF
+// intero a Claude, che lo "guarda" pagina per pagina. Claude legge i PDF
+// scansionati nativamente: niente da installare, niente da convertire.
+async function piattiDaPdfAnthropic(pdfUrl) {
+  const chiave = daFileEnv('ANTHROPIC_API_KEY');
+  if (!chiave || chiave.length < 20) return null;
+
+  const rp = await fetch(pdfUrl, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000), redirect: 'follow' });
+  if (!rp.ok) throw new Error(`PDF non scaricabile (${rp.status})`);
+  const buf = Buffer.from(await rp.arrayBuffer());
+  if (buf.length > 28_000_000) throw new Error('PDF troppo grande per la lettura a immagini');
+  const dati64 = buf.toString('base64');
+
+  let r, corpoErrore = '';
+  for (let t = 1; t <= 4; t++) {
+    r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': chiave, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODELLO_CLAUDE_IMG,
+        max_tokens: 8192,
+        messages: [{ role: 'user', content: [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: dati64 } },
+          { type: 'text', text: istruzioniImg() },
+        ] }],
+      }),
+      signal: AbortSignal.timeout(180000),
+    });
+    if (r.ok) break;
+    corpoErrore = await r.text();
+    if ((r.status !== 429 && r.status !== 529) || t === 4) break;
+    const s = Math.min(Number(r.headers.get('retry-after')) || 15 * t, 90);
+    process.stdout.write(`(limite Claude: aspetto ${Math.round(s)}s) `);
+    await attesa(s * 1000);
+  }
+  if (!r.ok) throw new Error(`Claude PDF ${r.status}: ${corpoErrore.slice(0, 140)}`);
+  const corpo = await r.json();
+  const testo = (corpo.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+  const dati = jsonDaTesto(testo);
+  if (!dati) throw new Error('Claude non ha letto il PDF come menu');
+  return normalizzaPiatti(dati.piatti);
 }
 
 // ── Indici di menu ──────────────────────────────────────────────────────────
@@ -677,17 +732,29 @@ async function main() {
     try {
       // Solo PDF, nessuna pagina html: si va dritti al PDF.
       if (!r.pagina_menu && r.menu_pdf) {
-        const testoPdf = await testoDalPdf(r.menu_pdf);
-        if (contaPrezzi(testoPdf) === 0) throw new Error('PDF senza prezzi leggibili (probabilmente e\' una scansione)');
-        const piattiPdf = await estraiPiatti(perIlModello(testoPdf), chiave);
+        let piattiPdf = [];
+        let fontePdf = 'pdf';
+        const testoPdf = await testoDalPdf(r.menu_pdf).catch(() => '');
+        // Se pdfjs ha cavato del testo, proviamo il modello sul testo.
+        if (testoPdf.trim().length >= 250) {
+          piattiPdf = await estraiPiatti(perIlModello(testoPdf), chiave);
+        }
+        // Testo assente o poche righe = e' una scansione: la guarda Claude.
+        if (piattiPdf.length < 6) {
+          try {
+            const daClaude = await piattiDaPdfAnthropic(r.menu_pdf);
+            if (daClaude && daClaude.length > piattiPdf.length) { piattiPdf = daClaude; fontePdf = 'pdf-immagine'; process.stdout.write('[Claude PDF] '); }
+          } catch (ev) { process.stdout.write(`(Claude PDF: ${ev.message.slice(0, 50)}) `); }
+        }
+        if (piattiPdf.length === 0) throw new Error('PDF illeggibile (scansione senza testo e Claude non l\'ha letto)');
         const conPrezzoPdf = piattiPdf.filter(p => p.prezzo > 0).length;
         writeFileSync(join(CARTELLA_MENU, `${slug}.json`), JSON.stringify({
           slug, nome: r.nome, email: r.email, sito: r.sito, pagina_menu: r.menu_pdf,
           citta: 'Sydney', paese: 'Australia', cucina: r.cucina, indirizzo: r.indirizzo,
           telefono: r.telefono, zona: r.zona_etichetta, estratto_il: new Date().toISOString().slice(0, 10),
-          pagine_lette: 1, fonte: 'pdf', piatti: piattiPdf,
+          pagine_lette: 1, fonte: fontePdf, piatti: piattiPdf,
         }, null, 2), 'utf-8');
-        console.log(`${String(piattiPdf.length).padStart(3)} piatti (${conPrezzoPdf} con prezzo)  [dal PDF]`);
+        console.log(`${String(piattiPdf.length).padStart(3)} piatti (${conPrezzoPdf} con prezzo)  [${fontePdf === 'pdf-immagine' ? 'PDF scansione' : 'dal PDF'}]`);
         riepilogo.push({ slug, nome: r.nome, piatti: piattiPdf.length, conPrezzo: conPrezzoPdf, esito: 'ok' });
         await attesa(PAUSA_MS);
         continue;
@@ -722,16 +789,18 @@ async function main() {
         testo = testo.slice(0, MAX_CARATTERI_PAGINA * 2);
       }
 
-      // Se la pagina non ha prezzi ma esiste un PDF del menu, leggiamo quello.
-      if (contaPrezzi(testo) === 0 && r.menu_pdf) {
+      // Se la pagina rende poco ma c'e' un PDF del menu, proviamo il testo del PDF.
+      if (contaPrezzi(testo) < 3 && r.menu_pdf) {
         const tPdf = await testoDalPdf(r.menu_pdf).catch(() => '');
-        if (contaPrezzi(tPdf) > 0) testo = tPdf;
+        if (tPdf.trim().length > testo.trim().length) testo = tPdf;
       }
 
       let piatti = null;
       let fonte = 'html';
 
-      if (testo.length >= 200 && contaPrezzi(testo) > 0) {
+      // I prezzi non sono obbligatori: un menu con nomi e descrizioni, anche
+      // senza prezzi, e' comunque una demo valida. L'importante e' leggerlo.
+      if (testo.trim().length >= 300) {
         const perModello = perIlModello(testo);
         if (salvaTesto) {
           writeFileSync(join(CARTELLA_MENU, `${slug}.testo-inviato.txt`),
@@ -741,8 +810,8 @@ async function main() {
         piatti = await estraiPiatti(perModello, chiave);
       }
 
-      // Niente prezzi nel testo: il menu e' quasi sempre una foto o una
-      // scansione. Ultima carta: farlo "guardare" al modello di visione.
+      // Ancora poco: il menu e' una foto o una scansione. Prima le immagini
+      // dentro la pagina, poi (se c'e' un PDF) il PDF intero letto da Claude.
       if (!piatti || piatti.length < 4) {
         const imgs = immaginiDiMenu(htmlMenu, risposta.url);
         if (imgs.length) {
@@ -753,11 +822,15 @@ async function main() {
           } catch (ev) { process.stdout.write(`(visione: ${ev.message.slice(0, 50)}) `); }
         }
       }
+      if ((!piatti || piatti.length < 4) && r.menu_pdf) {
+        try {
+          const daPdf = await piattiDaPdfAnthropic(r.menu_pdf);
+          if (daPdf && daPdf.length > (piatti?.length ?? 0)) { piatti = daPdf; fonte = 'pdf-immagine'; process.stdout.write('[Claude PDF] '); }
+        } catch (ev) { process.stdout.write(`(Claude PDF: ${ev.message.slice(0, 45)}) `); }
+      }
 
       if (!piatti || piatti.length === 0) {
-        throw new Error(testo.length < 200
-          ? 'pagina quasi vuota e nessuna immagine di menu utilizzabile'
-          : 'nessun prezzo nella pagina e nessuna immagine di menu utilizzabile');
+        throw new Error('nessun menu leggibile: ne\' testo, ne\' immagini, ne\' PDF');
       }
 
       const conPrezzo = piatti.filter(p => p.prezzo > 0).length;
@@ -790,11 +863,13 @@ async function main() {
   }
 
   const ok = riepilogo.filter(r => r.esito === 'ok');
-  const buoni = ok.filter(r => r.piatti >= 8 && r.conPrezzo >= 5);
+  const buoni = ok.filter(r => r.piatti >= 8);              // i prezzi sono un bonus, non un requisito
+  const senzaPrezzi = buoni.filter(r => r.conPrezzo === 0).length;
   console.log('\n─────────────────────────────────────────');
   console.log(`Menu letti:                    ${ok.length}/${riepilogo.length}`);
-  console.log(`  con almeno 8 piatti e prezzi: ${buoni.length}   <- pronti per la demo`);
-  console.log(`  scarsi (da controllare):      ${ok.length - buoni.length}`);
+  console.log(`  con almeno 8 piatti:         ${buoni.length}   <- pronti per la demo` +
+    (senzaPrezzi ? ` (di cui ${senzaPrezzi} senza prezzi)` : ''));
+  console.log(`  troppo corti (<8 piatti):    ${ok.length - buoni.length}`);
   console.log(`  non riusciti:                 ${riepilogo.length - ok.length}`);
   console.log(`\nUn file per locale in ${CARTELLA_MENU}`);
   if (riepilogo.length - ok.length > 0) {
