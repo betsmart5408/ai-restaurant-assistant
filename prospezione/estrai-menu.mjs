@@ -32,7 +32,6 @@ const CARTELLA_MENU = process.env.CARTELLA_MENU ? join(QUI, process.env.CARTELLA
 const UA = 'AI-Restaurant-Assistant/1.0 (lettura menu pubblico)';
 const GROQ = process.env.GROQ_URL ?? 'https://api.groq.com/openai/v1';
 const MAX_CARATTERI_PAGINA = 14000;   // per pagina; unendo piu' menu si arriva al doppio
-const PAUSA_MS = 6000;   // il piano gratuito di Groq ha un tetto di token al minuto
 
 const argomenti = process.argv.slice(2);
 const valore = (n) => { const i = argomenti.indexOf(n); return i !== -1 ? argomenti[i + 1] : null; };
@@ -41,6 +40,13 @@ const ancheForse = argomenti.includes('--anche-forse');
 const rifai = argomenti.includes('--rifai');
 const salvaTesto = argomenti.includes('--salva-testo');   // per capire cosa vede il modello
 const citta = (valore('--citta') || 'sydney').toLowerCase();
+// Con --claude anche i menu di testo passano da Claude invece che da Groq.
+// Piu' veloce (niente attese di 90s per il limite del piano gratuito Groq) e
+// piu' preciso; costa ~1-2 centesimi a menu. Serve ANTHROPIC_API_KEY nel .env.
+const usaClaudeTesto = argomenti.includes('--claude') || process.env.MOTORE === 'claude';
+// Pausa fra un ristorante e l'altro: con Groq gratis serve larga (tetto di
+// token al minuto); con Claude basta poco.
+const PAUSA_MS = usaClaudeTesto ? 1200 : 6000;
 
 const attesa = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -327,6 +333,7 @@ async function scaricaImmagine(url) {
 
 // ── Menu-immagine con Groq (llama-4) ────────────────────────────────────────
 async function piattiDaImmaginiGroq(urls, chiave) {
+  if (!chiave) return null;   // modalita' --claude: niente Groq
   const modello = await scegliModelloVisione(chiave);
   if (!modello) return null;   // questa chiave non ha un modello che vede
   const contenuto = [
@@ -351,6 +358,39 @@ async function piattiDaImmaginiGroq(urls, chiave) {
   if (!r.ok) throw new Error(`Groq visione ${r.status}: ${corpoErrore.slice(0, 140)}`);
   const dati = jsonDaTesto((await r.json()).choices?.[0]?.message?.content ?? '');
   if (!dati) throw new Error('il modello di visione non ha restituito un menu leggibile');
+  return normalizzaPiatti(dati.piatti);
+}
+
+// ── Menu di testo con Anthropic (Claude) ────────────────────────────────────
+// Usato con --claude al posto di Groq: niente attese per il limite gratuito.
+async function piattiDaTestoAnthropic(testo) {
+  const chiave = daFileEnv('ANTHROPIC_API_KEY');
+  if (!chiave || chiave.length < 20) throw new Error('serve ANTHROPIC_API_KEY nel .env per --claude');
+  let r, corpoErrore = '';
+  for (let t = 1; t <= 5; t++) {
+    r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': chiave, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODELLO_CLAUDE_IMG,
+        max_tokens: 8192,
+        system: ISTRUZIONI,
+        messages: [{ role: 'user', content: 'Pagina del menu:\n\n' + testo }],
+      }),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (r.ok) break;
+    corpoErrore = await r.text();
+    if ((r.status !== 429 && r.status !== 529 && r.status !== 500) || t === 5) break;
+    const s = Math.min(Number(r.headers.get('retry-after')) || 8 * t, 60);
+    process.stdout.write(`(limite Claude: aspetto ${Math.round(s)}s) `);
+    await attesa(s * 1000);
+  }
+  if (!r.ok) throw new Error(`Claude ${r.status}: ${corpoErrore.slice(0, 140)}`);
+  const corpo = await r.json();
+  const t = (corpo.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+  const dati = jsonDaTesto(t);
+  if (!dati) throw new Error('Claude non ha restituito un menu leggibile');
   return normalizzaPiatti(dati.piatti);
 }
 
@@ -612,6 +652,10 @@ function normalizzaPiatti(arr) {
 // abbiamo mandato troppo: si riprova con meta' testo.
 async function estraiPiatti(testo, chiave, opz = {}) {
   const { jsonMode = true, dimezzamenti = 0 } = opz;
+
+  // Modalita' --claude: salta Groq, va dritto a Claude sul testo.
+  if (usaClaudeTesto) return piattiDaTestoAnthropic(testo);
+
   const modello = await scegliModello(chiave);
   let r, corpoErrore = '';
 
@@ -686,13 +730,21 @@ function slugDi(nome, osmId) {
 }
 
 async function main() {
-  const chiave = await trovaChiave();
-  if (!chiave) {
+  if (usaClaudeTesto) {
+    if (!daFileEnv('ANTHROPIC_API_KEY') || daFileEnv('ANTHROPIC_API_KEY').length < 20) {
+      console.error('\n--claude richiede ANTHROPIC_API_KEY nel file .env. Prendila su https://console.anthropic.com');
+      process.exit(1);
+    }
+    console.log('Modalita\' --claude: i menu (testo, foto e PDF) li legge Claude. Groq non serve.\n');
+  }
+  const chiave = usaClaudeTesto ? '' : await trovaChiave();
+  if (!usaClaudeTesto && !chiave) {
     console.error('\nNessuna chiave Groq utilizzabile.');
     console.error('  - quella nel file .env viene rifiutata (o non c\'e\')');
     console.error('  - nel database non ce n\'e\' una valida');
     console.error('\nPrendine una nuova gratis su https://console.groq.com/keys');
     console.error('e incollala nel file .env alla riga GROQ_API_KEY=');
+    console.error('\nOppure lancia con --claude per usare Claude al posto di Groq.');
     process.exit(1);
   }
 
