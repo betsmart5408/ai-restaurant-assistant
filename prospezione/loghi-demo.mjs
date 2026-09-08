@@ -121,6 +121,22 @@ function candidatiLogo(html, baseUrl) {
   return [...best.entries()].sort((a, b) => b[1] - a[1]).map(([u]) => u);
 }
 
+// ── Link Instagram dalla homepage ──────────────────────────────────────────
+const IG_SCARTA = /\/(p|reel|reels|explore|tags|stories|share|accounts|about|developer|legal|privacy|tv)\b/i;
+function instagramDa(html) {
+  const visti = new Map();   // handle -> conteggio
+  for (const m of html.matchAll(/https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)\/?/gi)) {
+    const h = m[1].toLowerCase();
+    if (h.length < 2 || h.length > 30) continue;
+    if (IG_SCARTA.test(m[0]) || /^(p|reel|reels|explore|tags|stories|share|accounts)$/.test(h)) continue;
+    visti.set(h, (visti.get(h) || 0) + 1);
+  }
+  if (!visti.size) return null;
+  // l'handle citato piu' volte (di solito è quello nel footer / icona social)
+  const handle = [...visti.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  return `https://instagram.com/${handle}`;
+}
+
 function tipoImmagine(buf, contentType) {
   const ct = (contentType || '').split(';')[0].trim().toLowerCase();
   if (/^image\/(png|jpeg|webp|gif|svg\+xml|x-icon|vnd\.microsoft\.icon|avif)$/.test(ct)) return ct;
@@ -320,6 +336,7 @@ async function main() {
   const haIsDemo = colonne.has('is_demo');
   const haLogoUrl = colonne.has('logo_url');
   const haColori = colonne.has('primary_color') && colonne.has('background_color');
+  const haInstagram = colonne.has('instagram_url');
 
   let sql = `SELECT r.id, r.slug, r.name${haDemoSito ? ', r.demo_sito' : ", '' AS demo_sito"}
              FROM restaurants r
@@ -334,7 +351,7 @@ async function main() {
   if (demo.length === 0) { console.log('Niente da fare: tutte le demo hanno già un logo (usa --rifai per rifarle).'); await pool.end(); return; }
 
   console.log(`${demo.length} demo da guardare.\n`);
-  let messi = 0, saltati = 0, coloriMessi = 0;
+  let messi = 0, saltati = 0, coloriMessi = 0, instagramMessi = 0;
 
   for (const [i, r] of demo.entries()) {
     process.stdout.write(`[${i + 1}/${demo.length}] ${r.name.slice(0, 34).padEnd(34)} `);
@@ -348,13 +365,24 @@ async function main() {
       else { console.log(`— sito ${resp.status}`); saltati++; await attesa(300); continue; }
     } catch { console.log('— sito irraggiungibile'); saltati++; await attesa(300); continue; }
 
+    // Instagram: si prende comunque, anche se poi il logo non si trova.
+    let notaIg = '';
+    if (haInstagram) {
+      const ig = instagramDa(html);
+      if (ig) {
+        await pool.query('UPDATE restaurants SET instagram_url = $1 WHERE id = $2', [ig, r.id]);
+        instagramMessi++;
+        notaIg = `  ig:@${ig.split('/').pop()}`;
+      }
+    }
+
     const urls = candidatiLogo(html, sito).slice(0, 8);
     let logo = null;
     for (const u of urls) {
       logo = await scaricaLogo(u);
       if (logo) break;
     }
-    if (!logo) { console.log('— nessun logo trovato'); saltati++; await attesa(300); continue; }
+    if (!logo) { console.log(`— nessun logo trovato${notaIg}`); saltati++; await attesa(300); continue; }
 
     try {
       await pool.query(
@@ -378,7 +406,7 @@ async function main() {
           coloriMessi++;
         }
       }
-      console.log(`ok  ${logo.mime.replace('image/', '')} ${kb}KB${notaColore}`);
+      console.log(`ok  ${logo.mime.replace('image/', '')} ${kb}KB${notaColore}${notaIg}`);
       messi++;
     } catch (e) {
       console.log(`— errore db: ${e.message}`);
@@ -388,9 +416,10 @@ async function main() {
   }
 
   console.log(`\n─────────────────────────────`);
-  console.log(`Loghi messi:   ${messi}`);
+  console.log(`Loghi messi:     ${messi}`);
   if (adattaColori) console.log(`Colori adattati: ${coloriMessi}  (gli altri tengono la tavolozza per tipo di cucina)`);
-  console.log(`Saltati:       ${saltati}  (sito assente/irraggiungibile o nessun logo)`);
+  console.log(`Instagram trovati: ${instagramMessi}`);
+  console.log(`Saltati:         ${saltati}  (sito assente/irraggiungibile o nessun logo)`);
   console.log(`\nRilancia .\\deploy-tutto.ps1 per pubblicare l'API con loghi e colori.`);
   await pool.end();
 }
