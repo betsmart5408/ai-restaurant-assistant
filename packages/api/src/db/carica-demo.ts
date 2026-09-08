@@ -52,6 +52,9 @@ const soloElenco = argomenti.includes('--elenco');
 const cancellaTutte = argomenti.includes('--cancella-tutte');
 const soloSlugList = argomenti.includes('--slug-list');
 const forzaRifacimento = argomenti.includes('--forza');   // rifa' anche se ci sono traduzioni a mano   // per il ciclo di traduci-demo.ps1
+// --solo-nuovi: carica SOLO i menu il cui slug non e' gia' nel database.
+// Non tocca (non cancella, non ritraduce) le demo gia' presenti.
+const soloNuovi = argomenti.includes('--solo-nuovi');
 
 interface Piatto { nome: string; descrizione?: string; prezzo?: number | string; categoria?: string }
 interface Menu {
@@ -185,8 +188,18 @@ async function main() {
   if (soloElenco) { await elenco(); return; }
   if (cancellaTutte) { await cancellaDemo(); return; }
 
-  const menu = leggiMenu();
+  let menu = leggiMenu();
   if (!menu.length) { console.error(`Nessun menu con almeno ${minimo} piatti.`); process.exit(1); }
+
+  if (soloNuovi) {
+    const esistenti = new Set(
+      (await db.query('SELECT slug FROM restaurants')).rows.map((r: { slug: string }) => r.slug)
+    );
+    const prima = menu.length;
+    menu = menu.filter(m => !esistenti.has(m.slug));
+    console.log(`--solo-nuovi: ${prima - menu.length} demo gia' nel database, salto quelle. Ne restano ${menu.length} da aggiungere.`);
+    if (!menu.length) { console.log('Niente di nuovo da caricare.'); return; }
+  }
 
   console.log(`\n${menu.length} menu da caricare come demo:\n`);
   let fatti = 0;
