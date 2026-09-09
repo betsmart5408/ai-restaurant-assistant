@@ -5,6 +5,8 @@
  *   node prospezione/loghi-demo.mjs --limite 20    prova su poche
  *   node prospezione/loghi-demo.mjs --slug al-aseel
  *   node prospezione/loghi-demo.mjs --rifai        rifà anche quelle che un logo ce l'hanno
+ *   node prospezione/loghi-demo.mjs --riprendi     rifà tutte TRANNE quelle già rifatte nelle ultime 36 h
+ *                                                  (per riprendere un --rifai interrotto)
  *
  * Come lo trova, in ordine di qualità:
  *   1. <link rel="apple-touch-icon">  (quasi sempre è il logo pulito, quadrato)
@@ -38,6 +40,8 @@ const valore = (n) => { const i = argomenti.indexOf(n); return i !== -1 ? argome
 const limite = Number(valore('--limite')) || null;
 const soloSlug = valore('--slug');
 const rifai = argomenti.includes('--rifai');
+// Riprende un --rifai interrotto: rifà tutte tranne quelle già aggiornate da poco.
+const riprendi = argomenti.includes('--riprendi');
 // I colori della demo vengono adattati al logo, salvo --no-colori.
 const adattaColori = !argomenti.includes('--no-colori');
 
@@ -362,7 +366,12 @@ async function main() {
              ${haIsDemo ? 'WHERE r.is_demo = TRUE' : 'WHERE 1=1'}`;
   const params = [];
   if (soloSlug) { params.push(soloSlug); sql += ` AND r.slug = $${params.length}`; }
-  if (!rifai) sql += ` AND NOT EXISTS (SELECT 1 FROM restaurant_logos l WHERE l.restaurant_id = r.id)`;
+  if (riprendi) {
+    // riprende un --rifai interrotto: salta quelle già rifatte da poco
+    sql += ` AND NOT EXISTS (SELECT 1 FROM restaurant_logos l WHERE l.restaurant_id = r.id AND l.updated_at > NOW() - INTERVAL '36 hours')`;
+  } else if (!rifai) {
+    sql += ` AND NOT EXISTS (SELECT 1 FROM restaurant_logos l WHERE l.restaurant_id = r.id)`;
+  }
   sql += ' ORDER BY r.name';
   if (limite) sql += ` LIMIT ${limite}`;
 
