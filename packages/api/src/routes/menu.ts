@@ -19,6 +19,29 @@ async function getRestaurantGroqKey(slug?: string): Promise<string | null> {
 
 const router = Router();
 
+// ── Cache di lettura del menu (60s) ────────────────────────────────────────
+// I clienti che guardano il menu sono tantissimi, ma il menu cambia di rado.
+// Cache in memoria per istanza: si svuota quando il ristoratore modifica un
+// piatto, e comunque scade da sola. Con più repliche ognuna ha la sua.
+const CACHE_TTL_MS = 60_000;
+const cacheMenu = new Map<string, { data: unknown; exp: number }>();
+
+function cacheGet(k: string): unknown | null {
+  const v = cacheMenu.get(k);
+  if (v && v.exp > Date.now()) return v.data;
+  if (v) cacheMenu.delete(k);
+  return null;
+}
+function cacheSet(k: string, data: unknown): void {
+  if (cacheMenu.size > 4000) cacheMenu.clear();   // guardia anti-crescita
+  cacheMenu.set(k, { data, exp: Date.now() + CACHE_TTL_MS });
+}
+function cacheBust(slug: string): void {
+  for (const k of cacheMenu.keys()) {
+    if (k === `m:${slug}` || k.startsWith(`t:${slug}:`)) cacheMenu.delete(k);
+  }
+}
+
 // POST /api/menu/:restaurantSlug/ig-event — contatori dell'invito Instagram.
 // Pubblico (lo chiama il chat cliente). event: "shown" | "click".
 router.post('/:restaurantSlug/ig-event', async (req, res) => {
@@ -38,6 +61,9 @@ router.post('/:restaurantSlug/ig-event', async (req, res) => {
 router.get('/:restaurantSlug', async (req, res) => {
   try {
     const { restaurantSlug } = req.params;
+
+    const inCache = cacheGet(`m:${restaurantSlug}`);
+    if (inCache) return res.json(inCache);
 
     const restaurant = await db.query(
       'SELECT id, name, languages, currency, logo_url, primary_color, background_color, ai_name, font_family, instagram_url, is_demo FROM restaurants WHERE slug = $1',
@@ -72,10 +98,12 @@ router.get('/:restaurantSlug', async (req, res) => {
       menuByCategory[dish.category].push(dish);
     }
 
-    res.json({
+    const payload = {
       restaurant: { ...restaurant.rows[0], sales_whatsapp: salesWhatsapp },
       menu: menuByCategory,
-    });
+    };
+    cacheSet(`m:${restaurantSlug}`, payload);
+    res.json(payload);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
@@ -140,6 +168,9 @@ router.get('/:restaurantSlug/dishes/translated', async (req, res) => {
     const { restaurantSlug } = req.params;
     const lang = (req.query.lang as string) || 'es';
 
+    const inCache = cacheGet(`t:${restaurantSlug}:${lang}`);
+    if (inCache) return res.json(inCache);
+
     // Traduzioni gia' salvate in dish_translations (riempite una volta sola dallo
     // script translate-menu). Se per un piatto manca la traduzione si mostra
     // l'originale: il menu non resta mai vuoto ne' a meta'.
@@ -159,6 +190,7 @@ router.get('/:restaurantSlug/dishes/translated', async (req, res) => {
       [restaurantSlug, lang]
     );
 
+    cacheSet(`t:${restaurantSlug}:${lang}`, result.rows);
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -223,6 +255,7 @@ router.post('/:restaurantSlug/dishes', requireAuth, requireOwnSlug, async (req, 
       traduzioni = esito.scritte;
     } catch (e) { console.error('Traduzione non riuscita:', e); }
 
+    cacheBust(String(req.params.restaurantSlug));
     res.status(201).json({ ...nuovo, traduzioni });
   } catch (err) {
     console.error(err);
@@ -285,6 +318,7 @@ router.patch('/:restaurantSlug/dishes/:dishId', requireAuth, requireOwnSlug, asy
       } catch (e) { console.error('Traduzione non riuscita:', e); }
     }
 
+    cacheBust(String(req.params.restaurantSlug));
     res.json({ ...piatto, traduzioni });
   } catch (err) {
     console.error(err);
@@ -320,6 +354,7 @@ router.delete('/:restaurantSlug/dishes/:dishId', requireAuth, requireOwnSlug, as
       [dishId, restaurantSlug]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Piatto non trovato' });
+    cacheBust(String(req.params.restaurantSlug));
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -374,6 +409,7 @@ router.put('/:restaurantSlug/translations/:dishId/:lang', requireAuth, requireOw
              source = 'manual', updated_at = NOW()`,
       [dishId, lang, name ?? '', description ?? '']
     );
+    cacheBust(String(req.params.restaurantSlug));
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -417,6 +453,7 @@ router.post('/:restaurantSlug/translations/refresh', requireAuth, requireOwnSlug
     const key = await getRestaurantGroqKey(restaurantSlug);
     const esito = await traduciESalva(mancanti.rows, base, daFare, key);
 
+    cacheBust(restaurantSlug);
     res.json({
       completato: false,
       tradotti: mancanti.rows.length,
