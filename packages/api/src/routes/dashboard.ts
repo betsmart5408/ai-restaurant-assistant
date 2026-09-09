@@ -247,7 +247,8 @@ router.put('/:restaurantId/appearance', requireAuth, requireOwnRestaurant, async
 router.get('/:restaurantId/locale', requireAuth, requireOwnRestaurant, async (req, res) => {
   try {
     const r = await db.query(
-      `SELECT city, country, cuisine_type, about, timezone, latitude, longitude, instagram_url
+      `SELECT city, country, cuisine_type, about, timezone, latitude, longitude,
+              instagram_url, ig_popup_shown, ig_follow_clicks
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     );

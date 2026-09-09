@@ -491,19 +491,49 @@ export default function App() {
     return () => { annullato = true; };
   }, []);
 
-  // Dopo 2 minuti, un invito discreto a seguire il ristorante su Instagram.
-  // Una volta sola per visita: se l'ha gia' visto (o chiuso) non torna.
+  // Invito a seguire il ristorante su Instagram.
+  // - compare dopo 1 minuto e mezzo
+  // - "Piu' tardi" (o tocco fuori) lo richiude e lo rimostra dopo altri 90s
+  // - "Segui" apre Instagram e non lo fa piu' vedere per questa visita
+  // - niente memoria fra visite: ogni scansione del QR ricomincia da capo
+  const IG_ATTESA_MS = 90 * 1000;
+  const igTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const igStopRef = useRef(false);
+  const igContatoRef = useRef(false);
+
+  const pianificaIg = () => {
+    if (igStopRef.current || !instagramUrl) return;
+    clearTimeout(igTimerRef.current);
+    igTimerRef.current = setTimeout(() => setShowIg(true), IG_ATTESA_MS);
+  };
+
   useEffect(() => {
-    if (!instagramUrl) return;
-    const chiave = `ig-visto:${params.restaurant}`;
-    try { if (localStorage.getItem(chiave)) return; } catch { /* private mode */ }
-    const timer = setTimeout(() => setShowIg(true), 2 * 60 * 1000);
-    return () => clearTimeout(timer);
+    pianificaIg();
+    return () => clearTimeout(igTimerRef.current);
   }, [instagramUrl]);
 
-  const chiudiIg = () => {
+  const registraIgEvento = (event: 'shown' | 'click') => {
+    fetch(`${API}/api/menu/${params.restaurant}/ig-event`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event }), keepalive: true,
+    }).catch(() => {});
+  };
+
+  // Conta "mostrato" una volta sola per visita, alla prima apparizione.
+  useEffect(() => {
+    if (showIg && !igContatoRef.current) {
+      igContatoRef.current = true;
+      registraIgEvento('shown');
+    }
+  }, [showIg]);
+
+  const igPiuTardi = () => { setShowIg(false); pianificaIg(); };
+  const igSegui = () => {
+    igStopRef.current = true;
+    clearTimeout(igTimerRef.current);
     setShowIg(false);
-    try { localStorage.setItem(`ig-visto:${params.restaurant}`, '1'); } catch { /* private mode */ }
+    registraIgEvento('click');
+    apriInstagram(instagramUrl);
   };
 
   // Salva sessione in localStorage ad ogni cambio messaggi
@@ -1060,9 +1090,9 @@ export default function App() {
         </div>
       )}
 
-      {/* ── INVITO INSTAGRAM (dopo 2 minuti) ── */}
+      {/* ── INVITO INSTAGRAM (dopo 90 secondi) ── */}
       {showIg && instagramUrl && (
-        <div style={S.modalOverlay} onClick={chiudiIg}>
+        <div style={S.modalOverlay} onClick={igPiuTardi}>
           <div style={S.igBox} onClick={e => e.stopPropagation()}>
             <div style={S.igStripe} />
             <div style={S.igRing}>
@@ -1071,13 +1101,10 @@ export default function App() {
                 : <div style={S.igGlyphBox}><IgGlyph size={30} /></div>}
             </div>
             <p style={S.igText}>{t('igTitle', lang)}</p>
-            <button
-              style={S.igBtn}
-              onClick={() => { apriInstagram(instagramUrl); chiudiIg(); }}
-            >
+            <button style={S.igBtn} onClick={igSegui}>
               <IgGlyph size={18} /> {t('igBtn', lang)}
             </button>
-            <button style={S.igLater} onClick={chiudiIg}>{t('igLater', lang)}</button>
+            <button style={S.igLater} onClick={igPiuTardi}>{t('igLater', lang)}</button>
           </div>
         </div>
       )}

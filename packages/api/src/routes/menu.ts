@@ -19,6 +19,21 @@ async function getRestaurantGroqKey(slug?: string): Promise<string | null> {
 
 const router = Router();
 
+// POST /api/menu/:restaurantSlug/ig-event — contatori dell'invito Instagram.
+// Pubblico (lo chiama il chat cliente). event: "shown" | "click".
+router.post('/:restaurantSlug/ig-event', async (req, res) => {
+  try {
+    const colonna = req.body?.event === 'click' ? 'ig_follow_clicks' : 'ig_popup_shown';
+    await db.query(
+      `UPDATE restaurants SET ${colonna} = ${colonna} + 1 WHERE slug = $1`,
+      [req.params.restaurantSlug]
+    );
+    res.json({ ok: true });
+  } catch {
+    res.json({ ok: false });   // una metrica persa non deve mai disturbare il cliente
+  }
+});
+
 // GET /api/menu/:restaurantSlug — menu pubblico per il QR chat
 router.get('/:restaurantSlug', async (req, res) => {
   try {

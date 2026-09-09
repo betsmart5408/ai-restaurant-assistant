@@ -348,8 +348,8 @@ export default function App() {
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [aiName, setAiName] = useState('Marco');
   const [aiNameMsg, setAiNameMsg] = useState('');
-  const [locale, setLocale] = useState<{ city: string; region: string; country: string; timezone: string; latitude: number | null; longitude: number | null; cuisine_type: string; about: string; instagram_url: string }>(
-    { city: '', region: '', country: '', timezone: '', latitude: null, longitude: null, cuisine_type: '', about: '', instagram_url: '' }
+  const [locale, setLocale] = useState<{ city: string; region: string; country: string; timezone: string; latitude: number | null; longitude: number | null; cuisine_type: string; about: string; instagram_url: string; ig_popup_shown: number; ig_follow_clicks: number }>(
+    { city: '', region: '', country: '', timezone: '', latitude: null, longitude: null, cuisine_type: '', about: '', instagram_url: '', ig_popup_shown: 0, ig_follow_clicks: 0 }
   );
   const [cercaCitta, setCercaCitta] = useState('');
   const [risultatiCitta, setRisultatiCitta] = useState<any[]>([]);
@@ -544,6 +544,8 @@ export default function App() {
           longitude: data.longitude != null ? Number(data.longitude) : null,
           cuisine_type: data.cuisine_type ?? '', about: data.about ?? '',
           instagram_url: data.instagram_url ?? '',
+          ig_popup_shown: Number(data.ig_popup_shown ?? 0),
+          ig_follow_clicks: Number(data.ig_follow_clicks ?? 0),
         });
       } else if (t === 'billing') {
         const data = await apiFetch('/api/billing/status', auth.token);
@@ -1281,9 +1283,19 @@ export default function App() {
                   placeholder="@iltuoristorante  oppure  instagram.com/iltuoristorante"
                   onChange={e => { setLocale(l => ({ ...l, instagram_url: e.target.value })); setLocaleMsg(''); }} />
                 <span style={{ fontSize: 12, opacity: 0.7, display: 'block', marginTop: 4 }}>
-                  Dopo 2 minuti il cliente vede un invito a seguirti. Lascia vuoto per non mostrarlo.
+                  Dopo 90 secondi il cliente vede un invito a seguirti. Lascia vuoto per non mostrarlo.
                 </span>
               </label>
+
+              {(locale.ig_popup_shown > 0 || locale.instagram_url) && (
+                <div style={{ marginTop: 10, padding: '10px 12px', background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: 10, fontSize: 13, color: '#6b21a8' }}>
+                  📸 Invito visto da <strong>{locale.ig_popup_shown}</strong> client{locale.ig_popup_shown === 1 ? 'e' : 'i'} ·
+                  {' '}<strong>{locale.ig_follow_clicks}</strong> {locale.ig_follow_clicks === 1 ? 'ha' : 'hanno'} toccato «Segui»
+                  {locale.ig_popup_shown > 0 && (
+                    <> ({Math.round((locale.ig_follow_clicks / locale.ig_popup_shown) * 100)}%)</>
+                  )}
+                </div>
+              )}
 
               {localeMsg && <div style={{ marginTop: 10, fontSize: 14, color: localeMsg === 'Salvato.' ? '#166534' : '#b45309' }}>{localeMsg}</div>}
               <button style={{ ...S.btnPrimary, marginTop: 14 }} disabled={localeSaving} onClick={salvaLocale}>
