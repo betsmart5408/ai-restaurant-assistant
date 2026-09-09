@@ -7,18 +7,38 @@ const router = Router();
 
 // POST /api/admin/login — login superadmin
 router.post('/login', async (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'email e password obbligatori' });
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'email e password obbligatori' });
 
-  const result = await db.query('SELECT * FROM superadmins WHERE email = $1', [email]);
-  if (result.rows.length === 0) return res.status(401).json({ error: 'Credenziali non valide' });
+    const result = await db.query(
+      'SELECT * FROM superadmins WHERE LOWER(email) = $1',
+      [String(email).toLowerCase().trim()]
+    );
 
-  const sa = result.rows[0];
-  const ok = await bcrypt.compare(password, sa.password_hash);
-  if (!ok) return res.status(401).json({ error: 'Credenziali non valide' });
+    if (result.rows.length === 0) {
+      // Se la tabella e' proprio vuota il problema non e' la password:
+      // nessuno ha ancora creato il primo superadmin. Dirlo apertamente
+      // non svela niente e fa risparmiare mezz'ora di tentativi.
+      const quanti = await db.query('SELECT COUNT(*)::int AS n FROM superadmins');
+      if (quanti.rows[0].n === 0) {
+        return res.status(401).json({
+          error: 'Nessun super admin registrato. Crealo con: .\\crea-superadmin.ps1 -Email tua@email.com -Password LaTuaPassword',
+        });
+      }
+      return res.status(401).json({ error: 'Super admin: email o password non corretti' });
+    }
 
-  const token = signToken({ userId: sa.id, restaurantId: 'superadmin', role: 'superadmin' });
-  res.json({ token, role: 'superadmin' });
+    const sa = result.rows[0];
+    const ok = await bcrypt.compare(password, sa.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Super admin: email o password non corretti' });
+
+    const token = signToken({ userId: sa.id, restaurantId: 'superadmin', role: 'superadmin' });
+    res.json({ token, role: 'superadmin' });
+  } catch (err) {
+    console.error('Superadmin login error:', err);
+    res.status(500).json({ error: 'Accesso non riuscito' });
+  }
 });
 
 // Tutte le route successive richiedono auth superadmin
@@ -26,36 +46,46 @@ router.use(requireAuth, requireSuperAdmin);
 
 // GET /api/admin/restaurants — tutti i ristoranti con billing
 router.get('/restaurants', async (_req, res) => {
-  const result = await db.query(`
-    SELECT r.id, r.name, r.slug, r.created_at, r.logo_url,
-           r.plan, r.subscription_status, r.trial_ends_at,
-           r.monthly_price, r.suspended_at, r.billing_email,
-           u.email as owner_email,
-           COUNT(DISTINCT d.id) as dish_count,
-           COUNT(DISTINCT cs.id) FILTER (WHERE cs.created_at >= NOW() - INTERVAL '30 days') as sessions_30d
-    FROM restaurants r
-    LEFT JOIN users u ON u.restaurant_id = r.id AND u.role = 'owner'
-    LEFT JOIN dishes d ON d.restaurant_id = r.id
-    LEFT JOIN chat_sessions cs ON cs.restaurant_id = r.id
-    GROUP BY r.id, u.email
-    ORDER BY r.created_at DESC
-  `);
-  res.json(result.rows);
+  try {
+    const result = await db.query(`
+      SELECT r.id, r.name, r.slug, r.created_at, r.logo_url,
+             r.plan, r.subscription_status, r.trial_ends_at,
+             r.monthly_price, r.suspended_at, r.billing_email,
+             u.email as owner_email,
+             COUNT(DISTINCT d.id) as dish_count,
+             COUNT(DISTINCT cs.id) FILTER (WHERE cs.created_at >= NOW() - INTERVAL '30 days') as sessions_30d
+      FROM restaurants r
+      LEFT JOIN users u ON u.restaurant_id = r.id AND u.role = 'owner'
+      LEFT JOIN dishes d ON d.restaurant_id = r.id
+      LEFT JOIN chat_sessions cs ON cs.restaurant_id = r.id
+      GROUP BY r.id, u.email
+      ORDER BY r.created_at DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // GET /api/admin/stats — KPI globali
 router.get('/stats', async (_req, res) => {
-  const result = await db.query(`
-    SELECT
-      (SELECT COUNT(*) FROM restaurants) as total_restaurants,
-      (SELECT COUNT(*) FROM restaurants WHERE subscription_status = 'active') as active_subscriptions,
-      (SELECT COUNT(*) FROM restaurants WHERE subscription_status = 'trialing') as trialing,
-      (SELECT COUNT(*) FROM restaurants WHERE suspended_at IS NOT NULL) as suspended,
-      (SELECT COALESCE(SUM(monthly_price), 0) FROM restaurants WHERE subscription_status = 'active') as mrr,
-      (SELECT COUNT(*) FROM chat_sessions WHERE created_at >= CURRENT_DATE - INTERVAL '30 days') as sessions_30d,
-      (SELECT COUNT(*) FROM restaurants WHERE created_at >= CURRENT_DATE - INTERVAL '30 days') as new_30d
-  `);
-  res.json(result.rows[0]);
+  try {
+    const result = await db.query(`
+      SELECT
+        (SELECT COUNT(*) FROM restaurants) as total_restaurants,
+        (SELECT COUNT(*) FROM restaurants WHERE subscription_status = 'active') as active_subscriptions,
+        (SELECT COUNT(*) FROM restaurants WHERE subscription_status = 'trialing') as trialing,
+        (SELECT COUNT(*) FROM restaurants WHERE suspended_at IS NOT NULL) as suspended,
+        (SELECT COALESCE(SUM(monthly_price), 0) FROM restaurants WHERE subscription_status = 'active') as mrr,
+        (SELECT COUNT(*) FROM chat_sessions WHERE created_at >= CURRENT_DATE - INTERVAL '30 days') as sessions_30d,
+        (SELECT COUNT(*) FROM restaurants WHERE created_at >= CURRENT_DATE - INTERVAL '30 days') as new_30d
+    `);
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // POST /api/admin/restaurants — crea nuovo ristorante
@@ -105,35 +135,40 @@ router.post('/restaurants', async (req: Request, res: Response) => {
 
 // PATCH /api/admin/restaurants/:id — sospendi / riattiva / cambia piano
 router.patch('/restaurants/:id', async (req: Request, res: Response) => {
-  const { action, monthly_price, plan } = req.body;
-  if (action === 'suspend') {
-    await db.query(`UPDATE restaurants SET suspended_at = NOW(), subscription_status = 'suspended' WHERE id = $1`, [req.params.id]);
-  } else if (action === 'activate') {
-    await db.query(`UPDATE restaurants SET suspended_at = NULL, subscription_status = 'active', plan = 'pro' WHERE id = $1`, [req.params.id]);
-  } else if (action === 'update_price') {
-    await db.query(`UPDATE restaurants SET monthly_price = $1 WHERE id = $2`, [monthly_price, req.params.id]);
-  } else if (action === 'update_plan') {
-    await db.query(`UPDATE restaurants SET plan = $1 WHERE id = $2`, [plan, req.params.id]);
+  try {
+    const { action, monthly_price, plan } = req.body;
+    if (action === 'suspend') {
+      await db.query(`UPDATE restaurants SET suspended_at = NOW(), subscription_status = 'suspended' WHERE id = $1`, [req.params.id]);
+    } else if (action === 'activate') {
+      await db.query(`UPDATE restaurants SET suspended_at = NULL, subscription_status = 'active', plan = 'pro' WHERE id = $1`, [req.params.id]);
+    } else if (action === 'update_price') {
+      await db.query(`UPDATE restaurants SET monthly_price = $1 WHERE id = $2`, [monthly_price, req.params.id]);
+    } else if (action === 'update_plan') {
+      await db.query(`UPDATE restaurants SET plan = $1 WHERE id = $2`, [plan, req.params.id]);
+    } else {
+      return res.status(400).json({ error: 'Azione non riconosciuta' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
-  res.json({ success: true });
 });
 
 // DELETE /api/admin/restaurants/:id
 router.delete('/restaurants/:id', async (req: Request, res: Response) => {
-  await db.query(`UPDATE restaurants SET suspended_at = NOW(), subscription_status = 'suspended' WHERE id = $1`, [req.params.id]);
-  res.json({ success: true });
+  try {
+    await db.query(`UPDATE restaurants SET suspended_at = NOW(), subscription_status = 'suspended' WHERE id = $1`, [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
-// POST /api/admin/create-superadmin — crea primo superadmin (solo se non esiste)
-router.post('/create-superadmin', async (req: Request, res: Response) => {
-  const { email, password, secret } = req.body;
-  if (secret !== process.env.SUPERADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
-  const hash = await bcrypt.hash(password, 10);
-  await db.query(
-    'INSERT INTO superadmins (email, password_hash) VALUES ($1, $2) ON CONFLICT (email) DO UPDATE SET password_hash = $2',
-    [email, hash]
-  );
-  res.json({ success: true });
-});
+// Nota: il primo superadmin si crea da riga di comando, non via HTTP:
+//   .\crea-superadmin.ps1 -Email tua@email.com -Password LaTuaPassword
+// (la vecchia rotta /create-superadmin stava sotto la guardia di
+//  autenticazione, quindi non era raggiungibile da chi non era gia' dentro)
 
 export default router;

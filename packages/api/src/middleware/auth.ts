@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { db } from '../db/client';
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret-change-in-production';
 
@@ -49,4 +50,22 @@ export function requireOwnRestaurant(req: Request, res: Response, next: NextFunc
     return res.status(403).json({ error: 'Access denied to this restaurant' });
   }
   next();
+}
+
+// Come requireOwnRestaurant ma per le rotte che usano lo "slug" del ristorante
+// nell'indirizzo: risolve lo slug nell'id e lo confronta con quello del token.
+export function requireOwnSlug(req: Request, res: Response, next: NextFunction): void {
+  if (req.auth?.role === 'superadmin') { next(); return; }
+  const slug = req.params.restaurantSlug;
+  if (!slug) { res.status(400).json({ error: 'Ristorante non indicato' }); return; }
+  db.query('SELECT id FROM restaurants WHERE slug = $1', [slug])
+    .then((r) => {
+      if (r.rows.length === 0) { res.status(404).json({ error: 'Restaurant not found' }); return; }
+      if (r.rows[0].id !== req.auth?.restaurantId) {
+        res.status(403).json({ error: 'Access denied to this restaurant' });
+        return;
+      }
+      next();
+    })
+    .catch(() => { res.status(500).json({ error: 'Internal server error' }); });
 }

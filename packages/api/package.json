@@ -7,7 +7,13 @@
     "migrate2": "tsx src/db/migrate2.ts",
     "start": "node dist/index.js",
     "migrate": "tsx src/db/migrate.ts",
-    "seed": "tsx src/db/seed.ts"
+    "translate": "tsx src/db/translate-menu.ts",
+    "load-translations": "tsx src/db/load-translations.ts",
+    "migrate:all": "tsx src/db/migrate-all.ts",
+    "crea-utente": "tsx src/db/crea-utente.ts",
+    "crea-superadmin": "tsx src/db/crea-superadmin.ts",
+    "seed": "tsx src/db/seed.ts",
+    "carica-demo": "tsx src/db/carica-demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

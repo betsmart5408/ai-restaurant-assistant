@@ -1,3 +1,17 @@
+:root {
+  --bg: #0f0f1a;
+  --surface: #16213e;
+  --surface-2: #1a1a2e;
+  --accent: #0f3460;
+  --border: #2a2a4a;
+  --text: #eaeaea;
+  --text-soft: #a8a8b3;
+  --brand: #e94560;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --brand-soft: rgba(233,69,96,0.15);
+  --logo-glow: drop-shadow(0 0 40px rgba(233,69,96,0.30));
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
@@ -45,6 +59,11 @@ input, textarea {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@keyframes chef-pulse {
+  0%, 100% { transform: scale(1) translateY(0); opacity: 0.85; }
+  50%      { transform: scale(1.12) translateY(-6px); opacity: 1; }
 }
 
 @keyframes bounce {

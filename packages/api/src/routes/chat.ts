@@ -4,6 +4,15 @@ import { processChat } from '../services/ai-chat';
 
 const router = Router();
 
+// ── Limiti di sicurezza e di costo ──────────────────────────────────────────
+// Il modello viene pagato dal ristoratore: senza questi tetti una singola
+// sessione aperta al pubblico puo' generare una spesa illimitata.
+const MAX_CARATTERI_MESSAGGIO = 600;   // un messaggio piu' lungo di cosi' non e' una domanda
+const MAX_MESSAGGI_PER_VISITA = 150;   // 75 domande: nessun cliente vero ci arriva
+const MAX_TURNI_IN_CONTESTO = 12;      // quanta conversazione rimandiamo al modello
+const DURATA_VISITA_MS = 3 * 60 * 60 * 1000;  // 3 ore: oltre, e' un altro pasto
+
+
 // Recupera ordini già confermati per una sessione
 async function getSessionOrders(sessionId: string): Promise<string> {
   try {
@@ -29,7 +38,7 @@ router.post('/session', async (req, res) => {
     const { restaurant_slug, table_number, language = 'it', group_size, saved_preferences, returning_customer, previous_dishes } = req.body;
 
     const restaurant = await db.query(
-      'SELECT id, name, groq_api_key FROM restaurants WHERE slug = $1',
+      'SELECT id, name, groq_api_key, ai_name FROM restaurants WHERE slug = $1',
       [restaurant_slug]
     );
     if (restaurant.rows.length === 0) return res.status(404).json({ error: 'Restaurant not found' });
@@ -63,6 +72,9 @@ router.post('/session', async (req, res) => {
       ? previous_dishes.slice(0, 5).join(', ')
       : null;
 
+    // Nome dell'assistente scelto dal ristoratore (Marco se non lo ha cambiato)
+    const nomeAI = (restaurant.rows[0].ai_name || '').trim() || 'Marco';
+
     const welcomeMessages: Record<string, string> = returning_customer && dishList ? {
       it: `Bentornato! 😊 Che bello rivederti da ${restaurantName}!\nL'ultima volta avevi scelto: **${dishList}** — spero ti siano piaciuti! Oggi posso consigliarti qualcosa di speciale, o vuoi scoprire le novità del menu?`,
       en: `Welcome back! 😊 Great to see you again at ${restaurantName}!\nLast time you tried: **${dishList}** — hope you enjoyed them! Can I recommend something special today, or would you like to see what's new?`,
@@ -75,27 +87,27 @@ router.post('/session', async (req, res) => {
       ja: `おかえりなさい！😊 ${restaurantName}でまたお会いできて嬉しいです！\n前回は：**${dishList}** をお選びになりました — お気に召しましたか？今日は何か特別なものをおすすめしましょうか？`,
       ar: `أهلاً بعودتك! 😊 يسعدنا رؤيتك مجدداً في ${restaurantName}!\nفي آخر زيارة اخترت: **${dishList}** — آمل أنك استمتعت! هل يمكنني أن أوصي بشيء مميز اليوم؟`,
     } : returning_customer ? {
-      it: `Bentornato! 😊 Che bello rivederti da ${restaurantName}!\nSono Marco, il tuo assistente virtuale. Cosa ti va oggi — vuoi esplorare il menu o hai già qualcosa in mente?`,
-      en: `Welcome back! 😊 Great to see you again at ${restaurantName}!\nI'm Marco, your virtual assistant. What are you in the mood for today?`,
-      de: `Willkommen zurück! 😊 Schön, Sie wieder bei ${restaurantName} zu sehen!\nIch bin Marco. Was darf ich Ihnen heute empfehlen?`,
-      es: `¡Bienvenido de nuevo! 😊 ¡Qué alegría verte en ${restaurantName}!\nSoy Marco. ¿Qué te apetece hoy?`,
-      fr: `Bon retour! 😊 Ravi de vous revoir chez ${restaurantName}!\nJe suis Marco. Qu'est-ce qui vous fait envie aujourd'hui?`,
-      pt: `Bem-vindo de volta! 😊 Que bom vê-lo em ${restaurantName}!\nSou Marco. O que lhe apetece hoje?`,
+      it: `Bentornato! 😊 Che bello rivederti da ${restaurantName}!\nSono ${nomeAI}, il tuo assistente virtuale. Cosa ti va oggi — vuoi esplorare il menu o hai già qualcosa in mente?`,
+      en: `Welcome back! 😊 Great to see you again at ${restaurantName}!\nI'm ${nomeAI}, your virtual assistant. What are you in the mood for today?`,
+      de: `Willkommen zurück! 😊 Schön, Sie wieder bei ${restaurantName} zu sehen!\nIch bin ${nomeAI}. Was darf ich Ihnen heute empfehlen?`,
+      es: `¡Bienvenido de nuevo! 😊 ¡Qué alegría verte en ${restaurantName}!\nSoy ${nomeAI}. ¿Qué te apetece hoy?`,
+      fr: `Bon retour! 😊 Ravi de vous revoir chez ${restaurantName}!\nJe suis ${nomeAI}. Qu'est-ce qui vous fait envie aujourd'hui?`,
+      pt: `Bem-vindo de volta! 😊 Que bom vê-lo em ${restaurantName}!\nSou ${nomeAI}. O que lhe apetece hoje?`,
       ru: `С возвращением! 😊 Рады снова видеть вас в ${restaurantName}!\nЯ Марко. Что вам сегодня угодно?`,
-      zh: `欢迎回来！😊 很高兴再次在${restaurantName}见到您！\n我是Marco。今天想吃什么？`,
-      ja: `おかえりなさい！😊 ${restaurantName}でまたお会いできて嬉しいです！\n私はMarcoです。今日は何がお好みですか？`,
-      ar: `أهلاً بعودتك! 😊 يسعدنا رؤيتك مجدداً في ${restaurantName}!\nأنا Marco. ماذا تريد اليوم؟`,
+      zh: `欢迎回来！😊 很高兴再次在${restaurantName}见到您！\n我是${nomeAI}。今天想吃什么？`,
+      ja: `おかえりなさい！😊 ${restaurantName}でまたお会いできて嬉しいです！\n私は${nomeAI}です。今日は何がお好みですか？`,
+      ar: `أهلاً بعودتك! 😊 يسعدنا رؤيتك مجدداً في ${restaurantName}!\nأنا ${nomeAI}. ماذا تريد اليوم؟`,
     } : {
-      it: `Ciao! 👋 Sono Marco, il tuo assistente virtuale da ${restaurantName}.\nSono qui per aiutarti a scoprire i piatti migliori e rispondere a qualsiasi domanda. Hai allergie o intolleranze di cui dovrei sapere?`,
-      en: `Hello! 👋 I'm Marco, your virtual assistant at ${restaurantName}.\nI'm here to help you discover the best dishes and answer any questions. Do you have any allergies or intolerances I should know about?`,
-      de: `Hallo! 👋 Ich bin Marco, Ihr virtueller Assistent bei ${restaurantName}.\nIch helfe Ihnen, die besten Gerichte zu entdecken. Haben Sie Allergien oder Unverträglichkeiten?`,
-      es: `¡Hola! 👋 Soy Marco, tu asistente virtual en ${restaurantName}.\nEstoy aquí para ayudarte a descubrir los mejores platos. ¿Tienes alguna alergia o intolerancia?`,
-      fr: `Bonjour! 👋 Je suis Marco, votre assistant virtuel chez ${restaurantName}.\nJe suis là pour vous aider à découvrir les meilleurs plats. Avez-vous des allergies ou intolérances?`,
-      pt: `Olá! 👋 Sou Marco, o seu assistente virtual em ${restaurantName}.\nEstou aqui para ajudá-lo a descobrir os melhores pratos. Tem alguma alergia ou intolerância?`,
+      it: `Ciao! 👋 Sono ${nomeAI}, il tuo assistente virtuale da ${restaurantName}.\nSono qui per aiutarti a scoprire i piatti migliori e rispondere a qualsiasi domanda. Hai allergie o intolleranze di cui dovrei sapere?`,
+      en: `Hello! 👋 I'm ${nomeAI}, your virtual assistant at ${restaurantName}.\nI'm here to help you discover the best dishes and answer any questions. Do you have any allergies or intolerances I should know about?`,
+      de: `Hallo! 👋 Ich bin ${nomeAI}, Ihr virtueller Assistent bei ${restaurantName}.\nIch helfe Ihnen, die besten Gerichte zu entdecken. Haben Sie Allergien oder Unverträglichkeiten?`,
+      es: `¡Hola! 👋 Soy ${nomeAI}, tu asistente virtual en ${restaurantName}.\nEstoy aquí para ayudarte a descubrir los mejores platos. ¿Tienes alguna alergia o intolerancia?`,
+      fr: `Bonjour! 👋 Je suis ${nomeAI}, votre assistant virtuel chez ${restaurantName}.\nJe suis là pour vous aider à découvrir les meilleurs plats. Avez-vous des allergies ou intolérances?`,
+      pt: `Olá! 👋 Sou ${nomeAI}, o seu assistente virtual em ${restaurantName}.\nEstou aqui para ajudá-lo a descobrir os melhores pratos. Tem alguma alergia ou intolerância?`,
       ru: `Привет! 👋 Я Марко, ваш виртуальный ассистент в ${restaurantName}.\nЯ здесь, чтобы помочь вам открыть лучшие блюда. Есть ли у вас аллергии?`,
-      zh: `你好！👋 我是Marco，${restaurantName}的虚拟助手。\n我在这里帮您发现最好的菜肴。您有任何过敏或不耐受症状吗？`,
-      ja: `こんにちは！👋 私はMarco、${restaurantName}のバーチャルアシスタントです。\n最高の料理を見つけるお手伝いをします。アレルギーや食物不耐症はありますか？`,
-      ar: `مرحباً! 👋 أنا Marco، مساعدك الافتراضي في ${restaurantName}.\nأنا هنا لمساعدتك في اكتشاف أفضل الأطباق. هل لديك أي حساسية؟`,
+      zh: `你好！👋 我是${nomeAI}，${restaurantName}的虚拟助手。\n我在这里帮您发现最好的菜肴。您有任何过敏或不耐受症状吗？`,
+      ja: `こんにちは！👋 私は${nomeAI}、${restaurantName}のバーチャルアシスタントです。\n最高の料理を見つけるお手伝いをします。アレルギーや食物不耐症はありますか？`,
+      ar: `مرحباً! 👋 أنا ${nomeAI}، مساعدك الافتراضي في ${restaurantName}.\nأنا هنا لمساعدتك في اكتشاف أفضل الأطباق. هل لديك أي حساسية؟`,
     };
     const welcomeMsg = welcomeMessages[language] ?? welcomeMessages['it'];
     const defaultSuggestions: Record<string, string[]> = {
@@ -170,10 +182,18 @@ router.post('/:sessionId/message', async (req, res) => {
     if (!message || !String(message).trim()) {
       return res.status(400).json({ error: 'Il messaggio non può essere vuoto' });
     }
+    // Tetto alla lunghezza: protegge la spesa del ristoratore e i tempi di risposta
+    if (String(message).length > MAX_CARATTERI_MESSAGGIO) {
+      return res.status(400).json({
+        error: 'Messaggio troppo lungo',
+        message: 'Il messaggio e\' un po\' lungo: puoi riscriverlo piu\' breve?',
+      });
+    }
 
     const session = await db.query(
       `SELECT cs.id, cs.language, cs.messages, cs.restaurant_id, cs.table_id,
-              r.name as restaurant_name, r.groq_api_key, t.number as table_number
+              r.name as restaurant_name, r.groq_api_key, r.ai_name,
+              r.city, r.country, r.cuisine_type, r.about, r.timezone, r.latitude, r.longitude, t.number as table_number
        FROM chat_sessions cs
        JOIN restaurants r ON r.id = cs.restaurant_id
        JOIN tables t ON t.id = cs.table_id
@@ -183,7 +203,28 @@ router.post('/:sessionId/message', async (req, res) => {
     if (session.rows.length === 0) return res.status(404).json({ error: 'Session not found' });
 
     const s = session.rows[0];
-    const history = (s.messages as Array<{ role: 'user' | 'assistant'; content: string }>)
+    const tutti = (s.messages as Array<{ role: 'user' | 'assistant'; content: string; timestamp?: string }>) ?? [];
+
+    // Consideriamo solo la visita in corso. I messaggi del pranzo non devono
+    // ne' contare nel tetto ne' finire nel contesto della cena.
+    const adesso = Date.now();
+    const visita = tutti.filter(m => {
+      if (!m.timestamp) return false;
+      const t = Date.parse(m.timestamp);
+      return !Number.isNaN(t) && adesso - t < DURATA_VISITA_MS;
+    });
+
+    if (visita.length >= MAX_MESSAGGI_PER_VISITA) {
+      return res.status(429).json({
+        error: 'Conversazione troppo lunga',
+        message: 'Abbiamo parlato parecchio! Per il resto chiedi pure al cameriere.',
+      });
+    }
+
+    // Rimandiamo al modello solo gli ultimi scambi della visita: la
+    // conversazione intera farebbe crescere costo e tempo a ogni messaggio.
+    const history = visita
+      .slice(-MAX_TURNI_IN_CONTESTO)
       .map(({ role, content }) => ({ role, content }));
 
     const existingOrders = await getSessionOrders(sessionId);
@@ -192,6 +233,11 @@ router.post('/:sessionId/message', async (req, res) => {
       {
         restaurantId: s.restaurant_id,
         restaurantName: s.restaurant_name,
+        aiName: (s.ai_name || '').trim() || 'Marco',
+        city: s.city, country: s.country, cuisineType: s.cuisine_type, about: s.about,
+        timezone: s.timezone,
+        latitude: s.latitude != null ? Number(s.latitude) : null,
+        longitude: s.longitude != null ? Number(s.longitude) : null,
         tableNumber: s.table_number,
         language: language || s.language,
         conversationHistory: history,
@@ -229,8 +275,28 @@ router.post('/:sessionId/message', async (req, res) => {
       suggestions: response.suggestions ?? [],
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to process message' });
+    console.error('Chat message error:', err);
+    // Meglio una frase onesta che una schermata di errore: il cliente e' seduto
+    // al tavolo e non deve accorgersi dei nostri guai tecnici.
+    const scuse: Record<string, string> = {
+      it: "Scusa, in questo momento non riesco a rispondere. Il menu resta consultabile qui accanto.",
+      en: "Sorry, I can't answer right now. The menu is still available next to this chat.",
+      de: "Entschuldigung, ich kann gerade nicht antworten. Die Speisekarte ist weiterhin verfügbar.",
+      es: "Perdona, ahora mismo no puedo responder. La carta sigue disponible aquí al lado.",
+      fr: "Désolé, je ne peux pas répondre pour le moment. Le menu reste consultable à côté.",
+      pt: "Desculpe, agora não consigo responder. O menu continua disponível aqui ao lado.",
+      ru: "Извините, сейчас я не могу ответить. Меню по-прежнему доступно рядом.",
+      zh: "抱歉，我现在无法回复。菜单仍可在旁边查看。",
+      ja: "申し訳ありません、今はお答えできません。メニューは横からご覧いただけます。",
+      ar: "عذرًا، لا أستطيع الرد الآن. القائمة ما زالت متاحة بجانب هذه المحادثة.",
+    };
+    const lingua = String(req.body?.language || 'it');
+    res.json({
+      message: scuse[lingua] ?? scuse['it'],
+      order_data: null,
+      suggestions: [],
+      errore_tecnico: err instanceof Error ? err.message : 'errore sconosciuto',
+    });
   }
 });
 
