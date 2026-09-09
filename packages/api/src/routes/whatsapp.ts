@@ -17,7 +17,7 @@ import { db } from '../db/client';
 
 const router = Router();
 
-const DASHBOARD_URL = (process.env.DASHBOARD_URL || 'https://gustobolsa-dashboard.pages.dev').replace(/\/+$/, '');
+const DASHBOARD_URL = (process.env.DASHBOARD_URL || 'https://app.lingofork.com').replace(/\/+$/, '');
 const PREZZO_MESE = process.env.SALES_PRICE || '€49/mese';
 const GIORNI_PROVA = Number(process.env.SALES_TRIAL_DAYS) || 7;
 

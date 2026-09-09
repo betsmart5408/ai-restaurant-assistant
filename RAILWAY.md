@@ -17,9 +17,9 @@ funzionare.
    JWT_SECRET=...
    GROQ_API_KEY=...
    ANTHROPIC_API_KEY=...
-   APP_URL=https://gustobolsa-dashboard.pages.dev
-   DASHBOARD_URL=https://gustobolsa-dashboard.pages.dev
-   ALLOWED_ORIGINS=https://gustobolsa-chat.pages.dev,https://gustobolsa-dashboard.pages.dev,https://gustobolsa-cucina.pages.dev
+   APP_URL=https://app.lingofork.com
+   DASHBOARD_URL=https://app.lingofork.com
+   ALLOWED_ORIGINS=https://menu.lingofork.com,https://app.lingofork.com,https://cucina.lingofork.com
    SALES_WHATSAPP=14155238886
    SALES_TRIAL_DAYS=7
    SALES_PRICE=€49/mese
@@ -42,15 +42,18 @@ funzionare.
 
 Vercel Hobby limita a 100 deploy/giorno e lo sforavamo di continuo. Le 3
 interfacce (siti statici) sono passate a **Cloudflare Pages**, deploy diretti
-illimitati e gratis. Vedi `CLOUDFLARE.md`. URL di produzione:
+illimitati e gratis. Vedi `CLOUDFLARE.md`.
+
+Dominio: **lingofork.com** (registrato su Cloudflare). Domini di produzione:
 
 ```
-https://gustobolsa-chat.pages.dev        (clienti / QR menu)
-https://gustobolsa-cucina.pages.dev      (monitor cucina)
-https://gustobolsa-dashboard.pages.dev   (dashboard ristoratore + /attiva)
+https://menu.lingofork.com    -> progetto Pages gustobolsa-chat      (clienti / QR menu)
+https://app.lingofork.com     -> progetto Pages gustobolsa-dashboard (dashboard + /attiva)
+https://cucina.lingofork.com  -> progetto Pages gustobolsa-cucina    (da collegare quando serve)
 ```
 
-Per ripubblicarle: `.\deploy-cloudflare.ps1`. `deploy-tutto.ps1` (Vercel) e i
+Gli URL `gustobolsa-*.pages.dev` restano validi come fallback. Per ripubblicare
+le interfacce: `.\deploy-cloudflare.ps1`. `deploy-tutto.ps1` (Vercel) e i
 progetti Vercel `restaurant-*` non servono piu'.
 
 ## Webhook che puntano all'API
