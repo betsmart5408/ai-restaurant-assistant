@@ -14,6 +14,7 @@ import posRoutes from './routes/pos';
 import adminRoutes from './routes/superadmin';
 import billingRoutes from './routes/billing';
 import uploadRoutes from './routes/upload';
+import whatsappRoutes from './routes/whatsapp';
 import { startAlertScheduler } from './services/alerts';
 
 const app = express();
@@ -35,6 +36,8 @@ app.use(cors({
 }));
 // Webhook Stripe deve ricevere raw body PRIMA di express.json()
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
+// Twilio invia il webhook WhatsApp come form-urlencoded
+app.use('/api/whatsapp', express.urlencoded({ extended: false }));
 app.use(express.json());
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
@@ -51,6 +54,7 @@ app.use('/api/pos', posRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 
 app.listen(PORT, () => {
   console.log(`API server running on http://localhost:${PORT}`);

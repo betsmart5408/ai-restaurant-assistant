@@ -5,7 +5,10 @@ import { requireAuth } from '../middleware/auth';
 
 const router = Router();
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', { apiVersion: '2026-06-24.dahlia' });
+// Stripe v22 lancia se la chiave è vuota: con un segnaposto il modulo si
+// carica lo stesso e solo le chiamate di billing falliranno (gestite dai
+// try/catch) finché non si configura una chiave vera.
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder_not_configured', { apiVersion: '2026-06-24.dahlia' });
 const PRICE_ID = process.env.STRIPE_PRICE_ID ?? '';
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? '';
 const APP_URL = process.env.APP_URL ?? 'http://localhost:5174';
