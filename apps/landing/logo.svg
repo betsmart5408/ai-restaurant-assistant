@@ -1,0 +1,14 @@
+<svg width="232" height="48" viewBox="0 0 232 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LingoFork">
+  <defs>
+    <linearGradient id="lfLogo" x1="6" y1="3" x2="42" y2="45" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8A4B"/>
+      <stop offset="1" stop-color="#FF3D6E"/>
+    </linearGradient>
+  </defs>
+  <path d="M15 4.5h18c6 0 10.5 4.5 10.5 10.5v12c0 6-4.5 10.5-10.5 10.5H21l-8.1 5.8c-1.05.75-2.45-.05-2.35-1.33l.46-5.4C6.2 35.3 4.5 31.5 4.5 27V15C4.5 9 9 4.5 15 4.5Z" fill="url(#lfLogo)"/>
+  <g stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 12.5v5.5c0 2.1 1.5 3.5 3.2 3.7M30 12.5v5.5c0 2.1-1.5 3.5-3.2 3.7M24 12.5v5.6"/>
+    <path d="M24 21.7V35.5"/>
+  </g>
+  <text x="58" y="32" font-family="Fraunces, 'Times New Roman', Georgia, serif" font-size="27" font-weight="600" letter-spacing="-0.5" fill="#14110E">Lingo<tspan fill="#FF3D6E">Fork</tspan></text>
+</svg>
