@@ -38,12 +38,13 @@ function firmaValida(req: Request): boolean {
   }
 }
 
-// Il messaggio precompilato dal tasto della demo contiene "[demo:slug]".
-const RE_MARKER = /\[demo:([a-z0-9][a-z0-9-]{1,60})\]/i;
+// Il messaggio precompilato dal tasto della demo finisce con "#<slug>".
+// Le versioni vecchie usavano "[demo:<slug>]": lo accettiamo ancora.
+const RE_MARKER = /\[demo:([a-z0-9][a-z0-9-]{1,60})\]|(?:^|\s)#([a-z0-9][a-z0-9-]{1,60})\b/i;
 
 function trovaSlug(testo: string): string | null {
   const marker = testo.match(RE_MARKER);
-  if (marker) return marker[1].toLowerCase();
+  if (marker) return (marker[1] || marker[2]).toLowerCase();
   const paren = testo.match(/\(([a-z0-9][a-z0-9-]{1,60})\)/i);
   if (paren) return paren[1].toLowerCase();
   const url = testo.match(/[?&]restaurant=([a-z0-9][a-z0-9-]{1,60})/i) || testo.match(/attiva=([a-z0-9][a-z0-9-]{1,60})/i);
