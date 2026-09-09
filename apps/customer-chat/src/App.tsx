@@ -225,6 +225,35 @@ const UI: Record<string, Record<string, string>> = {
 // parola non tradotta capisce l'inglese, l'italiano quasi mai.
 function t(key: string, lang: string) { return UI[key]?.[lang] ?? UI[key]?.['en'] ?? UI[key]?.['it'] ?? key; }
 
+// Il glifo fotocamera di Instagram, in monocromatico (colore ereditato).
+function IgGlyph({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="2" width="20" height="20" rx="5.5" />
+      <circle cx="12" cy="12" r="4.2" />
+      <circle cx="17.4" cy="6.6" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+// Apre il profilo Instagram: prima prova l'app installata (deep link),
+// se non c'e' ripiega sul sito. Su desktop va dritto al sito.
+function apriInstagram(url: string) {
+  const handle = url.split('/').filter(Boolean).pop() || '';
+  const mobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent || '');
+  if (!mobile || !handle) { window.open(url, '_blank', 'noopener'); return; }
+  const iniziato = Date.now();
+  const web = setTimeout(() => {
+    // se l'app si e' aperta la pagina va in background e questo timer slitta:
+    // in quel caso non apriamo il sito.
+    if (Date.now() - iniziato < 1500) window.open(url, '_blank', 'noopener');
+  }, 900);
+  const onHide = () => { clearTimeout(web); document.removeEventListener('visibilitychange', onHide); };
+  document.addEventListener('visibilitychange', onHide);
+  window.location.href = `instagram://user?username=${handle}`;
+}
+
 const CAT_LABELS: Record<string, Record<string, string>> = {
   antipasti:   { it: 'Antipasti', en: 'Starters', de: 'Vorspeisen', es: 'Entrantes', fr: 'Entrées', pt: 'Entradas', ru: 'Закуски', zh: '前菜', ja: '前菜', ar: 'مقبلات' },
   pizze:       { it: 'Pizze', en: 'Pizzas', de: 'Pizzen', es: 'Pizzas', fr: 'Pizzas', pt: 'Pizzas', ru: 'Пиццы', zh: '披萨', ja: 'ピザ', ar: 'بيتزا' },
@@ -1035,19 +1064,19 @@ export default function App() {
       {showIg && instagramUrl && (
         <div style={S.modalOverlay} onClick={chiudiIg}>
           <div style={S.igBox} onClick={e => e.stopPropagation()}>
-            {logoSrc
-              ? <img src={logoSrc} alt="" style={S.igLogo} />
-              : <div style={S.igMark}>📸</div>}
+            <div style={S.igStripe} />
+            <div style={S.igRing}>
+              {logoSrc
+                ? <img src={logoSrc} alt="" style={S.igLogo} />
+                : <div style={S.igGlyphBox}><IgGlyph size={30} /></div>}
+            </div>
             <p style={S.igText}>{t('igTitle', lang)}</p>
-            <a
-              href={instagramUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
               style={S.igBtn}
-              onClick={chiudiIg}
+              onClick={() => { apriInstagram(instagramUrl); chiudiIg(); }}
             >
-              {t('igBtn', lang)}
-            </a>
+              <IgGlyph size={18} /> {t('igBtn', lang)}
+            </button>
             <button style={S.igLater} onClick={chiudiIg}>{t('igLater', lang)}</button>
           </div>
         </div>
@@ -1163,11 +1192,13 @@ const S: Record<string, React.CSSProperties> = {
   modalClose: { position: 'absolute', top: 16, right: 16, background: 'var(--border)', color: 'var(--text-soft)', border: 'none', borderRadius: '50%', width: 32, height: 32, fontSize: 14, cursor: 'pointer' },
 
   // Invito Instagram
-  igBox: { background: 'var(--surface)', borderRadius: '24px 24px 0 0', padding: '28px 24px 34px', width: '100%', position: 'relative', border: '1px solid var(--border)', textAlign: 'center' as const },
-  igLogo: { width: 56, height: 56, borderRadius: 14, objectFit: 'contain' as const, margin: '0 auto 12px', display: 'block', background: 'var(--bg)' },
-  igMark: { fontSize: 40, marginBottom: 8 },
+  igBox: { background: 'var(--surface)', borderRadius: '24px 24px 0 0', padding: '30px 24px 30px', width: '100%', position: 'relative', border: '1px solid var(--border)', textAlign: 'center' as const, overflow: 'hidden' },
+  igStripe: { position: 'absolute' as const, top: 0, left: 0, right: 0, height: 6, background: 'linear-gradient(90deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)' },
+  igRing: { width: 76, height: 76, borderRadius: '50%', margin: '4px auto 14px', padding: 3, boxSizing: 'border-box' as const, background: 'linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', display: 'flex' },
+  igLogo: { width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' as const, border: '3px solid var(--surface)', background: 'var(--bg)', boxSizing: 'border-box' as const },
+  igGlyphBox: { width: '100%', height: '100%', borderRadius: '50%', border: '3px solid var(--surface)', background: 'var(--bg)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' as const },
   igText: { fontSize: 15, lineHeight: 1.45, color: 'var(--text)', margin: '0 0 18px', fontWeight: 600 },
-  igBtn: { display: 'block', width: '100%', padding: '14px', borderRadius: 14, fontSize: 15, fontWeight: 700, background: 'var(--brand)', color: '#fff', border: 'none', cursor: 'pointer', textDecoration: 'none', marginBottom: 10, boxSizing: 'border-box' as const },
+  igBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '14px', borderRadius: 14, fontSize: 15, fontWeight: 700, background: 'linear-gradient(90deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', color: '#fff', border: 'none', cursor: 'pointer', marginBottom: 8, boxSizing: 'border-box' as const },
   igLater: { display: 'block', width: '100%', padding: '10px', borderRadius: 12, fontSize: 14, fontWeight: 600, background: 'transparent', color: 'var(--text-soft)', border: 'none', cursor: 'pointer' },
 
   // Lang picker
