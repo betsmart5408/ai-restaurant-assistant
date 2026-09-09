@@ -220,6 +220,7 @@ const UI: Record<string, Record<string, string>> = {
   igTitle:     { it: 'Ti è piaciuto? Seguici su Instagram per foto e novità 📸', en: 'Enjoying it? Follow us on Instagram for photos & news 📸', de: 'Gefällt es dir? Folge uns auf Instagram für Fotos & News 📸', es: '¿Te gusta? Síguenos en Instagram para fotos y novedades 📸', fr: 'Ça vous plaît ? Suivez-nous sur Instagram pour photos et actus 📸', pt: 'Está a gostar? Siga-nos no Instagram para fotos e novidades 📸', ru: 'Нравится? Подпишитесь на нас в Instagram — фото и новости 📸', zh: '喜欢吗？在 Instagram 关注我们，看照片和最新消息 📸', ja: '気に入りましたか？写真や最新情報はInstagramで 📸', ar: 'أعجبك المكان؟ تابعنا على إنستغرام للصور والأخبار 📸', ko: '마음에 드셨나요? 인스타그램에서 사진과 소식을 확인하세요 📸', id: 'Suka? Ikuti kami di Instagram untuk foto & kabar terbaru 📸', hi: 'पसंद आया? फ़ोटो और अपडेट के लिए हमें Instagram पर फ़ॉलो करें 📸' },
   igBtn:       { it: 'Segui su Instagram', en: 'Follow on Instagram', de: 'Auf Instagram folgen', es: 'Seguir en Instagram', fr: 'Suivre sur Instagram', pt: 'Seguir no Instagram', ru: 'Подписаться в Instagram', zh: '在 Instagram 关注', ja: 'Instagramでフォロー', ar: 'تابع على إنستغرام', ko: '인스타그램 팔로우', id: 'Ikuti di Instagram', hi: 'Instagram पर फ़ॉलो करें' },
   igLater:     { it: 'Più tardi', en: 'Maybe later', de: 'Später', es: 'Más tarde', fr: 'Plus tard', pt: 'Mais tarde', ru: 'Позже', zh: '以后再说', ja: '後で', ar: 'لاحقاً', ko: '나중에', id: 'Nanti saja', hi: 'बाद में' },
+  demoCta:     { it: 'Attiva questo menu per il tuo ristorante', en: 'Activate this menu for your restaurant', de: 'Diese Speisekarte für Ihr Restaurant aktivieren', es: 'Activa este menú para tu restaurante', fr: 'Activez ce menu pour votre restaurant', pt: 'Ative este menu para o seu restaurante', ru: 'Активируйте это меню для вашего ресторана', zh: '为您的餐厅启用此菜单', ja: 'このメニューをあなたのレストランで使う', ar: 'فعّل هذه القائمة لمطعمك', ko: '내 레스토랑에 이 메뉴 적용하기', id: 'Aktifkan menu ini untuk restoran Anda', hi: 'अपने रेस्तरां के लिए यह मेन्यू चालू करें' },
 };
 // Ripiego in inglese, non in italiano: un turista coreano che trova una
 // parola non tradotta capisce l'inglese, l'italiano quasi mai.
@@ -453,6 +454,7 @@ export default function App() {
   const [valuta, setValuta] = useState<string>('\u20AC');
   const [instagramUrl, setInstagramUrl] = useState<string>('');
   const [showIg, setShowIg] = useState(false);
+  const [demoWa, setDemoWa] = useState<string>('');   // link WhatsApp: solo nelle demo
 
   // Lingue offerte da QUESTO ristorante. Finche' non arrivano dal server
   // non mostriamo niente, cosi' nessuno sceglie una lingua non tradotta.
@@ -477,6 +479,11 @@ export default function App() {
         const r = data.restaurant;
         if (r.logo_url) setLogoSrc(r.logo_url.startsWith('http') ? r.logo_url : `${API}${r.logo_url}`);
         if (r.instagram_url) setInstagramUrl(r.instagram_url);
+        if (r.sales_whatsapp) {
+          const num = String(r.sales_whatsapp).replace(/[^\d]/g, '');
+          const msg = `Ciao! Ho visto la demo di ${r.name ?? 'questo ristorante'} (${params.restaurant}) e vorrei attivarla per il mio locale.`;
+          setDemoWa(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`);
+        }
         if (r.name) setNomeLocale(r.name);
         // Se il ristorante non dichiara le lingue restiamo sull'inglese:
         // meglio una scelta sola che funziona di dieci che non traducono.
@@ -535,6 +542,14 @@ export default function App() {
     registraIgEvento('click');
     apriInstagram(instagramUrl);
   };
+
+  // Tasto "attiva questo menu": compare solo nelle demo (lo decide l'API con
+  // sales_whatsapp). Appena la demo viene attivata, l'API non lo manda piu'.
+  const demoCtaBtn = demoWa ? (
+    <a href={demoWa} target="_blank" rel="noopener noreferrer" style={S.demoCta}>
+      <span style={{ fontSize: 17 }}>💬</span> {t('demoCta', lang)}
+    </a>
+  ) : null;
 
   // Salva sessione in localStorage ad ogni cambio messaggi
   useEffect(() => {
@@ -829,6 +844,7 @@ export default function App() {
         <button style={S.homeLangBtn} onClick={() => { setScreen('lang'); }}>
           {LANG_OPTIONS.find(o => o.code === lang)?.label ?? '🌐'} ▾
         </button>
+        {demoCtaBtn}
       </div>
     );
   }
@@ -1090,6 +1106,8 @@ export default function App() {
         </div>
       )}
 
+      {demoCtaBtn}
+
       {/* ── INVITO INSTAGRAM (dopo 90 secondi) ── */}
       {showIg && instagramUrl && (
         <div style={S.modalOverlay} onClick={igPiuTardi}>
@@ -1227,6 +1245,9 @@ const S: Record<string, React.CSSProperties> = {
   igText: { fontSize: 15, lineHeight: 1.45, color: 'var(--text)', margin: '0 0 18px', fontWeight: 600 },
   igBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '14px', borderRadius: 14, fontSize: 15, fontWeight: 700, background: 'linear-gradient(90deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', color: '#fff', border: 'none', cursor: 'pointer', marginBottom: 8, boxSizing: 'border-box' as const },
   igLater: { display: 'block', width: '100%', padding: '10px', borderRadius: 12, fontSize: 14, fontWeight: 600, background: 'transparent', color: 'var(--text-soft)', border: 'none', cursor: 'pointer' },
+
+  // Tasto demo → WhatsApp
+  demoCta: { position: 'fixed' as const, left: '50%', bottom: 74, transform: 'translateX(-50%)', zIndex: 40, display: 'flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 999, background: '#25D366', color: '#fff', fontSize: 14, fontWeight: 700, textDecoration: 'none', boxShadow: '0 6px 22px rgba(37,211,102,0.45)', maxWidth: '92%', whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' },
 
   // Lang picker
   langPickerOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', zIndex: 200 },

@@ -40,7 +40,7 @@ router.get('/:restaurantSlug', async (req, res) => {
     const { restaurantSlug } = req.params;
 
     const restaurant = await db.query(
-      'SELECT id, name, languages, currency, logo_url, primary_color, background_color, ai_name, font_family, instagram_url FROM restaurants WHERE slug = $1',
+      'SELECT id, name, languages, currency, logo_url, primary_color, background_color, ai_name, font_family, instagram_url, is_demo FROM restaurants WHERE slug = $1',
       [restaurantSlug]
     );
 
@@ -49,6 +49,11 @@ router.get('/:restaurantSlug', async (req, res) => {
     }
 
     const restaurantId = restaurant.rows[0].id;
+    // Solo nelle demo mostriamo il tasto "attiva su WhatsApp": appena la demo
+    // viene attivata (is_demo = false) il tasto sparisce da solo.
+    const salesWhatsapp = restaurant.rows[0].is_demo
+      ? (process.env.SALES_WHATSAPP || '').replace(/[^\d+]/g, '') || null
+      : null;
 
     const dishes = await db.query(
       `SELECT id, name, description, price, category, allergens, image_url, available, prep_time_min
@@ -68,7 +73,7 @@ router.get('/:restaurantSlug', async (req, res) => {
     }
 
     res.json({
-      restaurant: restaurant.rows[0],
+      restaurant: { ...restaurant.rows[0], sales_whatsapp: salesWhatsapp },
       menu: menuByCategory,
     });
   } catch (err) {
