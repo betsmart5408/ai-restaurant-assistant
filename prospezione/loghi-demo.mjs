@@ -269,6 +269,17 @@ function coloreDaImmagine(buf, mime) {
   else if (mime === 'image/svg+xml') px = coloriDaSvg(buf);
   if (!px || !px.length) return null;
 
+  // Quanto e' "chiaro" il logo nel suo insieme (solo pixel opachi). Serve a
+  // decidere se il menu va su fondo chiaro (logo scuro -> si vede) o su fondo
+  // scuro (logo chiaro/bianco: su fondo bianco sparirebbe).
+  let sommaLuce = 0, opachi = 0;
+  for (const [r, g, b, a] of px) {
+    if (a < 128) continue;
+    sommaLuce += (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    opachi++;
+  }
+  const logoChiaro = opachi > 0 && sommaLuce / opachi > 0.62;
+
   const secchi = new Map();
   for (const [r, g, b, a] of px) {
     if (a < 128) continue;
@@ -291,12 +302,15 @@ function coloreDaImmagine(buf, mime) {
   }
   let [h, s, l] = rgbToHsl(best.r, best.g, best.b);
   if (s < 0.15) return null;                    // in pratica è grigio
-  // l'accento va su fondo chiaro: né troppo pallido né fluo
   s = Math.min(Math.max(s, 0.45), 0.9);
+  if (logoChiaro) {
+    // logo chiaro/bianco -> menu su fondo scuro tinto, accento più luminoso
+    l = Math.min(Math.max(l, 0.5), 0.72);
+    return { primario: hslToHex(h, s, l), sfondo: hslToHex(h, 0.30, 0.13) };
+  }
+  // logo scuro -> menu su fondo quasi bianco tinto dello stesso tono
   l = Math.min(Math.max(l, 0.32), 0.55);
-  const primario = hslToHex(h, s, l);
-  const sfondo = hslToHex(h, 0.14, 0.972);      // bianco appena tinto dello stesso tono
-  return { primario, sfondo };
+  return { primario: hslToHex(h, s, l), sfondo: hslToHex(h, 0.14, 0.972) };
 }
 
 async function scaricaLogo(url) {

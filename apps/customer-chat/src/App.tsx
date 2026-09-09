@@ -375,9 +375,17 @@ function applicaCarattere(nome?: string | null) {
   document.head.appendChild(link);
 }
 
+function luminanza(hex: string) {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
 function applicaTema(sfondo?: string | null, principale?: string | null) {
   const root = document.documentElement.style;
-  if (principale) root.setProperty('--brand', principale);
+  // Un brand quasi bianco renderebbe invisibili i pulsanti: lo ignoriamo.
+  if (principale && /^#[0-9a-fA-F]{6}$/.test(principale) && luminanza(principale) < 0.9) {
+    root.setProperty('--brand', principale);
+  }
   if (!sfondo || !/^#[0-9a-fA-F]{6}$/.test(sfondo)) return;
 
   const r = parseInt(sfondo.slice(1, 3), 16);
@@ -407,8 +415,10 @@ function applicaTema(sfondo?: string | null, principale?: string | null) {
   const p = (principale && /^#[0-9a-fA-F]{6}$/.test(principale)) ? principale : 'var(--brand)';
   const pr = parseInt(p.slice(1, 3), 16), pg = parseInt(p.slice(3, 5), 16), pb = parseInt(p.slice(5, 7), 16);
   root.setProperty('--brand-soft', `rgba(${pr}, ${pg}, ${pb}, 0.15)`);
+  // Su fondo chiaro un logo bianco/chiaro sparirebbe: gli diamo un contorno
+  // sottile scuro (oltre all'ombra) cosi' resta leggibile comunque.
   root.setProperty('--logo-glow', chiaro
-    ? 'drop-shadow(0 6px 18px rgba(0,0,0,0.12))'
+    ? 'drop-shadow(0.8px 0 0 rgba(0,0,0,0.32)) drop-shadow(-0.8px 0 0 rgba(0,0,0,0.32)) drop-shadow(0 0.8px 0 rgba(0,0,0,0.32)) drop-shadow(0 -0.8px 0 rgba(0,0,0,0.32)) drop-shadow(0 6px 16px rgba(0,0,0,0.14))'
     : `drop-shadow(0 0 40px rgba(${pr}, ${pg}, ${pb}, 0.30))`);
 
   document.body.style.background = sfondo;
@@ -1158,7 +1168,7 @@ const S: Record<string, React.CSSProperties> = {
   errorBox: { background: 'var(--surface-2)', border: '1px solid var(--brand)', color: 'var(--brand)', borderRadius: 10, padding: '12px 16px', fontSize: 14, textAlign: 'center', maxWidth: 320, width: '100%' },
 
   langScreen: { fontFamily: 'var(--font, system-ui)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', gap: 40, padding: 32, background: 'var(--bg, #000)' },
-  coverLogo: { width: 220, objectFit: 'contain' as const },
+  coverLogo: { width: 220, objectFit: 'contain' as const, filter: 'var(--logo-glow)' },
   loadingChef: { fontSize: 64, animation: 'chef-pulse 1.4s ease-in-out infinite' },
   langGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 340 },
   langBtn: { padding: '16px 12px', borderRadius: 12, fontSize: 16, fontWeight: 600, background: 'var(--surface)', color: 'var(--text)', border: '1.5px solid var(--border)', cursor: 'pointer' },
@@ -1166,7 +1176,7 @@ const S: Record<string, React.CSSProperties> = {
 
   header: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--bg)', borderBottom: '1px solid var(--border)', flexShrink: 0 },
   backBtn: { background: 'none', color: 'var(--text-soft)', fontSize: 20, padding: 4, border: 'none', cursor: 'pointer', flexShrink: 0 },
-  headerLogo: { height: 48, maxWidth: '60%', objectFit: 'contain' as const, flex: 1 },
+  headerLogo: { height: 48, maxWidth: '60%', objectFit: 'contain' as const, flex: 1, filter: 'var(--logo-glow)' },
   headerSub2: { fontSize: 12, color: 'var(--text-soft)', flexShrink: 0 },
   headerSub: { fontSize: 12, color: 'var(--text-soft)' },
   orderBadge: { background: '#22c55e22', color: '#22c55e', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, flexShrink: 0 },
