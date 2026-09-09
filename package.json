@@ -19,7 +19,8 @@
     "concurrently": "^9.1.0",
     "typescript": "^5.7.2"
   },
-  "dependencies": {
+  "comment": "@duckdb/node-api e pdfjs-dist servono solo agli script in prospezione/, non all'API. Sono in optionalDependencies cosi' un build (es. Railway) che non riesce a compilarli prosegue lo stesso.",
+  "optionalDependencies": {
     "@duckdb/node-api": "^1.5.5-r.4",
     "pdfjs-dist": "^6.3.289"
   }
