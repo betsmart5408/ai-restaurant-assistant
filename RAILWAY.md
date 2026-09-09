@@ -17,9 +17,9 @@ funzionare.
    JWT_SECRET=...
    GROQ_API_KEY=...
    ANTHROPIC_API_KEY=...
-   APP_URL=https://restaurant-dashboard-two-hazel.vercel.app
-   DASHBOARD_URL=https://restaurant-dashboard-two-hazel.vercel.app
-   ALLOWED_ORIGINS=https://restaurant-chat-gustobolsa.vercel.app,https://restaurant-dashboard-two-hazel.vercel.app,https://restaurant-cucina-gustobolsa.vercel.app
+   APP_URL=https://gustobolsa-dashboard.pages.dev
+   DASHBOARD_URL=https://gustobolsa-dashboard.pages.dev
+   ALLOWED_ORIGINS=https://gustobolsa-chat.pages.dev,https://gustobolsa-dashboard.pages.dev,https://gustobolsa-cucina.pages.dev
    SALES_WHATSAPP=14155238886
    SALES_TRIAL_DAYS=7
    SALES_PRICE=€49/mese
@@ -38,15 +38,20 @@ funzionare.
 6. Aspetta il deploy (2-3 min), poi apri `<url>/health` → deve dare
    `{"status":"ok"}`.
 
-## Sposta le interfacce sul nuovo URL
+## Le 3 interfacce ora stanno su Cloudflare Pages (non piu' Vercel)
 
-Nel progetto, in `apps/*/​.env.production` metti il nuovo URL:
+Vercel Hobby limita a 100 deploy/giorno e lo sforavamo di continuo. Le 3
+interfacce (siti statici) sono passate a **Cloudflare Pages**, deploy diretti
+illimitati e gratis. Vedi `CLOUDFLARE.md`. URL di produzione:
+
 ```
-VITE_API_URL=https://<il-tuo>.up.railway.app
+https://gustobolsa-chat.pages.dev        (clienti / QR menu)
+https://gustobolsa-cucina.pages.dev      (monitor cucina)
+https://gustobolsa-dashboard.pages.dev   (dashboard ristoratore + /attiva)
 ```
-per `customer-chat`, `owner-dashboard`, `kitchen-display`. Poi ripubblica le
-3 interfacce (`.\deploy-tutto.ps1` — l'API su Vercel puoi ignorarla / cancellare
-il progetto `restaurant-api`).
+
+Per ripubblicarle: `.\deploy-cloudflare.ps1`. `deploy-tutto.ps1` (Vercel) e i
+progetti Vercel `restaurant-*` non servono piu'.
 
 ## Webhook che puntano all'API
 - **Twilio WhatsApp** "When a message comes in" → `https://<url>.up.railway.app/api/whatsapp/inbound`

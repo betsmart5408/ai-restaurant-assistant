@@ -1,4 +1,8 @@
 # ============================================================
+#  [OBSOLETO]  Le 3 interfacce ora stanno su CLOUDFLARE PAGES:
+#  usa  deploy-cloudflare.ps1  (deploy illimitati, niente limite 100/giorno
+#  di Vercel Hobby). Questo script resta solo per storico / emergenze.
+#
 #  AI Restaurant Assistant  ->  pubblicazione delle 3 interfacce su Vercel
 #  L'API ora sta su RAILWAY (deploy automatico a ogni git push): qui non
 #  serve piu' toccarla. Con -ConMalgradoApiVercel si ripubblica anche
@@ -42,7 +46,10 @@ function Deploy-Folder($folder, $projectName, $envMap) {
     if ($envMap) {
         foreach ($k in $envMap.Keys) {
             Write-Host "   + variabile $k" -ForegroundColor DarkGray
-            $envMap[$k] | vercel env add $k production --force 2>$null | Out-Null
+            # rimuovo il vecchio valore (se c'e') e riscrivo: cosi' funziona
+            # anche con versioni di Vercel CLI che non hanno --force su env add
+            vercel env rm $k production --yes 2>$null | Out-Null
+            $envMap[$k] | vercel env add $k production 2>$null | Out-Null
         }
     }
     Write-Host "   deploy in corso (puo' richiedere 1-2 minuti)..." -ForegroundColor DarkGray
@@ -153,8 +160,28 @@ foreach ($a in $apps) {
         devDependencies = $dd
     }
     Write-Utf8 "$d\package.json" ($np | ConvertTo-Json -Depth 5)
-    Write-Utf8 "$d\.env.production" "VITE_API_URL=$apiUrl"
-    $u = Deploy-Folder $d $a.name $null
+
+    # Variabili VITE_ del frontend. Le forziamo ANCHE come env di progetto su
+    # Vercel (--force): se nelle impostazioni del progetto e' rimasto un vecchio
+    # VITE_API_URL (es. la vecchia API su Vercel), quello vince sul file
+    # .env.production al momento del build e il sito continua a chiamare l'API
+    # morta. Forzandolo qui, ogni deploy riparte dall'URL di Railway.
+    $envApp = [ordered]@{ "VITE_API_URL" = $apiUrl }
+    $srcEnv = "$root\apps\$($a.dir)\.env.production"
+    if (Test-Path $srcEnv) {
+        foreach ($line in Get-Content $srcEnv) {
+            $t = $line.Trim()
+            if ($t -eq "" -or $t.StartsWith("#")) { continue }
+            $i = $t.IndexOf("=")
+            if ($i -lt 1) { continue }
+            $n = $t.Substring(0, $i).Trim()
+            $val = $t.Substring($i + 1).Trim().Trim('"')
+            if ($n -eq "VITE_API_URL" -or $val -eq "") { continue }
+            if ($n -like "VITE_*") { $envApp[$n] = $val }
+        }
+    }
+    Write-Utf8 "$d\.env.production" (($envApp.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join "`n")
+    $u = Deploy-Folder $d $a.name $envApp
     # Indirizzo stabile del progetto (quello con il codice casuale resta bloccato
     # sulla versione di quel singolo deploy).
     $results[$a.dir] = "https://$($a.name)-gustobolsa.vercel.app"

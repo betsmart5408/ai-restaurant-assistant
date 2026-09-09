@@ -6,3 +6,8 @@ dist/
 *.log
 /tmp/
 .claude/
+
+.deploy-*
+.vercel
+.wrangler/
+apps/*/.wrangler/
