@@ -69,10 +69,11 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'owner' | 'admin'>('owner');
   // L'accesso Super Admin non si mostra ai ristoratori: compare solo se
-  // l'indirizzo contiene ?admin (es. app.lingofork.com/?admin).
+  // l'indirizzo contiene ?admin (es. app.lingofork.com/?admin), e in quel
+  // caso il form parte gia' in modalita' Super Admin.
   const adminSbloccato = /[?&]admin\b/.test(window.location.search) || window.location.hash.includes('admin');
+  const [mode, setMode] = useState<'owner' | 'admin'>(adminSbloccato ? 'admin' : 'owner');
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -833,7 +834,10 @@ export default function App() {
     }
   }
 
-  if (!auth) {
+  // ?admin nell'URL: mostra sempre il login Super Admin, anche se in questo
+  // browser e' rimasta la sessione di un ristoratore (es. una demo attivata).
+  const vuoleAdmin = /[?&]admin\b/.test(window.location.search) || window.location.hash.includes('admin');
+  if (!auth || (vuoleAdmin && auth.role !== 'superadmin')) {
     return <LoginScreen onLogin={d => { saveAuth(d); setAuth(d); }} />;
   }
 
