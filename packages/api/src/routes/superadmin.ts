@@ -90,7 +90,7 @@ router.get('/stats', async (_req, res) => {
 
 // POST /api/admin/restaurants — crea nuovo ristorante
 router.post('/restaurants', async (req: Request, res: Response) => {
-  const { restaurant_name, owner_email, owner_password, monthly_price = 49 } = req.body;
+  const { restaurant_name, owner_email, owner_password, monthly_price = 30 } = req.body;
   if (!restaurant_name || !owner_email || !owner_password) {
     return res.status(400).json({ error: 'restaurant_name, owner_email, owner_password obbligatori' });
   }

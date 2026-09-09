@@ -22,7 +22,7 @@ funzionare.
    ALLOWED_ORIGINS=https://menu.lingofork.com,https://app.lingofork.com,https://cucina.lingofork.com
    SALES_WHATSAPP=14155238886
    SALES_TRIAL_DAYS=7
-   SALES_PRICE=€49/mese
+   SALES_PRICE=A$30/mese
    TWILIO_ACCOUNT_SID=...
    TWILIO_AUTH_TOKEN=...
    TWILIO_WHATSAPP_FROM=+14155238886

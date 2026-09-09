@@ -218,7 +218,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
   const [restaurants, setRestaurants] = useState<AdminRestaurant[]>([]);
   const [tab, setTab] = useState<'dashboard' | 'restaurants' | 'new'>('dashboard');
   const [loading, setLoading] = useState(false);
-  const [newForm, setNewForm] = useState({ restaurant_name: '', owner_email: '', owner_password: '', monthly_price: '49' });
+  const [newForm, setNewForm] = useState({ restaurant_name: '', owner_email: '', owner_password: '', monthly_price: '30' });
   const [newMsg, setNewMsg] = useState('');
   const [search, setSearch] = useState('');
 
@@ -248,7 +248,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
       const data = await res.json();
       if (res.ok) {
         setNewMsg(`✅ Ristorante creato! Slug: ${data.slug} | QR: ${data.qr_base_url}`);
-        setNewForm({ restaurant_name: '', owner_email: '', owner_password: '', monthly_price: '49' });
+        setNewForm({ restaurant_name: '', owner_email: '', owner_password: '', monthly_price: '30' });
         load();
       } else setNewMsg(`❌ ${data.error}`);
     } catch { setNewMsg('❌ Errore di rete'); }
@@ -360,7 +360,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontWeight: 700, color: statusColor(r.subscription_status) }}>{statusLabel(r.subscription_status)}</div>
-                        <div style={{ fontSize: 13, color: '#64748b' }}>€{Number(r.monthly_price ?? 49).toFixed(0)}/mese</div>
+                        <div style={{ fontSize: 13, color: '#64748b' }}>A${Number(r.monthly_price ?? 30).toFixed(0)}/mese</div>
                       </div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {r.suspended_at
@@ -385,14 +385,14 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
                 <label style={S.formLabel}>Nome ristorante<input style={S.formInput} value={newForm.restaurant_name} onChange={e => setNewForm(f => ({ ...f, restaurant_name: e.target.value }))} placeholder="Es. Ristorante Da Mario" /></label>
                 <label style={S.formLabel}>Email owner<input style={S.formInput} type="email" value={newForm.owner_email} onChange={e => setNewForm(f => ({ ...f, owner_email: e.target.value }))} placeholder="mario@ristorante.it" /></label>
                 <label style={S.formLabel}>Password owner<input style={S.formInput} type="password" value={newForm.owner_password} onChange={e => setNewForm(f => ({ ...f, owner_password: e.target.value }))} placeholder="Min 8 caratteri" /></label>
-                <label style={S.formLabel}>Prezzo mensile (€)<input style={S.formInput} type="number" value={newForm.monthly_price} onChange={e => setNewForm(f => ({ ...f, monthly_price: e.target.value }))} /></label>
+                <label style={S.formLabel}>Prezzo mensile (A$)<input style={S.formInput} type="number" value={newForm.monthly_price} onChange={e => setNewForm(f => ({ ...f, monthly_price: e.target.value }))} /></label>
               </div>
               {newMsg && <div style={{ marginTop: 12, fontSize: 14, padding: '10px 14px', borderRadius: 8, background: newMsg.startsWith('✅') ? '#f0fdf4' : '#fef2f2', color: newMsg.startsWith('✅') ? '#166534' : '#991b1b', border: `1px solid ${newMsg.startsWith('✅') ? '#86efac' : '#fca5a5'}` }}>{newMsg}</div>}
               <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
                 <button style={S.btnPrimary} onClick={createRestaurant} disabled={!newForm.restaurant_name || !newForm.owner_email || !newForm.owner_password}>
                   ➕ Crea ristorante
                 </button>
-                <button style={S.btnSecondary} onClick={() => { setNewForm({ restaurant_name: '', owner_email: '', owner_password: '', monthly_price: '49' }); setNewMsg(''); }}>Reset</button>
+                <button style={S.btnSecondary} onClick={() => { setNewForm({ restaurant_name: '', owner_email: '', owner_password: '', monthly_price: '30' }); setNewMsg(''); }}>Reset</button>
               </div>
             </div>
           </div>
@@ -1232,7 +1232,7 @@ export default function App() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 20 }}>
                   <div style={S.kpiCard}>
                     <div style={S.kpiLabel}>Costo mensile</div>
-                    <div style={{ ...S.kpiValue, color: '#6366f1', fontSize: 28 }}>€{Number(billing.monthly_price ?? 49).toFixed(2)}</div>
+                    <div style={{ ...S.kpiValue, color: '#6366f1', fontSize: 28 }}>A${Number(billing.monthly_price ?? 30).toFixed(2)}</div>
                   </div>
                 </div>
 
