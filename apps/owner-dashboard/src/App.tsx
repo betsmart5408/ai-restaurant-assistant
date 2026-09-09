@@ -180,7 +180,7 @@ function ClaimScreen({ slug, token, onDone }: { slug: string; token: string; onD
               ? <img src={info.logo_url.startsWith('http') ? info.logo_url : `${API}${info.logo_url}`} alt="" style={{ height: 54, objectFit: 'contain', display: 'block', margin: '0 auto 10px' }} />
               : <div style={S.loginLogo}>🍽️</div>}
             <h1 style={S.loginTitle}>Attiva {info?.name ?? 'la tua demo'}</h1>
-            <p style={S.loginSub}>Il menu è già caricato e tradotto. Scegli le tue credenziali: 14 giorni di prova, nessuna carta.</p>
+            <p style={S.loginSub}>Il menu è già caricato e tradotto. Scegli le tue credenziali: prova gratuita, nessuna carta.</p>
             <form onSubmit={attiva} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <label style={S.formLabel}>Email<input style={S.formInput} type="email" value={email} onChange={e => setEmail(e.target.value)} required autoFocus /></label>
               <label style={S.formLabel}>Password (min 8)<input style={S.formInput} type="password" value={password} onChange={e => setPassword(e.target.value)} required /></label>

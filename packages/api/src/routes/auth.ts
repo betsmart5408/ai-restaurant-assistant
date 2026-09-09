@@ -256,6 +256,7 @@ router.post('/claim', async (req, res) => {
     );
 
     // La demo diventa un cliente vero: niente più is_demo, trial da adesso.
+    const giorniProva = Number(process.env.SALES_TRIAL_DAYS) || 7;
     await client.query(
       `UPDATE restaurants SET
          is_demo = FALSE,
@@ -264,9 +265,9 @@ router.post('/claim', async (req, res) => {
          demo_email = COALESCE(demo_email, $2),
          plan = 'trial',
          subscription_status = 'trialing',
-         trial_ends_at = NOW() + INTERVAL '14 days'
+         trial_ends_at = NOW() + make_interval(days => $3)
        WHERE id = $1`,
-      [rest.id, emailPulita]
+      [rest.id, emailPulita, giorniProva]
     );
 
     // Le demo hanno un solo tavolo: un ristorante vero ne vuole di più.

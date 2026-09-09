@@ -1,8 +1,11 @@
 /**
- * Webhook WhatsApp (Twilio). Quando un ristoratore scrive al numero
- * commerciale — di solito dal tasto "Attiva questo menu" nella demo, che
- * precompila "... (slug) ..." — rispondiamo in automatico con il link di
- * attivazione e due righe su costo e prova.
+ * Webhook WhatsApp (Twilio) — assistente commerciale.
+ *
+ * Il ristoratore tocca "Attiva questo menu" nella demo: WhatsApp si apre con un
+ * messaggio precompilato che contiene "[demo:<slug>]". Lui preme solo invio.
+ * Da lì il bot guida tutto con un menu a numeri: attiva, prezzo, come funziona,
+ * parla con una persona. Il numero della demo resta in memoria (whatsapp_leads),
+ * quindi quando risponde "1" gli mandiamo subito il link giusto.
  *
  * Su Twilio: numero WhatsApp → "When a message comes in" →
  *   POST https://<api>/api/whatsapp/inbound
@@ -16,14 +19,13 @@ const router = Router();
 
 const DASHBOARD_URL = (process.env.DASHBOARD_URL || 'https://restaurant-dashboard-two-hazel.vercel.app').replace(/\/+$/, '');
 const PREZZO_MESE = process.env.SALES_PRICE || '€49/mese';
+const GIORNI_PROVA = Number(process.env.SALES_TRIAL_DAYS) || 7;
 
 function twiml(testo: string): string {
   const safe = testo.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${safe}</Message></Response>`;
 }
 
-// Firma Twilio: se abbiamo l'auth token la verifichiamo, altrimenti (sandbox
-// / test) lasciamo passare ma lo segnaliamo nei log.
 function firmaValida(req: Request): boolean {
   const token = process.env.TWILIO_AUTH_TOKEN;
   if (!token) { console.warn('[whatsapp] TWILIO_AUTH_TOKEN assente: firma non verificata'); return true; }
@@ -36,29 +38,12 @@ function firmaValida(req: Request): boolean {
   }
 }
 
-async function linkAttivazione(slug: string): Promise<{ nome: string; link: string; giaAttiva: boolean } | null> {
-  const r = await db.query(
-    'SELECT id, name, is_demo, demo_claim_token FROM restaurants WHERE slug = $1',
-    [slug]
-  );
-  const row = r.rows[0];
-  if (!row) return null;
-  if (!row.is_demo) return { nome: row.name, link: `${DASHBOARD_URL}/`, giaAttiva: true };
-  let token = row.demo_claim_token;
-  if (!token) {
-    token = randomBytes(18).toString('base64url');
-    await db.query('UPDATE restaurants SET demo_claim_token = $1 WHERE id = $2', [token, row.id]);
-  }
-  return {
-    nome: row.name,
-    link: `${DASHBOARD_URL}/attiva?attiva=${encodeURIComponent(slug)}&token=${token}`,
-    giaAttiva: false,
-  };
-}
+// Il messaggio precompilato dal tasto della demo contiene "[demo:slug]".
+const RE_MARKER = /\[demo:([a-z0-9][a-z0-9-]{1,60})\]/i;
 
 function trovaSlug(testo: string): string | null {
-  // Il tasto demo precompila "... (slug) ..."; altrimenti proviamo un
-  // /attiva?attiva=slug incollato, o l'ultimo token che sembra uno slug.
+  const marker = testo.match(RE_MARKER);
+  if (marker) return marker[1].toLowerCase();
   const paren = testo.match(/\(([a-z0-9][a-z0-9-]{1,60})\)/i);
   if (paren) return paren[1].toLowerCase();
   const url = testo.match(/[?&]restaurant=([a-z0-9][a-z0-9-]{1,60})/i) || testo.match(/attiva=([a-z0-9][a-z0-9-]{1,60})/i);
@@ -66,34 +51,125 @@ function trovaSlug(testo: string): string | null {
   return null;
 }
 
+// Che cosa vuole il ristoratore: numero del menu o parole chiave.
+function intento(testo: string): 'attiva' | 'prezzo' | 'come' | 'persona' | 'menu' {
+  const t = testo.toLowerCase().trim();
+  if (/^1\b/.test(t) || /\battiv/i.test(t) || /\bprova\b/.test(t)) return 'attiva';
+  if (/^2\b/.test(t) || /prezz|cost|quant|paga|abbon|tarif|mensil/i.test(t)) return 'prezzo';
+  if (/^3\b/.test(t) || /come funzion|come va|cos.?è|cosa fa|a cosa serve|spieg|info/i.test(t)) return 'come';
+  if (/^4\b/.test(t) || /person|operator|umano|chiama|parlare|telefon/i.test(t)) return 'persona';
+  return 'menu';
+}
+
+async function datiRistorante(slug: string) {
+  const r = await db.query(
+    'SELECT id, name, is_demo, demo_claim_token FROM restaurants WHERE slug = $1',
+    [slug]
+  );
+  return r.rows[0] || null;
+}
+
+async function linkAttivazione(row: { id: string; demo_claim_token: string | null }, slug: string): Promise<string> {
+  let token = row.demo_claim_token;
+  if (!token) {
+    token = randomBytes(18).toString('base64url');
+    await db.query('UPDATE restaurants SET demo_claim_token = $1 WHERE id = $2', [token, row.id]);
+  }
+  return `${DASHBOARD_URL}/attiva?attiva=${encodeURIComponent(slug)}&token=${token}`;
+}
+
+function menu(nome: string): string {
+  return (
+    `Ciao! 👋 Sono l'assistente${nome ? ` di ${nome}` : ''}.\n` +
+    `Rispondi con un numero:\n\n` +
+    `1️⃣  Attiva la demo — ${GIORNI_PROVA} giorni gratis\n` +
+    `2️⃣  Quanto costa\n` +
+    `3️⃣  Come funziona\n` +
+    `4️⃣  Parla con una persona`
+  );
+}
+
+const TESTO_PREZZO =
+  `${PREZZO_MESE}, tutto incluso.\n` +
+  `• ${GIORNI_PROVA} giorni di prova gratis, senza carta\n` +
+  `• Nessun vincolo: disdici quando vuoi\n\n` +
+  `Scrivi 1 per attivare, oppure 3 per sapere come funziona.`;
+
+const TESTO_COME =
+  `Come funziona 👇\n` +
+  `• I clienti inquadrano un QR al tavolo e vedono il menu nella loro lingua (10 lingue)\n` +
+  `• Un assistente AI consiglia piatti, spiega ingredienti, suggerisce vini\n` +
+  `• Tu gestisci tutto da un pannello: piatti, prezzi, foto — le traduzioni si aggiornano da sole\n` +
+  `• Il menu che hai visto è già il tuo, con i tuoi piatti e i tuoi colori\n\n` +
+  `Scrivi 1 per attivarlo (${GIORNI_PROVA} giorni gratis).`;
+
+const TESTO_PERSONA =
+  `Perfetto 👍 Una persona ti risponde a breve qui su WhatsApp.\n` +
+  `Nel frattempo, se vuoi già provare: scrivi 1 e ti mando il link.`;
+
 router.post('/inbound', async (req: Request, res: Response) => {
   try {
     if (!firmaValida(req)) { res.status(403).type('text/xml').send(twiml('Richiesta non valida.')); return; }
 
+    const phone = String(req.body?.From ?? '').replace(/^whatsapp:/i, '').trim();
+    const nomeProfilo = String(req.body?.ProfileName ?? '').trim();
     const testo = String(req.body?.Body ?? '').trim();
-    const slug = trovaSlug(testo);
-    const prezzo = /prezz|cost|quanto|paga|abbon/i.test(testo);
 
+    // 1. slug dal messaggio, se c'è, e memoria per numero
+    const slugMsg = trovaSlug(testo);
+    let lead: { slug: string | null; name: string | null } | null = null;
+    if (phone) {
+      const r = await db.query('SELECT slug, name FROM whatsapp_leads WHERE phone = $1', [phone]);
+      lead = r.rows[0] || null;
+      await db.query(
+        `INSERT INTO whatsapp_leads (phone, slug, name, last_msg_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (phone) DO UPDATE SET
+           slug = COALESCE($2, whatsapp_leads.slug),
+           name = COALESCE(NULLIF($3, ''), whatsapp_leads.name),
+           last_msg_at = NOW()`,
+        [phone, slugMsg, nomeProfilo]
+      );
+    }
+    const slug = slugMsg || lead?.slug || null;
+    const rest = slug ? await datiRistorante(slug) : null;
+    const nome = rest?.name || lead?.name || '';
+
+    // 2. cosa vuole. Il messaggio del tasto ("[demo:...]") è il primo contatto:
+    // lì mostriamo sempre il menu, senza indovinare dall'eventuale "info".
+    const primoContatto = RE_MARKER.test(testo);
+    const vuole = primoContatto ? 'menu' : intento(testo);
     let risposta: string;
+    let stato = 'menu';
 
-    if (slug) {
-      const info = await linkAttivazione(slug);
-      if (!info) {
-        risposta = `Ciao! Non ho trovato quel menu. Rimandami il link della demo che hai visto e ti attivo l'accesso.`;
-      } else if (info.giaAttiva) {
-        risposta = `Il menu di ${info.nome} è già attivo ✅\nAccedi qui: ${info.link}\nSe hai perso la password scrivimi.`;
+    if (!rest && vuole !== 'menu') {
+      risposta = `Per aiutarti mi serve sapere quale demo hai visto.\nRimandami il link della demo (o tocca di nuovo il tasto "Attiva questo menu" nella pagina).`;
+    } else if (vuole === 'attiva') {
+      if (!rest) {
+        risposta = `Mandami prima il link della demo che hai visto e ti attivo l'accesso.`;
+      } else if (!rest.is_demo) {
+        risposta = `${nome} è già attivo ✅\nAccedi qui: ${DASHBOARD_URL}/\nSe hai perso la password scrivimi.`;
+        stato = 'attivato';
       } else {
+        const link = await linkAttivazione(rest, slug!);
         risposta =
-          `Ciao! 👋 Sono l'assistente di ${info.nome}.\n\n` +
-          `Il menu che hai visto è già pronto: tradotto in 10 lingue, con l'assistente AI che consiglia piatti ai tuoi clienti.\n\n` +
-          `💶 ${PREZZO_MESE} · 14 giorni di prova gratis, senza carta.\n\n` +
-          `Attivalo qui (scegli tu email e password):\n${info.link}\n\n` +
-          `Scrivimi pure se hai domande.`;
+          `Ecco il link per attivare ${nome} — ${GIORNI_PROVA} giorni gratis, senza carta:\n\n${link}\n\n` +
+          `Apri il link, scegli email e password, e sei dentro. Il menu è già caricato e tradotto.`;
+        stato = 'link_inviato';
       }
-    } else if (prezzo) {
-      risposta = `${PREZZO_MESE}, con 14 giorni di prova gratuiti e nessuna carta richiesta.\n\nMandami il link della demo che hai visto (o il nome del ristorante) e ti mando l'accesso.`;
+    } else if (vuole === 'prezzo') {
+      risposta = TESTO_PREZZO;
+    } else if (vuole === 'come') {
+      risposta = TESTO_COME;
+    } else if (vuole === 'persona') {
+      risposta = TESTO_PERSONA;
+      stato = 'umano';
     } else {
-      risposta = `Ciao! 👋 Mandami il link della demo che hai ricevuto — oppure il nome del tuo ristorante — e ti mando subito l'accesso per attivarla.`;
+      risposta = menu(nome);
+    }
+
+    if (phone) {
+      await db.query('UPDATE whatsapp_leads SET stato = $1 WHERE phone = $2', [stato, phone]);
     }
 
     res.type('text/xml').send(twiml(risposta));

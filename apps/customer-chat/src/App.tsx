@@ -481,7 +481,9 @@ export default function App() {
         if (r.instagram_url) setInstagramUrl(r.instagram_url);
         if (r.sales_whatsapp) {
           const num = String(r.sales_whatsapp).replace(/[^\d]/g, '');
-          const msg = `Ciao! Ho visto la demo di ${r.name ?? 'questo ristorante'} (${params.restaurant}) e vorrei attivarla per il mio locale.`;
+          // Il marker [demo:slug] fa riconoscere al bot di quale ristorante si
+          // tratta: il ristoratore preme solo invio.
+          const msg = `Ciao! Vorrei info sulla demo del mio ristorante. [demo:${params.restaurant}]`;
           setDemoWa(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`);
         }
         if (r.name) setNomeLocale(r.name);
