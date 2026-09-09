@@ -124,6 +124,77 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
   );
 }
 
+// ─── Attiva la tua demo ─────────────────────────────────────
+function ClaimScreen({ slug, token, onDone }: { slug: string; token: string; onDone: (d: AuthData) => void }) {
+  const [info, setInfo] = useState<{ name: string; logo_url?: string } | null>(null);
+  const [fatal, setFatal] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API}/api/auth/claim?slug=${encodeURIComponent(slug)}&token=${encodeURIComponent(token)}`)
+      .then(r => r.json().then(d => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => { if (ok) setInfo(d); else setFatal(d.error || 'Link non valido'); })
+      .catch(() => setFatal('Errore di connessione'));
+  }, []);
+
+  async function attiva(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    if (password.length < 8) { setError('La password deve avere almeno 8 caratteri'); return; }
+    if (password !== password2) { setError('Le due password non coincidono'); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/auth/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, token, email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Attivazione non riuscita'); return; }
+      saveAuth(data);
+      try { window.history.replaceState(null, '', window.location.pathname); } catch { /* ignora */ }
+      onDone(data);
+    } catch {
+      setError('Errore di connessione');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={S.loginWrap}>
+      <div style={S.loginCard}>
+        {fatal ? (
+          <>
+            <div style={S.loginLogo}>⚠️</div>
+            <h1 style={S.loginTitle}>{fatal}</h1>
+            <p style={S.loginSub}>Se pensi sia un errore, scrivici e ti mandiamo un nuovo link.</p>
+          </>
+        ) : (
+          <>
+            {info?.logo_url
+              ? <img src={info.logo_url.startsWith('http') ? info.logo_url : `${API}${info.logo_url}`} alt="" style={{ height: 54, objectFit: 'contain', display: 'block', margin: '0 auto 10px' }} />
+              : <div style={S.loginLogo}>🍽️</div>}
+            <h1 style={S.loginTitle}>Attiva {info?.name ?? 'la tua demo'}</h1>
+            <p style={S.loginSub}>Il menu è già caricato e tradotto. Scegli le tue credenziali: 14 giorni di prova, nessuna carta.</p>
+            <form onSubmit={attiva} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <label style={S.formLabel}>Email<input style={S.formInput} type="email" value={email} onChange={e => setEmail(e.target.value)} required autoFocus /></label>
+              <label style={S.formLabel}>Password (min 8)<input style={S.formInput} type="password" value={password} onChange={e => setPassword(e.target.value)} required /></label>
+              <label style={S.formLabel}>Ripeti la password<input style={S.formInput} type="password" value={password2} onChange={e => setPassword2(e.target.value)} required /></label>
+              {error && <div style={S.errorBox}>{error}</div>}
+              <button style={S.btnPrimary} type="submit" disabled={loading || !info}>{loading ? 'Attivazione...' : 'Attiva e entra →'}</button>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Super Admin Panel ──────────────────────────────────────
 // Indirizzo pubblico del menu cliente: e' il link che si manda al ristoratore.
 const MENU_PUBBLICO = (import.meta as any).env?.VITE_MENU_URL ?? 'https://restaurant-chat-gustobolsa.vercel.app';
@@ -722,7 +793,15 @@ export default function App() {
     } catch { alert('Nessun abbonamento attivo'); }
   }
 
-  if (!auth) return <LoginScreen onLogin={d => { saveAuth(d); setAuth(d); }} />;
+  if (!auth) {
+    const qp = new URLSearchParams(window.location.search);
+    const claimSlug = qp.get('attiva');
+    const claimToken = qp.get('token');
+    if (claimSlug && claimToken) {
+      return <ClaimScreen slug={claimSlug} token={claimToken} onDone={d => { saveAuth(d); setAuth(d); }} />;
+    }
+    return <LoginScreen onLogin={d => { saveAuth(d); setAuth(d); }} />;
+  }
 
   if (auth.role === 'superadmin') {
     return <SuperAdminPanel token={auth.token} onLogout={() => { clearAuth(); setAuth(null); }} />;
