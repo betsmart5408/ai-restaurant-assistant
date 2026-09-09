@@ -278,7 +278,7 @@ function coloreDaImmagine(buf, mime) {
     sommaLuce += (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     opachi++;
   }
-  const logoChiaro = opachi > 0 && sommaLuce / opachi > 0.62;
+  const logoChiaro = opachi > 0 && sommaLuce / opachi > 0.58;
 
   const secchi = new Map();
   for (const [r, g, b, a] of px) {
@@ -304,9 +304,10 @@ function coloreDaImmagine(buf, mime) {
   if (s < 0.15) return null;                    // in pratica è grigio
   s = Math.min(Math.max(s, 0.45), 0.9);
   if (logoChiaro) {
-    // logo chiaro/bianco -> menu su fondo scuro tinto, accento più luminoso
-    l = Math.min(Math.max(l, 0.5), 0.72);
-    return { primario: hslToHex(h, s, l), sfondo: hslToHex(h, 0.30, 0.13) };
+    // logo chiaro/bianco -> menu su fondo SCURO ma tinto del colore del logo
+    // (non nero), accento più luminoso per staccare sul fondo scuro
+    l = Math.min(Math.max(l, 0.52), 0.72);
+    return { primario: hslToHex(h, s, l), sfondo: hslToHex(h, 0.38, 0.17) };
   }
   // logo scuro -> menu su fondo quasi bianco tinto dello stesso tono
   l = Math.min(Math.max(l, 0.32), 0.55);
