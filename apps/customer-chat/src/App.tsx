@@ -1125,7 +1125,7 @@ const S: Record<string, React.CSSProperties> = {
     color: 'var(--text)', padding: '0 20px', lineHeight: 1.2, maxWidth: 340 },
   nomeHeader: { fontSize: 15, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap' as const,
     overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 },
-  homeLogo: { width: '75%', maxWidth: 320, objectFit: 'contain' as const, opacity: 0.92, filter: 'var(--logo-glow)' },
+  homeLogo: { width: '62%', maxWidth: 240, objectFit: 'contain' as const, opacity: 0.94, filter: 'var(--logo-glow)' },
   homeButtons: { display: 'flex', flexDirection: 'column' as const, gap: 14, width: '100%', padding: '0 28px', marginBottom: 8 },
   homeBtn: { width: '100%', padding: '18px 20px', borderRadius: 16, fontSize: 17, fontWeight: 700, background: 'var(--surface)', color: 'var(--text)', border: '1.5px solid var(--border)', cursor: 'pointer', backdropFilter: 'blur(8px)', textAlign: 'center' as const, letterSpacing: 0.3 },
   homeBtnAI: { background: 'var(--brand-soft)', border: '1.5px solid var(--brand)', color: '#fff' },
@@ -1145,7 +1145,7 @@ const S: Record<string, React.CSSProperties> = {
 
   header: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--bg)', borderBottom: '1px solid var(--border)', flexShrink: 0 },
   backBtn: { background: 'none', color: 'var(--text-soft)', fontSize: 20, padding: 4, border: 'none', cursor: 'pointer', flexShrink: 0 },
-  headerLogo: { height: 36, objectFit: 'contain' as const, flex: 1 },
+  headerLogo: { height: 48, maxWidth: '60%', objectFit: 'contain' as const, flex: 1 },
   headerSub2: { fontSize: 12, color: 'var(--text-soft)', flexShrink: 0 },
   headerSub: { fontSize: 12, color: 'var(--text-soft)' },
   orderBadge: { background: '#22c55e22', color: '#22c55e', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, flexShrink: 0 },

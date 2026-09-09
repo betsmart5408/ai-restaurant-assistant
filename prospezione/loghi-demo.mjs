@@ -61,6 +61,8 @@ function candidatiLogo(html, baseUrl) {
     if (!url) return;
     let u; try { u = new URL(url.trim(), baseUrl).href; } catch { return; }
     if (!/^https?:/i.test(u)) return;
+    // Un SVG e' vettoriale: nitido a qualsiasi dimensione. Sempre preferito.
+    if (/\.svg(\?|$)/i.test(u)) punti += 60;
     out.push({ u, punti });
   };
 
@@ -87,7 +89,9 @@ function candidatiLogo(html, baseUrl) {
     } catch { /* ld+json rotto: pazienza */ }
   }
 
-  // 3. <img> con "logo" (o "brand") in alt/class/id/src, non icone/pagamenti
+  // 3. <img> con "logo" (o "brand") in alt/class/id/src, non icone/pagamenti.
+  // Di solito e' il logo alla risoluzione piena: meglio di una apple-touch-icon
+  // da 180px, che ingrandita sgrana.
   for (const m of html.matchAll(/<img\b[^>]*>/gi)) {
     const tag = m[0];
     const attr = (n) => (new RegExp(`\\b${n}=["']([^"']*)["']`, 'i').exec(tag) || [])[1] || '';
@@ -95,9 +99,9 @@ function candidatiLogo(html, baseUrl) {
     const spia = (attr('alt') + ' ' + attr('class') + ' ' + attr('id') + ' ' + src).toLowerCase();
     if (!/logo|brand/.test(spia)) continue;
     if (/icon|payment|visa|master|amex|paypal|badge|sprite|award|star|flag/.test(spia)) continue;
-    // bonus se il tag è nell'header (euristica: compare nei primi 4000 caratteri)
     const dentroHeader = m.index < 4000 || /header|navbar|site-?logo|main-?logo/.test(spia);
-    push(src, 75 + (dentroHeader ? 10 : 0));
+    const largo = Number(attr('width')) >= 200 || Number(attr('height')) >= 120;
+    push(src, 104 + (dentroHeader ? 8 : 0) + (largo ? 8 : 0));
   }
 
   // 4. og:image / twitter:image
@@ -376,11 +380,15 @@ async function main() {
       }
     }
 
-    const urls = candidatiLogo(html, sito).slice(0, 8);
+    // Scarica i primi candidati e tiene il migliore: un SVG vince sempre,
+    // altrimenti il file piu' pesante (piu' grande = meno sgranato ingrandito).
+    const urls = candidatiLogo(html, sito).slice(0, 5);
     let logo = null;
     for (const u of urls) {
-      logo = await scaricaLogo(u);
-      if (logo) break;
+      const scaricato = await scaricaLogo(u);
+      if (!scaricato) continue;
+      if (scaricato.mime === 'image/svg+xml') { logo = scaricato; break; }
+      if (!logo || scaricato.data.length > logo.data.length) logo = scaricato;
     }
     if (!logo) { console.log(`— nessun logo trovato${notaIg}`); saltati++; await attesa(300); continue; }
 
