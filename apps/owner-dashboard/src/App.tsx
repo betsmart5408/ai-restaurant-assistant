@@ -793,13 +793,20 @@ export default function App() {
     } catch { alert('Nessun abbonamento attivo'); }
   }
 
-  if (!auth) {
+  // Il link di attivazione della demo (?attiva=slug&token=...) ha la precedenza
+  // su qualunque sessione gia' salvata in questo browser: chi apre quel link
+  // deve sempre finire sulla schermata "scegli email e password", non su una
+  // dashboard altrui rimasta loggata (es. un accesso di prova).
+  {
     const qp = new URLSearchParams(window.location.search);
     const claimSlug = qp.get('attiva');
     const claimToken = qp.get('token');
     if (claimSlug && claimToken) {
       return <ClaimScreen slug={claimSlug} token={claimToken} onDone={d => { saveAuth(d); setAuth(d); }} />;
     }
+  }
+
+  if (!auth) {
     return <LoginScreen onLogin={d => { saveAuth(d); setAuth(d); }} />;
   }
 
