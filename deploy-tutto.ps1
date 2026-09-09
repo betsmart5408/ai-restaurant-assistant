@@ -1,12 +1,18 @@
 # ============================================================
-#  AI Restaurant Assistant  ->  pubblicazione su Vercel
-#  API (serverless) + 3 interfacce
+#  AI Restaurant Assistant  ->  pubblicazione delle 3 interfacce su Vercel
+#  L'API ora sta su RAILWAY (deploy automatico a ogni git push): qui non
+#  serve piu' toccarla. Con -ConMalgradoApiVercel si ripubblica anche
+#  la vecchia API serverless su Vercel (di norma NON serve).
 #  Uso:
 #  powershell -ExecutionPolicy Bypass -File "C:\Users\pippo\Desktop\AI Restaurant Assistant\deploy-tutto.ps1"
 # ============================================================
+param([switch]$ConMalgradoApiVercel)
 $ErrorActionPreference = "Continue"
 $root = "C:\Users\pippo\Desktop\AI Restaurant Assistant"
 Set-Location $root
+
+# L'indirizzo dell'API su Railway: le interfacce puntano qui.
+$apiUrl = "https://ai-restaurant-assistant-production-449f.up.railway.app"
 
 function Write-Utf8($path, $text) {
     # UTF-8 SENZA BOM: il BOM manda in errore il parser JSON di Vercel
@@ -65,6 +71,8 @@ Write-Host "== 2/6  Login Vercel (si apre il browser) ==" -ForegroundColor Cyan
 vercel whoami 2>$null
 if ($LASTEXITCODE -ne 0) { vercel login }
 
+if ($ConMalgradoApiVercel) {
+
 Write-Host ""
 Write-Host "== 3/6  Compilo l'API ==" -ForegroundColor Cyan
 npm install
@@ -75,7 +83,7 @@ if (-not (Test-Path "$root\packages\api\dist\index.js")) {
 }
 
 Write-Host ""
-Write-Host "== 4/6  Preparo e pubblico l'API ==" -ForegroundColor Cyan
+Write-Host "== 4/6  Preparo e pubblico l'API (Vercel, di solito NON serve) ==" -ForegroundColor Cyan
 $apiDir = "$root\.deploy-api"
 if (Test-Path $apiDir) { Remove-Item $apiDir -Recurse -Force }
 New-Item -ItemType Directory -Path "$apiDir\api" -Force | Out-Null
@@ -104,15 +112,12 @@ Write-Utf8 "$apiDir\vercel.json" $vercelJson
 
 $envMap = Get-EnvMap
 $envMap["NODE_ENV"] = "production"
-$deployed = Deploy-Folder $apiDir "restaurant-api" $envMap
-# Indirizzo stabile del progetto: quello con il codice casuale cambia a ogni deploy.
-# NB: Vercel ha assegnato a questo progetto l'alias "-psi", non "-gustobolsa".
-$apiUrl = "https://restaurant-api-psi.vercel.app"
-if (-not $deployed) {
-    Write-Host "Non sono riuscito a leggere l'indirizzo dell'API. Copiami l'output qui sopra." -ForegroundColor Red
-    Read-Host "INVIO per chiudere"; exit 1
-}
-Write-Host "API online: $apiUrl" -ForegroundColor Green
+Deploy-Folder $apiDir "restaurant-api" $envMap | Out-Null
+
+}  # fine blocco -ConMalgradoApiVercel
+
+Write-Host ""
+Write-Host "API (su Railway): $apiUrl" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "== 5/6  Pubblico le 3 interfacce ==" -ForegroundColor Cyan
@@ -156,9 +161,8 @@ foreach ($a in $apps) {
     Write-Host "   $($a.dir): $u" -ForegroundColor Green
 }
 
-Write-Host ""
-Write-Host "== 6/6  Collego l'APP_URL alla dashboard ==" -ForegroundColor Cyan
-if ($results["owner-dashboard"]) {
+# APP_URL / DASHBOARD_URL dell'API stanno gia' impostati su Railway.
+if ($ConMalgradoApiVercel -and $results["owner-dashboard"]) {
     Push-Location $apiDir
     $results["owner-dashboard"] | vercel env add APP_URL production --force 2>$null | Out-Null
     Pop-Location
