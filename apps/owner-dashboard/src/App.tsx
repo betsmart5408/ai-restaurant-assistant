@@ -241,7 +241,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
         {/* ── RISTORANTI ── */}
         {tab === 'restaurants' && (
           <div style={S.content}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
               <h1 style={S.pageTitle}>🍽️ Tutti i ristoranti</h1>
               <input style={{ ...S.formInput, width: 240, margin: 0 }} placeholder="🔍 Cerca..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
@@ -335,6 +335,15 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
 export default function App() {
   const [auth, setAuth] = useState<AuthData | null>(() => loadAuth());
   const [tab, setTab] = useState<Tab>('menu');
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 860);
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 859px)');
+    const upd = () => setIsMobile(mq.matches);
+    upd();
+    mq.addEventListener('change', upd);
+    return () => mq.removeEventListener('change', upd);
+  }, []);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [menu, setMenu] = useState<Dish[]>([]);
   const [menuForm, setMenuForm] = useState<Partial<Dish> | null>(null);
@@ -736,10 +745,25 @@ export default function App() {
     ['settings', '⚙️ Impostazioni'],
   ];
 
+  const sidebarStyle: React.CSSProperties = isMobile
+    ? { ...S.sidebar, position: 'fixed', top: 0, bottom: 0, left: 0, zIndex: 60, width: 250,
+        transform: navOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform .25s ease', boxShadow: navOpen ? '0 0 40px #0007' : 'none' }
+    : S.sidebar;
+
   return (
     <div style={S.root}>
+      {isMobile && (
+        <div style={S.mobileBar}>
+          <button style={S.hamburger} onClick={() => setNavOpen(true)} aria-label="Menu">☰</button>
+          <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {restaurant?.name ?? 'Dashboard'}
+          </span>
+        </div>
+      )}
+      {isMobile && navOpen && <div style={S.navBackdrop} onClick={() => setNavOpen(false)} />}
+
       {/* Sidebar */}
-      <aside style={S.sidebar}>
+      <aside style={sidebarStyle}>
         <div style={S.sidebarHeader}>
           {restaurant?.logo_url
             ? <img src={restaurant.logo_url} alt="logo" style={{ height: 40, objectFit: 'contain', borderRadius: 8 }} />
@@ -751,7 +775,7 @@ export default function App() {
         </div>
         <nav style={S.nav}>
           {navItems.map(([key, label]) => (
-            <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navBtnActive : {}) }} onClick={() => setTab(key)}>
+            <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navBtnActive : {}) }} onClick={() => { setTab(key); setNavOpen(false); }}>
               {label}
             </button>
           ))}
@@ -762,13 +786,13 @@ export default function App() {
       </aside>
 
       {/* Main */}
-      <main style={S.main}>
+      <main style={{ ...S.main, ...(isMobile ? { paddingTop: 52 } : {}) }}>
         {loading && <div style={S.loader}>Caricamento...</div>}
 
         {/* ── MENU ── */}
         {tab === 'menu' && (
           <div style={S.content}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
               <h1 style={S.pageTitle}>📋 Gestione Menu</h1>
               <button style={S.btnPrimary} onClick={() => setMenuForm({ name: '', description: '', price: 0, category: categorieDelMenu(menu)[0] ?? '', available: true })}>
                 + Aggiungi piatto
@@ -807,11 +831,11 @@ export default function App() {
                 <div key={cat}>
                   <h2 style={S.sectionTitle}>{cat} <span style={{ fontWeight: 400, fontSize: 13, color: '#94a3b8' }}>({dishes.length})</span></h2>
                   <div style={S.table}>
-                    <div style={{ ...S.tableHeader, gridTemplateColumns: '2fr 2fr 1fr 1fr 80px 60px' }}>
+                    <div style={{ ...S.tableHeader, gridTemplateColumns: '1.6fr 2fr 90px 90px 84px 52px', minWidth: 760 }}>
                       <span>Nome</span><span>Descrizione</span><span>Prezzo</span><span>Stato</span><span></span><span></span>
                     </div>
                     {dishes.map(d => (
-                      <div key={d.id} style={{ ...S.tableRow, gridTemplateColumns: '2fr 2fr 1fr 1fr 80px 60px' }}>
+                      <div key={d.id} style={{ ...S.tableRow, gridTemplateColumns: '1.6fr 2fr 90px 90px 84px 52px', minWidth: 760 }}>
                         <span style={{ fontWeight: 600 }}>{d.name}</span>
                         <span style={{ color: '#64748b', fontSize: 13 }}>{d.description}</span>
                         <span>{simboloValuta(restaurant?.currency)}{parseFloat(String(d.price)).toFixed(2)}</span>
@@ -1341,6 +1365,9 @@ const S: Record<string, React.CSSProperties> = {
 
   // Layout
   root: { display: 'flex', minHeight: '100vh', background: '#f8fafc' },
+  mobileBar: { position: 'fixed', top: 0, left: 0, right: 0, height: 52, zIndex: 50, background: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px' },
+  hamburger: { background: 'none', border: 'none', fontSize: 22, lineHeight: 1, cursor: 'pointer', color: '#1e293b', padding: 4 },
+  navBackdrop: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 55 },
   sidebar: { width: 240, background: '#1e293b', color: '#f8fafc', display: 'flex', flexDirection: 'column', padding: '20px 16px', gap: 4, flexShrink: 0 },
   sidebarHeader: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24, padding: '0 4px' },
   sidebarLogo: { fontSize: 28 },
@@ -1350,7 +1377,7 @@ const S: Record<string, React.CSSProperties> = {
   logoutBtn: { background: 'none', color: '#64748b', border: 'none', padding: '10px 12px', fontSize: 13, cursor: 'pointer', textAlign: 'left', marginTop: 8, borderTop: '1px solid #334155', paddingTop: 16 },
   main: { flex: 1, overflowY: 'auto' },
   loader: { padding: 40, color: '#64748b' },
-  content: { padding: 32, display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1100 },
+  content: { padding: 'clamp(14px, 4vw, 32px)', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1100 },
   pageTitle: { fontSize: 26, fontWeight: 700, color: '#1e293b' },
 
   // KPI
@@ -1363,9 +1390,9 @@ const S: Record<string, React.CSSProperties> = {
   chartCard: { background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 1px 3px #0001' },
 
   // Table
-  table: { background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px #0001' },
-  tableHeader: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '10px 16px', background: '#f1f5f9', fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' },
-  tableRow: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '12px 16px', borderTop: '1px solid #e2e8f0', fontSize: 14, color: '#1e293b', alignItems: 'center' },
+  table: { background: '#fff', borderRadius: 12, overflowX: 'auto', boxShadow: '0 1px 3px #0001', WebkitOverflowScrolling: 'touch' },
+  tableHeader: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', minWidth: 620, padding: '10px 16px', background: '#f1f5f9', fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' },
+  tableRow: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', minWidth: 620, padding: '12px 16px', borderTop: '1px solid #e2e8f0', fontSize: 14, color: '#1e293b', alignItems: 'center', gap: 8 },
 
   // Buttons
   btnPrimary: { background: '#6366f1', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
