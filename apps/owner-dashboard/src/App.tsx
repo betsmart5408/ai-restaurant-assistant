@@ -70,6 +70,9 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'owner' | 'admin'>('owner');
+  // L'accesso Super Admin non si mostra ai ristoratori: compare solo se
+  // l'indirizzo contiene ?admin (es. app.lingofork.com/?admin).
+  const adminSbloccato = /[?&]admin\b/.test(window.location.search) || window.location.hash.includes('admin');
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -104,21 +107,23 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
           {error && <div style={S.errorBox}>{error}</div>}
           <button style={S.btnPrimary} type="submit" disabled={loading}>{loading ? 'Accesso...' : 'Accedi →'}</button>
         </form>
-        <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid rgba(148,163,184,0.25)' }}>
-          <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 10 }}>
-            {mode === 'owner' ? 'Sei l\'amministratore della piattaforma?' : 'Sei il titolare di un ristorante?'}
+        {(adminSbloccato || mode === 'admin') && (
+          <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid rgba(148,163,184,0.25)' }}>
+            <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 10 }}>
+              {mode === 'owner' ? 'Sei l\'amministratore della piattaforma?' : 'Sei il titolare di un ristorante?'}
+            </div>
+            <button
+              type="button"
+              style={{
+                width: '100%', padding: '11px 14px', borderRadius: 10, cursor: 'pointer',
+                background: 'rgba(148,163,184,0.12)', border: '1px solid rgba(148,163,184,0.35)',
+                color: '#e2e8f0', fontSize: 13, fontWeight: 600,
+              }}
+              onClick={() => { setMode(m => m === 'owner' ? 'admin' : 'owner'); setError(''); }}>
+              {mode === 'owner' ? '\u{1F6E1}\uFE0F  Entra come Super Admin' : '\u{1F37D}\uFE0F  Entra come Ristorante'}
+            </button>
           </div>
-          <button
-            type="button"
-            style={{
-              width: '100%', padding: '11px 14px', borderRadius: 10, cursor: 'pointer',
-              background: 'rgba(148,163,184,0.12)', border: '1px solid rgba(148,163,184,0.35)',
-              color: '#e2e8f0', fontSize: 13, fontWeight: 600,
-            }}
-            onClick={() => { setMode(m => m === 'owner' ? 'admin' : 'owner'); setError(''); }}>
-            {mode === 'owner' ? '\u{1F6E1}\uFE0F  Entra come Super Admin' : '\u{1F37D}\uFE0F  Entra come Ristorante'}
-          </button>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -197,7 +202,7 @@ function ClaimScreen({ slug, token, onDone }: { slug: string; token: string; onD
 
 // ─── Super Admin Panel ──────────────────────────────────────
 // Indirizzo pubblico del menu cliente: e' il link che si manda al ristoratore.
-const MENU_PUBBLICO = (import.meta as any).env?.VITE_MENU_URL ?? 'https://restaurant-chat-gustobolsa.vercel.app';
+const MENU_PUBBLICO = (import.meta as any).env?.VITE_MENU_URL ?? 'https://menu.lingofork.com';
 const linkDemo = (slug: string) => `${MENU_PUBBLICO}/?restaurant=${slug}`;
 
 function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => void }) {
@@ -218,6 +223,15 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
   const [restaurants, setRestaurants] = useState<AdminRestaurant[]>([]);
   const [tab, setTab] = useState<'dashboard' | 'restaurants' | 'new'>('dashboard');
   const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 860);
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 859px)');
+    const fn = () => setIsMobile(mq.matches);
+    fn();
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
   const [newForm, setNewForm] = useState({ restaurant_name: '', owner_email: '', owner_password: '', monthly_price: '30' });
   const [newMsg, setNewMsg] = useState('');
   const [search, setSearch] = useState('');
@@ -272,9 +286,22 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
   const statusColor = (s: string) => s === 'active' ? '#22c55e' : s === 'trialing' ? '#f59e0b' : s === 'past_due' ? '#f97316' : '#ef4444';
   const statusLabel = (s: string) => s === 'active' ? '✅ Attivo' : s === 'trialing' ? '🟡 Trial' : s === 'past_due' ? '🟠 In ritardo' : s === 'suspended' ? '🔴 Sospeso' : s === 'cancelled' ? '❌ Cancellato' : s;
 
+  const sidebarStyle: React.CSSProperties = isMobile
+    ? { ...S.sidebar, background: '#0f172a', position: 'fixed', top: 0, bottom: 0, left: 0, zIndex: 60, width: 250,
+        transform: navOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform .25s ease', boxShadow: navOpen ? '0 0 40px #0007' : 'none' }
+    : { ...S.sidebar, background: '#0f172a' };
+
   return (
     <div style={S.root}>
-      <aside style={{ ...S.sidebar, background: '#0f172a' }}>
+      {isMobile && (
+        <div style={S.mobileBar}>
+          <button style={S.hamburger} onClick={() => setNavOpen(true)} aria-label="Menu">☰</button>
+          <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>Super Admin</span>
+        </div>
+      )}
+      {isMobile && navOpen && <div style={S.navBackdrop} onClick={() => setNavOpen(false)} />}
+
+      <aside style={sidebarStyle}>
         <div style={{ ...S.sidebarHeader, marginBottom: 28 }}>
           <div style={{ fontSize: 28 }}>🛡️</div>
           <div>
@@ -284,13 +311,13 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
         </div>
         <nav style={S.nav}>
           {([['dashboard', '📊 Dashboard'], ['restaurants', '🍽️ Ristoranti'], ['new', '➕ Nuovo ristorante']] as const).map(([key, label]) => (
-            <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navBtnActive : {}) }} onClick={() => setTab(key)}>{label}</button>
+            <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navBtnActive : {}) }} onClick={() => { setTab(key); setNavOpen(false); }}>{label}</button>
           ))}
         </nav>
         <button style={S.logoutBtn} onClick={onLogout}>← Esci</button>
       </aside>
 
-      <main style={S.main}>
+      <main style={{ ...S.main, ...(isMobile ? { paddingTop: 52 } : {}) }}>
         {loading && <div style={S.loader}>Caricamento...</div>}
 
         {/* ── DASHBOARD ── */}
@@ -302,7 +329,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
               <KPI label="Abbonamenti attivi" value={String(stats.active_subscriptions)} color="#22c55e" />
               <KPI label="In trial" value={String(stats.trialing)} color="#f59e0b" />
               <KPI label="Sospesi" value={String(stats.suspended)} color="#ef4444" />
-              <KPI label="MRR" value={`€${parseFloat(stats.mrr || '0').toFixed(0)}`} color="#6366f1" sub="Ricavo mensile ricorrente" />
+              <KPI label="MRR" value={`A$${parseFloat(stats.mrr || '0').toFixed(0)}`} color="#6366f1" sub="Ricavo mensile ricorrente" />
               <KPI label="Sessioni (30gg)" value={String(stats.sessions_30d)} color="#0ea5e9" />
               <KPI label="Nuovi (30gg)" value={String(stats.new_30d)} color="#8b5cf6" />
             </div>
@@ -314,15 +341,15 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
           <div style={S.content}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
               <h1 style={S.pageTitle}>🍽️ Tutti i ristoranti</h1>
-              <input style={{ ...S.formInput, width: 240, margin: 0 }} placeholder="🔍 Cerca..." value={search} onChange={e => setSearch(e.target.value)} />
+              <input style={{ ...S.formInput, width: '100%', maxWidth: 240, margin: 0 }} placeholder="🔍 Cerca..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {filtered.map(r => (
                 <div key={r.id} style={{ ...S.formCard, padding: '18px 20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 17, color: '#1e293b' }}>{r.name}</div>
-                      <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                    <div style={{ minWidth: 0, flex: '1 1 240px' }}>
+                      <div style={{ fontWeight: 700, fontSize: 17, color: '#1e293b', wordBreak: 'break-word' }}>{r.name}</div>
+                      <div style={{ fontSize: 13, color: '#64748b', marginTop: 2, wordBreak: 'break-word' }}>
                         👤 {r.owner_email} &nbsp;|&nbsp; 📋 {r.dish_count} piatti &nbsp;|&nbsp; 💬 {r.sessions_30d} sessioni/30gg
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
@@ -1206,7 +1233,7 @@ export default function App() {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: 13, color: '#64748b' }}>Piano</div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>{billing.plan === 'trial' ? 'Trial gratuito' : billing.plan === 'pro' ? '🚀 Pro' : billing.plan}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>{billing.plan === 'trial' ? 'Trial gratuito' : 'Abbonamento'}</div>
                   </div>
                 </div>
 
@@ -1239,7 +1266,7 @@ export default function App() {
                 <div style={{ display: 'flex', gap: 12, marginTop: 24, flexWrap: 'wrap' }}>
                   {(billing.subscription_status === 'trialing' || billing.subscription_status === 'cancelled') && (
                     <button style={S.btnPrimary} onClick={startCheckout}>
-                      💳 Attiva abbonamento Pro
+                      💳 Attiva abbonamento
                     </button>
                   )}
                   {billing.subscription_status === 'active' && (
