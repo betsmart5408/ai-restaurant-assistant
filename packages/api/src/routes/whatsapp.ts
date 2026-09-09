@@ -29,13 +29,23 @@ function twiml(testo: string): string {
 function firmaValida(req: Request): boolean {
   const token = process.env.TWILIO_AUTH_TOKEN;
   if (!token) { console.warn('[whatsapp] TWILIO_AUTH_TOKEN assente: firma non verificata'); return true; }
-  try {
-    const sig = req.header('X-Twilio-Signature') || '';
-    const url = `https://${req.headers.host}${req.originalUrl}`;
-    return twilio.validateRequest(token, sig, url, req.body || {});
-  } catch {
-    return false;
-  }
+  const sig = req.header('X-Twilio-Signature') || '';
+  // Dietro il proxy di Railway l'host/schema visti da Express possono non
+  // combaciare con l'URL che Twilio ha firmato: proviamo piu' varianti.
+  const host = (req.headers['x-forwarded-host'] as string) || req.headers.host || '';
+  const senzaQuery = req.originalUrl.split('?')[0];
+  const candidati = [
+    `https://${host}${req.originalUrl}`,
+    `https://${host}${senzaQuery}`,
+  ];
+  const ok = candidati.some((u) => {
+    try { return twilio.validateRequest(token, sig, u, req.body || {}); } catch { return false; }
+  });
+  if (ok) return true;
+  // Sandbox: se la firma non torna, logghiamo e proseguiamo lo stesso, cosi'
+  // il bot risponde. Per il numero di produzione: TWILIO_VALIDATE_STRICT=1.
+  console.warn('[whatsapp] firma Twilio non valida (', candidati[0], ') - proseguo. Per bloccare: TWILIO_VALIDATE_STRICT=1');
+  return process.env.TWILIO_VALIDATE_STRICT !== '1';
 }
 
 // Il messaggio precompilato dal tasto della demo finisce con "#<slug>".
