@@ -452,7 +452,8 @@ async function main() {
   if (adattaColori) console.log(`Colori adattati: ${coloriMessi}  (gli altri tengono la tavolozza per tipo di cucina)`);
   console.log(`Instagram trovati: ${instagramMessi}`);
   console.log(`Saltati:         ${saltati}  (sito assente/irraggiungibile o nessun logo)`);
-  console.log(`\nRilancia .\\deploy-tutto.ps1 per pubblicare l'API con loghi e colori.`);
+  console.log(`\nFatto. Loghi e colori stanno nel database: l'API su Railway li legge`);
+  console.log(`da sola, non serve nessun deploy. Sui menu si vedono entro ~1 minuto (cache).`);
   await pool.end();
 }
 
