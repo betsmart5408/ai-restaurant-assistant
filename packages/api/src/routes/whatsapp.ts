@@ -20,10 +20,15 @@ const router = Router();
 const DASHBOARD_URL = (process.env.DASHBOARD_URL || 'https://app.lingofork.com').replace(/\/+$/, '');
 const PREZZO_MESE = process.env.SALES_PRICE || 'A$30/mese';
 const GIORNI_PROVA = Number(process.env.SALES_TRIAL_DAYS) || 7;
+// Icona LingoFork mandata come immagine al primo messaggio (WhatsApp non
+// mostra anteprime di SVG, serve un PNG vero: generato da
+// prospezione/genera-icona-whatsapp.mjs e pubblicato con la landing).
+const ICONA_URL = process.env.SALES_ICON_URL || 'https://lingofork.com/wa-icon.png';
 
-function twiml(testo: string): string {
+function twiml(testo: string, mediaUrl?: string): string {
   const safe = testo.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${safe}</Message></Response>`;
+  const media = mediaUrl ? `<Media>${mediaUrl}</Media>` : '';
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${media}${safe}</Message></Response>`;
 }
 
 function firmaValida(req: Request): boolean {
@@ -89,34 +94,36 @@ async function linkAttivazione(row: { id: string; demo_claim_token: string | nul
   return `${DASHBOARD_URL}/attiva?attiva=${encodeURIComponent(slug)}&token=${token}`;
 }
 
+// *testo* = grassetto in WhatsApp. È l'unica personalizzazione visiva che la
+// piattaforma permette: i colori/il tema della chat restano quelli di WhatsApp.
 function menu(nome: string): string {
   return (
-    `Ciao! 👋 Sono l'assistente${nome ? ` di ${nome}` : ''}.\n` +
+    `Ciao! 👋 Sono l'assistente${nome ? ` di *${nome}*` : ''}.\n` +
     `Rispondi con un numero:\n\n` +
-    `1️⃣  Attiva la demo — ${GIORNI_PROVA} giorni gratis\n` +
-    `2️⃣  Quanto costa\n` +
-    `3️⃣  Come funziona\n` +
-    `4️⃣  Parla con una persona`
+    `1️⃣ *Attiva la demo* — ${GIORNI_PROVA} giorni gratis\n` +
+    `2️⃣ Quanto costa\n` +
+    `3️⃣ Come funziona\n` +
+    `4️⃣ Parla con una persona`
   );
 }
 
 const TESTO_PREZZO =
-  `${PREZZO_MESE}, tutto incluso.\n` +
+  `*${PREZZO_MESE}*, tutto incluso.\n` +
   `• ${GIORNI_PROVA} giorni di prova gratis, senza carta\n` +
   `• Nessun vincolo: disdici quando vuoi\n\n` +
-  `Scrivi 1 per attivare, oppure 3 per sapere come funziona.`;
+  `Scrivi *1* per attivare, oppure *3* per sapere come funziona.`;
 
 const TESTO_COME =
-  `Come funziona 👇\n` +
+  `*Come funziona* 👇\n` +
   `• I clienti inquadrano un QR al tavolo e vedono il menu nella loro lingua (10 lingue)\n` +
   `• Un assistente AI consiglia piatti, spiega ingredienti, suggerisce vini\n` +
   `• Tu gestisci tutto da un pannello: piatti, prezzi, foto — le traduzioni si aggiornano da sole\n` +
   `• Il menu che hai visto è già il tuo, con i tuoi piatti e i tuoi colori\n\n` +
-  `Scrivi 1 per attivarlo (${GIORNI_PROVA} giorni gratis).`;
+  `Scrivi *1* per attivarlo (${GIORNI_PROVA} giorni gratis).`;
 
 const TESTO_PERSONA =
   `Perfetto 👍 Una persona ti risponde a breve qui su WhatsApp.\n` +
-  `Nel frattempo, se vuoi già provare: scrivi 1 e ti mando il link.`;
+  `Nel frattempo, se vuoi già provare: scrivi *1* e ti mando il link.`;
 
 router.post('/inbound', async (req: Request, res: Response) => {
   try {
@@ -159,12 +166,12 @@ router.post('/inbound', async (req: Request, res: Response) => {
       if (!rest) {
         risposta = `Mandami prima il link della demo che hai visto e ti attivo l'accesso.`;
       } else if (!rest.is_demo) {
-        risposta = `${nome} è già attivo ✅\nAccedi qui: ${DASHBOARD_URL}/\nSe hai perso la password scrivimi.`;
+        risposta = `*${nome}* è già attivo ✅\nAccedi qui: ${DASHBOARD_URL}/\nSe hai perso la password scrivimi.`;
         stato = 'attivato';
       } else {
         const link = await linkAttivazione(rest, slug!);
         risposta =
-          `Ecco il link per attivare ${nome} — ${GIORNI_PROVA} giorni gratis, senza carta:\n\n${link}\n\n` +
+          `Ecco il link per attivare *${nome}* — *${GIORNI_PROVA} giorni gratis*, senza carta:\n\n${link}\n\n` +
           `Apri il link, scegli email e password, e sei dentro. Il menu è già caricato e tradotto.`;
         stato = 'link_inviato';
       }
@@ -183,7 +190,9 @@ router.post('/inbound', async (req: Request, res: Response) => {
       await db.query('UPDATE whatsapp_leads SET stato = $1 WHERE phone = $2', [stato, phone]);
     }
 
-    res.type('text/xml').send(twiml(risposta));
+    // L'icona LingoFork solo al primo tocco del tasto della demo: dà subito
+    // un'identità visiva senza ripetere la stessa immagine ad ogni risposta.
+    res.type('text/xml').send(twiml(risposta, primoContatto ? ICONA_URL : undefined));
   } catch (err) {
     console.error('whatsapp inbound error:', err);
     res.type('text/xml').send(twiml('Ricevuto! Ti risponde a breve una persona.'));
