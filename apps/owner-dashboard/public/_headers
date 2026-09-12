@@ -1,0 +1,7 @@
+# Vedi apps/customer-chat/_headers: evita che Cloudflare serva una versione
+# vecchia della dashboard sul dominio personalizzato (app.lingofork.com).
+/
+  Cache-Control: no-store
+
+/index.html
+  Cache-Control: no-store

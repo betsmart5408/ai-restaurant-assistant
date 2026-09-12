@@ -28,7 +28,10 @@ const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 function getQRParams() {
   const p = new URLSearchParams(window.location.search);
   return {
-    restaurant: p.get('restaurant') ?? 'gusto-alcazabilla',
+    // Senza "?restaurant=" nel link non sappiamo di quale locale si tratta:
+    // niente più fallback su un ristorante fisso (chi apriva il dominio nudo
+    // vedeva il menu di qualcun altro). App() manda altrove chi arriva senza slug.
+    restaurant: p.get('restaurant') ?? '',
     table: parseInt(p.get('table') ?? '1'),
     lang: p.get('lang') ?? navigator.language.slice(0, 2) ?? 'it',
   };
@@ -426,6 +429,15 @@ function applicaTema(sfondo?: string | null, principale?: string | null) {
 
 export default function App() {
   const params = getQRParams();
+
+  // Nessuno slug nel link (dominio aperto a mano, senza QR): non è un menu di
+  // nessuno in particolare. Meglio la vetrina che il menu del primo ristorante
+  // a caso.
+  useEffect(() => {
+    if (!params.restaurant) window.location.replace('https://lingofork.com');
+  }, [params.restaurant]);
+  if (!params.restaurant) return null;
+
   const [screen, setScreen] = useState<Screen>('lang');
   const [tab, setTab] = useState<Tab>('menu');
   const [lang, setLang] = useState(params.lang);

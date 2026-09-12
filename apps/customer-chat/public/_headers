@@ -1,0 +1,8 @@
+# La pagina va ricontrollata ad ogni visita: senza questo, sul dominio
+# personalizzato (menu.lingofork.com) la cache di Cloudflare puo' continuare
+# a servire una versione vecchia dell'app anche dopo un nuovo deploy.
+/
+  Cache-Control: no-store
+
+/index.html
+  Cache-Control: no-store

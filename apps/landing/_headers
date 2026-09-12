@@ -4,6 +4,12 @@
   X-Frame-Options: SAMEORIGIN
   Permissions-Policy: geolocation=(), microphone=(), camera=()
 
+/
+  Cache-Control: no-store
+
+/index.html
+  Cache-Control: no-store
+
 /favicon.svg
   Cache-Control: public, max-age=86400
 
