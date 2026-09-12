@@ -3,9 +3,10 @@
  *
  * Il ristoratore tocca "Attiva questo menu" nella demo: WhatsApp si apre con un
  * messaggio precompilato che contiene "[demo:<slug>]". Lui preme solo invio.
- * Da lì il bot guida tutto con un menu a numeri: attiva, prezzo, come funziona,
- * parla con una persona. Il numero della demo resta in memoria (whatsapp_leads),
- * quindi quando risponde "1" gli mandiamo subito il link giusto.
+ * Da lì il bot guida tutto con un menu a numeri: attiva, prezzo, come funziona.
+ * Il numero della demo resta in memoria (whatsapp_leads), quindi quando
+ * risponde "1" gli mandiamo subito il link giusto. Non c'è una linea umana:
+ * una volta attivato, il ristoratore ha un assistente AI nel pannello.
  *
  * Su Twilio: numero WhatsApp → "When a message comes in" →
  *   POST https://<api>/api/whatsapp/inbound
@@ -68,12 +69,13 @@ function trovaSlug(testo: string): string | null {
 }
 
 // Che cosa vuole il ristoratore: numero del menu o parole chiave.
-function intento(testo: string): 'attiva' | 'prezzo' | 'come' | 'persona' | 'menu' {
+// Chi cerca "una persona/un operatore" viene indirizzato a "come funziona":
+// lì si spiega che nel pannello c'è un assistente AI sempre disponibile.
+function intento(testo: string): 'attiva' | 'prezzo' | 'come' | 'menu' {
   const t = testo.toLowerCase().trim();
   if (/^1\b/.test(t) || /\battiv/i.test(t) || /\bprova\b/.test(t)) return 'attiva';
   if (/^2\b/.test(t) || /prezz|cost|quant|paga|abbon|tarif|mensil/i.test(t)) return 'prezzo';
-  if (/^3\b/.test(t) || /come funzion|come va|cos.?è|cosa fa|a cosa serve|spieg|info/i.test(t)) return 'come';
-  if (/^4\b/.test(t) || /person|operator|umano|chiama|parlare|telefon/i.test(t)) return 'persona';
+  if (/^3\b/.test(t) || /come funzion|come va|cos.?è|cosa fa|a cosa serve|spieg|info|person|operator|umano|chiama|parlare|telefon/i.test(t)) return 'come';
   return 'menu';
 }
 
@@ -102,8 +104,7 @@ function menu(nome: string): string {
     `Rispondi con un numero:\n\n` +
     `1️⃣ *Attiva la demo* — ${GIORNI_PROVA} giorni gratis\n` +
     `2️⃣ Quanto costa\n` +
-    `3️⃣ Come funziona\n` +
-    `4️⃣ Parla con una persona`
+    `3️⃣ Come funziona`
   );
 }
 
@@ -118,12 +119,9 @@ const TESTO_COME =
   `• I clienti inquadrano un QR al tavolo e vedono il menu nella loro lingua (10 lingue)\n` +
   `• Un assistente AI consiglia piatti, spiega ingredienti, suggerisce vini\n` +
   `• Tu gestisci tutto da un pannello: piatti, prezzi, foto — le traduzioni si aggiornano da sole\n` +
+  `• Nel pannello hai anche un *assistente AI tutto per te*: ti guida passo passo, risponde alle tue domande 24 ore su 24\n` +
   `• Il menu che hai visto è già il tuo, con i tuoi piatti e i tuoi colori\n\n` +
   `Scrivi *1* per attivarlo (${GIORNI_PROVA} giorni gratis).`;
-
-const TESTO_PERSONA =
-  `Perfetto 👍 Una persona ti risponde a breve qui su WhatsApp.\n` +
-  `Nel frattempo, se vuoi già provare: scrivi *1* e ti mando il link.`;
 
 router.post('/inbound', async (req: Request, res: Response) => {
   try {
@@ -179,9 +177,6 @@ router.post('/inbound', async (req: Request, res: Response) => {
       risposta = TESTO_PREZZO;
     } else if (vuole === 'come') {
       risposta = TESTO_COME;
-    } else if (vuole === 'persona') {
-      risposta = TESTO_PERSONA;
-      stato = 'umano';
     } else {
       risposta = menu(nome);
     }
@@ -195,7 +190,7 @@ router.post('/inbound', async (req: Request, res: Response) => {
     res.type('text/xml').send(twiml(risposta, primoContatto ? ICONA_URL : undefined));
   } catch (err) {
     console.error('whatsapp inbound error:', err);
-    res.type('text/xml').send(twiml('Ricevuto! Ti risponde a breve una persona.'));
+    res.type('text/xml').send(twiml('Ricevuto! Riprova tra poco, o scrivi di nuovo il nome della demo.'));
   }
 });
 

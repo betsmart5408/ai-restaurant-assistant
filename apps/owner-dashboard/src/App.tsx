@@ -431,6 +431,70 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
 }
 
 // ─── Main App ───────────────────────────────────────────────
+// ─── Assistente del pannello ─────────────────────────────────
+// Aiuta il TITOLARE a usare LingoFork (non l'assistente che parla con i
+// clienti nel menu pubblico: quello è un'altra cosa, configurabile in
+// "Impostazioni IA"). Fluttua su tutte le schede della dashboard.
+function AssistenteWidget({ token }: { token: string }) {
+  const [open, setOpen] = useState(false);
+  const [msgs, setMsgs] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [msgs, loading, open]);
+
+  async function invia(e?: React.FormEvent) {
+    e?.preventDefault();
+    const testo = input.trim();
+    if (!testo || loading) return;
+    const cronologia = msgs;
+    setMsgs(m => [...m, { role: 'user', content: testo }]);
+    setInput('');
+    setLoading(true);
+    try {
+      const data = await apiFetch('/api/assistente/chat', token, {
+        method: 'POST',
+        body: JSON.stringify({ message: testo, history: cronologia }),
+      });
+      setMsgs(m => [...m, { role: 'assistant', content: data.message }]);
+    } catch {
+      setMsgs(m => [...m, { role: 'assistant', content: '⚠️ Non riesco a rispondere adesso. Riprova tra poco.' }]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      {open && (
+        <div style={S.assistPanel}>
+          <div style={S.assistHead}>
+            <div style={{ fontWeight: 700, fontSize: 14.5 }}>🤖 Assistente LingoFork</div>
+            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>Ti aiuto a usare il pannello</div>
+          </div>
+          <div style={S.assistBody} ref={bodyRef}>
+            {msgs.length === 0 && (
+              <div style={S.assistBubbleA}>Ciao! 👋 Chiedimi pure — es. "come aggiungo un piatto?", "quanto costa l'abbonamento?", "come cambio i colori del menu?"</div>
+            )}
+            {msgs.map((m, i) => <div key={i} style={m.role === 'user' ? S.assistBubbleU : S.assistBubbleA}>{m.content}</div>)}
+            {loading && <div style={S.assistBubbleA}>Sto pensando…</div>}
+          </div>
+          <form onSubmit={invia} style={S.assistForm}>
+            <input style={S.assistInput} value={input} onChange={e => setInput(e.target.value)} placeholder="Scrivi una domanda..." autoFocus />
+            <button style={{ ...S.assistSend, opacity: loading || !input.trim() ? 0.5 : 1 }} type="submit" disabled={loading || !input.trim()} aria-label="Invia">➤</button>
+          </form>
+        </div>
+      )}
+      <button style={S.assistBtn} onClick={() => setOpen(o => !o)} aria-label={open ? 'Chiudi assistente' : 'Apri assistente'}>
+        {open ? '✕' : '🤖'}
+      </button>
+    </>
+  );
+}
+
 export default function App() {
   const [auth, setAuth] = useState<AuthData | null>(() => loadAuth());
   const [tab, setTab] = useState<Tab>('menu');
@@ -1457,6 +1521,7 @@ export default function App() {
           </div>
         )}
       </main>
+      <AssistenteWidget token={auth.token} />
     </div>
   );
 }
@@ -1479,6 +1544,17 @@ const S: Record<string, React.CSSProperties> = {
   loginTitle: { fontSize: 24, fontWeight: 700, textAlign: 'center', color: '#1e293b', marginBottom: 4 },
   loginSub: { fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 28 },
   errorBox: { background: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b', padding: '10px 14px', borderRadius: 8, fontSize: 14 },
+
+  // Assistente AI del pannello (per il titolare, non per i suoi clienti)
+  assistBtn: { position: 'fixed', right: 20, bottom: 20, zIndex: 70, width: 56, height: 56, borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg,#FF8A4B,#FF3D6E)', color: '#fff', fontSize: 24, cursor: 'pointer', boxShadow: '0 10px 26px -6px rgba(255,61,110,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  assistPanel: { position: 'fixed', right: 20, bottom: 86, zIndex: 70, width: 340, maxWidth: 'calc(100vw - 40px)', height: 460, maxHeight: 'calc(100vh - 140px)', background: '#fff', borderRadius: 18, boxShadow: '0 20px 60px -12px rgba(0,0,0,.35)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  assistHead: { padding: '14px 16px', borderBottom: '1px solid #e2e8f0', background: '#fff8f5' },
+  assistBody: { flex: 1, overflowY: 'auto', padding: '14px 14px 4px', display: 'flex', flexDirection: 'column', gap: 10 },
+  assistBubbleA: { alignSelf: 'flex-start', background: '#f1f5f9', color: '#1e293b', borderRadius: '4px 14px 14px 14px', padding: '9px 13px', fontSize: 13.5, lineHeight: 1.5, maxWidth: '86%', whiteSpace: 'pre-wrap' as const },
+  assistBubbleU: { alignSelf: 'flex-end', background: '#FF4D5E', color: '#fff', borderRadius: '14px 4px 14px 14px', padding: '9px 13px', fontSize: 13.5, lineHeight: 1.5, maxWidth: '86%', whiteSpace: 'pre-wrap' as const },
+  assistForm: { display: 'flex', gap: 8, padding: 12, borderTop: '1px solid #e2e8f0' },
+  assistInput: { flex: 1, border: '1px solid #e2e8f0', borderRadius: 10, padding: '9px 12px', fontSize: 13.5, outline: 'none' },
+  assistSend: { width: 38, height: 38, borderRadius: 10, border: 'none', background: '#FF4D5E', color: '#fff', fontSize: 16, cursor: 'pointer', flexShrink: 0 },
 
   // Layout
   root: { display: 'flex', minHeight: '100vh', background: '#f8fafc' },
