@@ -2,8 +2,12 @@ import { Router } from 'express';
 import { checkStockAlerts, checkExpiryAlerts, sendDailySummary } from '../services/alerts';
 import { sendWhatsApp } from '../services/whatsapp';
 import { db } from '../db/client';
+import { requireAuth, requireSuperAdmin } from '../middleware/auth';
 
 const router = Router();
+// Rotte di test/amministrazione (invio WhatsApp arbitrario, trigger job cron):
+// riservate al superadmin, non devono essere raggiungibili da un cliente anonimo.
+router.use(requireAuth, requireSuperAdmin);
 
 // POST /api/alerts/test-whatsapp — invia messaggio di test
 router.post('/test-whatsapp', async (req, res) => {

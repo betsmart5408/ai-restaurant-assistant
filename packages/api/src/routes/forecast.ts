@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { getForecast, getDishPortionsForecast } from '../services/forecast';
 import { generateWeeklyReport } from '../services/report';
+import { requireAuth, requireOwnRestaurant } from '../middleware/auth';
 
 const router = Router();
+router.use(requireAuth, requireOwnRestaurant);
 
 // GET /api/forecast/:restaurantId — previsione scorte ingredienti
 router.get('/:restaurantId', async (req, res) => {

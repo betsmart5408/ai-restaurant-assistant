@@ -9,6 +9,7 @@
  */
 import Groq from 'groq-sdk';
 import { db } from '../db/client';
+import { modelliDisponibili } from './groq-model';
 
 export const LANG_NAMES: Record<string, string> = {
   it: 'Italian', en: 'English', de: 'German', es: 'Spanish', fr: 'French',
@@ -21,32 +22,6 @@ export interface PiattoDaTradurre {
   id: string;
   name: string;
   description: string | null;
-}
-
-/** Modelli disponibili con la chiave in uso; scoperti una volta e tenuti in memoria. */
-let modelliInCache: string[] | null = null;
-
-const PREFERENZE = [
-  'gpt-oss-120b', 'llama-3.3-70b', 'llama-4', 'maverick', 'qwen3', 'minimax',
-  'gpt-oss-20b', 'llama-3.1-8b', 'gemma', 'compound',
-];
-const ESCLUDI = /whisper|tts|orpheus|guard|embed|rerank|moderation/i;
-
-async function modelliDisponibili(groq: Groq): Promise<string[]> {
-  if (modelliInCache) return modelliInCache;
-  if (process.env.GROQ_MODEL) { modelliInCache = [process.env.GROQ_MODEL]; return modelliInCache; }
-  try {
-    const lista: any = await groq.models.list();
-    const ids: string[] = (lista?.data || []).map((m: any) => m.id).filter(Boolean);
-    const punteggio = (id: string) => {
-      const i = PREFERENZE.findIndex(p => id.toLowerCase().includes(p));
-      return i === -1 ? 99 : i;
-    };
-    modelliInCache = ids.filter(id => !ESCLUDI.test(id)).sort((a, b) => punteggio(a) - punteggio(b)).slice(0, 2);
-  } catch {
-    modelliInCache = [];
-  }
-  return modelliInCache;
 }
 
 function estraiJson(raw: string): any[] | null {
@@ -151,7 +126,7 @@ export async function traduciESalva(
   const claudeAttivo = !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.length >= 20;
 
   const groq = chiave ? new Groq({ apiKey: chiave }) : null;
-  const modelli = groq ? await modelliDisponibili(groq) : [];
+  const modelli = groq && chiave ? await modelliDisponibili(groq, chiave) : [];
   if (modelli.length === 0 && !claudeAttivo) {
     return { scritte: 0, errore: 'Nessun traduttore disponibile (né Groq né Claude)' };
   }

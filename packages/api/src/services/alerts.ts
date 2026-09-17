@@ -14,6 +14,23 @@ interface Restaurant {
   whatsapp: string;
 }
 
+// checkStockAlerts gira ogni ora: senza un cooldown, un ingrediente che resta
+// sotto soglia per giorni manda lo stesso WhatsApp ogni ora, all'infinito
+// (costo Twilio + alert fatigue per il ristoratore). Un ingrediente che
+// peggiora da 'warning' a 'critical' deve comunque poter riavvisare subito.
+const COOLDOWN_ALERT_MS = 12 * 60 * 60 * 1000; // 12 ore
+const ultimoAlert = new Map<string, { level: 'critical' | 'warning'; at: number }>();
+
+function deveAvvisare(restaurantId: string, ingredientId: string, level: 'critical' | 'warning'): boolean {
+  const key = `${restaurantId}:${ingredientId}`;
+  const prev = ultimoAlert.get(key);
+  const ora = Date.now();
+  const escalation = prev?.level === 'warning' && level === 'critical';
+  if (prev && !escalation && ora - prev.at < COOLDOWN_ALERT_MS) return false;
+  ultimoAlert.set(key, { level, at: ora });
+  return true;
+}
+
 async function estimateHoursLeft(restaurantId: string, ingredientId: string, currentQty: number): Promise<number | undefined> {
   const result = await db.query(
     `SELECT ABS(SUM(qty_delta)) as consumed
@@ -43,13 +60,17 @@ export async function checkStockAlerts() {
       const qty = parseFloat(ing.current_qty);
       const threshold = parseFloat(ing.min_threshold);
       if (qty <= 0) {
-        await sendWhatsApp(restaurant.whatsapp, msgStockCritical(ing.name, qty, ing.unit));
+        if (deveAvvisare(restaurant.id, ing.id, 'critical')) {
+          await sendWhatsApp(restaurant.whatsapp, msgStockCritical(restaurant.name, ing.name, qty, ing.unit));
+        }
       } else if (qty <= threshold) {
         const hoursLeft = await estimateHoursLeft(restaurant.id, ing.id, qty);
         if (hoursLeft !== undefined && hoursLeft <= 3) {
-          await sendWhatsApp(restaurant.whatsapp, msgStockCritical(ing.name, qty, ing.unit, hoursLeft));
-        } else {
-          await sendWhatsApp(restaurant.whatsapp, msgStockWarning(ing.name, qty, ing.unit));
+          if (deveAvvisare(restaurant.id, ing.id, 'critical')) {
+            await sendWhatsApp(restaurant.whatsapp, msgStockCritical(restaurant.name, ing.name, qty, ing.unit, hoursLeft));
+          }
+        } else if (deveAvvisare(restaurant.id, ing.id, 'warning')) {
+          await sendWhatsApp(restaurant.whatsapp, msgStockWarning(restaurant.name, ing.name, qty, ing.unit));
         }
       }
     }
@@ -75,7 +96,7 @@ export async function checkExpiryAlerts() {
     for (const ing of expiring.rows) {
       await sendWhatsApp(
         restaurant.whatsapp,
-        msgExpiryAlert(ing.name, parseFloat(ing.current_qty), ing.unit, ing.days_left)
+        msgExpiryAlert(restaurant.name, ing.name, parseFloat(ing.current_qty), ing.unit, ing.days_left)
       );
     }
   }
@@ -115,7 +136,7 @@ export async function sendDailySummary() {
       [restaurant.id]
     );
     const r = today.rows[0];
-    await sendWhatsApp(restaurant.whatsapp, msgDailySummary({
+    await sendWhatsApp(restaurant.whatsapp, msgDailySummary(restaurant.name, {
       revenue: r.revenue,
       orders: r.orders,
       avgOrder: r.avg_order,

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db/client';
+import { requireAuth, requireOwnRestaurant } from '../middleware/auth';
 
 const router = Router();
 
@@ -147,7 +148,7 @@ router.post('/webhook/generic', async (req, res) => {
 });
 
 // GET /api/pos/config/:restaurantId — configurazione POS attuale
-router.get('/config/:restaurantId', async (req, res) => {
+router.get('/config/:restaurantId', requireAuth, requireOwnRestaurant, async (req, res) => {
   const result = await db.query(
     'SELECT pos_config FROM restaurants WHERE id = $1',
     [req.params.restaurantId]
@@ -156,7 +157,7 @@ router.get('/config/:restaurantId', async (req, res) => {
 });
 
 // PATCH /api/pos/config/:restaurantId — salva configurazione POS
-router.patch('/config/:restaurantId', async (req, res) => {
+router.patch('/config/:restaurantId', requireAuth, requireOwnRestaurant, async (req, res) => {
   try {
     const { provider, ...config } = req.body;
     // Merge con la config esistente

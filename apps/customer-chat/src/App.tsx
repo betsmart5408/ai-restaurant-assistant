@@ -104,6 +104,12 @@ function stessaVisita(salvatoAt?: string | null): boolean {
   if (ore > 3 || ore < 0) return false;
   if (prima.toDateString() !== ora.toDateString()) return false;
 
+  // Il confine pranzo/cena serve solo a non mostrare a un cliente diverso, che
+  // si siede allo stesso tavolo per il servizio successivo, il carrello/chat
+  // di chi c'era prima. Non deve pero' svuotare il carrello di chi ricarica la
+  // pagina pochi minuti prima/dopo le 16:00: sotto un'ora non lo applichiamo.
+  if (ore < 1) return true;
+
   const servizio = (d: Date) => (d.getHours() < 16 ? 'pranzo' : 'cena');
   return servizio(prima) === servizio(ora);
 }
@@ -441,6 +447,10 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('lang');
   const [tab, setTab] = useState<Tab>('menu');
   const [lang, setLang] = useState(params.lang);
+  // Se il cliente cambia lingua rapidamente due volte, la prima richiesta di
+  // traduzione del menu puo' rispondere DOPO la seconda: senza questo guard,
+  // il menu resterebbe tradotto nella lingua sbagliata rispetto a `lang`.
+  const langSwitchRef = useRef(params.lang);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -580,7 +590,7 @@ export default function App() {
   useEffect(() => {
     if (!sessionId) return;
     saveSession(params.restaurant, params.table, { sessionId, lang, messages, alreadyOrdered, joinedExisting });
-  }, [sessionId, lang, messages]);
+  }, [sessionId, lang, messages, alreadyOrdered, joinedExisting]);
 
   // Salva piatti selezionati in localStorage ad ogni cambio (non al primo render)
   const savedDishesInitRef = useRef(true);
@@ -641,13 +651,14 @@ export default function App() {
     setLoading(true);
     savePrefs(params.restaurant, { allergies: '', groupSize });
 
-    // Controlla sessione salvata e storico cliente
+    // Controlla sessione salvata
     const saved = loadSession(params.restaurant, params.table);
-    const history = loadCustomerHistory(params.restaurant);
-    const returning = isReturningCustomer(history);
 
-    // Si riprende la conversazione solo se e' ancora lo stesso pasto
-    if (saved && saved.lang === selectedLang && !returning) {
+    // Si riprende la conversazione solo se e' ancora lo stesso pasto.
+    // "returning customer" (storico >=12h) riguarda solo il messaggio di
+    // benvenuto di una sessione NUOVA: non deve cancellare una sessione
+    // ancora attiva solo perche' esiste uno storico vecchio non correlato.
+    if (saved && saved.lang === selectedLang) {
       if (stessaVisita(saved.savedAt)) {
         try {
           const menuRes = await fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=${selectedLang}`);
@@ -730,9 +741,16 @@ export default function App() {
     }
   }
 
+  // `loading` (state) si aggiorna solo al prossimo render: un doppio invio
+  // nello stesso tick (es. tasto Enter che ripete) leggerebbe due volte
+  // `loading === false` e manderebbe il messaggio due volte. Il ref e'
+  // sincrono e chiude subito la finestra.
+  const sendingRef = useRef(false);
+
   const sendMessage = useCallback(async (text?: string, keepDish?: boolean) => {
     const msg = text ?? input.trim();
-    if (!msg || !sessionId || loading) return;
+    if (!msg || !sessionId || loading || sendingRef.current) return;
+    sendingRef.current = true;
     setInput('');
     setSuggestions([]);
     if (!keepDish) setLastDiscussedDish(null);
@@ -751,6 +769,7 @@ export default function App() {
       setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Errore di rete. Riprova.', timestamp: new Date().toISOString() }]);
     } finally {
       setLoading(false);
+      sendingRef.current = false;
     }
   }, [input, sessionId, loading, lang]);
 
@@ -974,11 +993,12 @@ export default function App() {
                     setShowLangPicker(false);
                     setLang(opt.code);
                     setTranslatedDishes({});
+                    langSwitchRef.current = opt.code;
                     try {
                       const res = await fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=${opt.code}`);
-                      if (res.ok) {
+                      if (res.ok && langSwitchRef.current === opt.code) {
                         const data: Dish[] = await res.json();
-                        setDishes(data.filter(d => d.available));
+                        if (langSwitchRef.current === opt.code) setDishes(data.filter(d => d.available));
                       }
                     } catch { /* resta la lingua precedente */ }
                   }}

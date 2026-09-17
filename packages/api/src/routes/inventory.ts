@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { db } from '../db/client';
 import { getStockAlerts, restockIngredient } from '../services/inventory';
+import { requireAuth, requireOwnRestaurant } from '../middleware/auth';
 
 const router = Router();
+router.use(requireAuth, requireOwnRestaurant);
 
 // GET /api/inventory/:restaurantId/alerts
 router.get('/:restaurantId/alerts', async (req, res) => {
@@ -45,7 +47,7 @@ router.post('/:restaurantId/restock', async (req, res) => {
 // PATCH /api/inventory/:restaurantId/ingredients/:ingredientId — aggiorna soglia/scadenza
 router.patch('/:restaurantId/ingredients/:ingredientId', async (req, res) => {
   try {
-    const { ingredientId } = req.params;
+    const { restaurantId, ingredientId } = req.params;
     const { min_threshold, expiry_date, cost_per_unit } = req.body;
 
     const fields: string[] = [];
@@ -58,11 +60,13 @@ router.patch('/:restaurantId/ingredients/:ingredientId', async (req, res) => {
 
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
 
-    values.push(ingredientId);
+    values.push(ingredientId, restaurantId);
     const result = await db.query(
-      `UPDATE ingredients SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+      `UPDATE ingredients SET ${fields.join(', ')} WHERE id = $${idx++} AND restaurant_id = $${idx} RETURNING *`,
       values
     );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Ingredient not found' });
 
     res.json(result.rows[0]);
   } catch (err) {

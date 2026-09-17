@@ -11,3 +11,6 @@ dist/
 .vercel
 .wrangler/
 apps/*/.wrangler/
+
+# render/video di lavoro (Blender, Higgsfield): pesanti, non vanno su git
+Claude outputs/

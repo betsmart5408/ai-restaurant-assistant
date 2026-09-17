@@ -27,20 +27,20 @@ export async function sendWhatsApp(to: string, message: string): Promise<boolean
 
 // ── Messaggi predefiniti ─────────────────────────────────────
 
-export function msgStockCritical(name: string, qty: number, unit: string, hoursLeft?: number) {
+export function msgStockCritical(restaurantName: string, name: string, qty: number, unit: string, hoursLeft?: number) {
   const eta = hoursLeft ? ` Stima esaurimento: ~${hoursLeft}h.` : '';
-  return `🔴 *STOCK CRITICO — Da Mario*\n\n*${name}* quasi esaurito!\nRimangono solo *${qty}${unit}*.${eta}\n\nRiordina subito o disattiva i piatti che lo usano.`;
+  return `🔴 *STOCK CRITICO — ${restaurantName}*\n\n*${name}* quasi esaurito!\nRimangono solo *${qty}${unit}*.${eta}\n\nRiordina subito o disattiva i piatti che lo usano.`;
 }
 
-export function msgStockWarning(name: string, qty: number, unit: string) {
-  return `🟡 *Attenzione Magazzino — Da Mario*\n\n*${name}*: rimangono *${qty}${unit}* (sotto soglia minima).\n\nValuta di riordinare presto.`;
+export function msgStockWarning(restaurantName: string, name: string, qty: number, unit: string) {
+  return `🟡 *Attenzione Magazzino — ${restaurantName}*\n\n*${name}*: rimangono *${qty}${unit}* (sotto soglia minima).\n\nValuta di riordinare presto.`;
 }
 
-export function msgExpiryAlert(name: string, qty: number, unit: string, daysLeft: number) {
-  return `⚠️ *Scadenza imminente — Da Mario*\n\n*${name}* scade tra *${daysLeft} giorno/i*.\nQuantità: ${qty}${unit}.\n\nSuggerimento: attiva una promozione sui piatti che lo usano per evitare sprechi.`;
+export function msgExpiryAlert(restaurantName: string, name: string, qty: number, unit: string, daysLeft: number) {
+  return `⚠️ *Scadenza imminente — ${restaurantName}*\n\n*${name}* scade tra *${daysLeft} giorno/i*.\nQuantità: ${qty}${unit}.\n\nSuggerimento: attiva una promozione sui piatti che lo usano per evitare sprechi.`;
 }
 
-export function msgDailySummary(data: {
+export function msgDailySummary(restaurantName: string, data: {
   revenue: number;
   orders: number;
   avgOrder: number;
@@ -56,5 +56,5 @@ export function msgDailySummary(data: {
     ? `\n⚠️ ${data.criticalIngredients} ingrediente/i critico/i — controlla il magazzino!`
     : '\n✅ Magazzino OK';
 
-  return `🍽️ *Riepilogo serale — Da Mario*\n\n💶 Ricavo: *€${data.revenue.toFixed(2)}*\n👥 Ordini: *${data.orders}*\n🧾 Scontrino medio: *€${data.avgOrder.toFixed(2)}* (${trend})\n🏆 Piatto top: *${data.topDish}*${alerts}`;
+  return `🍽️ *Riepilogo serale — ${restaurantName}*\n\n💶 Ricavo: *€${data.revenue.toFixed(2)}*\n👥 Ordini: *${data.orders}*\n🧾 Scontrino medio: *€${data.avgOrder.toFixed(2)}* (${trend})\n🏆 Piatto top: *${data.topDish}*${alerts}`;
 }

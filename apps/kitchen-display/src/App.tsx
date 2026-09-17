@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 const RESTAURANT_ID = import.meta.env.VITE_RESTAURANT_ID ?? '11111111-1111-1111-1111-111111111111';
@@ -7,7 +7,7 @@ const POLL_MS = 5000;
 interface KitchenOrder {
   id: string;
   table_number: number;
-  status: 'CONFIRMED' | 'IN_KITCHEN';
+  status: 'CONFIRMED' | 'IN_KITCHEN' | 'READY';
   created_at: string;
   language: string;
   items: Array<{ name: string; qty: number; note: string | null }>;
@@ -28,10 +28,17 @@ export default function App() {
   const [now, setNow] = useState(Date.now());
   const [lastUpdate, setLastUpdate] = useState('');
 
+  // Evita che una risposta di poll più lenta sovrascriva lo stato con dati
+  // ormai vecchi rispetto a una richiesta partita dopo (es. dopo un updateStatus).
+  const requestSeq = useRef(0);
+
   const fetchOrders = useCallback(async () => {
+    const seq = ++requestSeq.current;
     try {
       const res = await fetch(`${API}/api/orders/kitchen/${RESTAURANT_ID}`);
+      if (!res.ok) return; // errore server: mantieni lo stato precedente, non svuotare la schermata
       const data = await res.json();
+      if (seq !== requestSeq.current || !Array.isArray(data)) return;
       setOrders(data);
       setLastUpdate(new Date().toLocaleTimeString('it-IT'));
     } catch {

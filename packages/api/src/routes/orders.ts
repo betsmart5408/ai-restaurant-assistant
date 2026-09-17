@@ -16,11 +16,33 @@ router.post('/', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const total = items.reduce(
-      (sum: number, item: { unit_price: number; qty: number }) =>
-        sum + item.unit_price * item.qty,
-      0
+    // Prezzo e nome piatto vengono SEMPRE letti dal DB, mai fidandosi del client:
+    // altrimenti chiunque potrebbe ordinare a qualsiasi prezzo (es. unit_price: 0.01).
+    const dishIds = [...new Set(items.map((item: { dish_id: string }) => item.dish_id))];
+    const dishesResult = await client.query(
+      `SELECT id, name, price FROM dishes WHERE id = ANY($1::uuid[]) AND restaurant_id = $2 AND available = TRUE`,
+      [dishIds, restaurant_id]
     );
+    const dishById = new Map(dishesResult.rows.map((d) => [d.id, d]));
+
+    const trustedItems: { dish_id: string; dish_name: string; qty: number; unit_price: number; note: string | null }[] = [];
+    for (const item of items as { dish_id: string; qty: number; note?: string }[]) {
+      const dish = dishById.get(item.dish_id);
+      const qty = Number(item.qty);
+      if (!dish || !Number.isInteger(qty) || qty <= 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Piatto non disponibile o quantità non valida' });
+      }
+      trustedItems.push({
+        dish_id: dish.id,
+        dish_name: dish.name,
+        qty,
+        unit_price: parseFloat(dish.price),
+        note: item.note ?? null,
+      });
+    }
+
+    const total = trustedItems.reduce((sum, item) => sum + item.unit_price * item.qty, 0);
 
     const order = await client.query(
       `INSERT INTO orders (restaurant_id, table_id, session_id, total, language, status)
@@ -31,11 +53,11 @@ router.post('/', async (req, res) => {
 
     const orderId = order.rows[0].id;
 
-    for (const item of items) {
+    for (const item of trustedItems) {
       await client.query(
         `INSERT INTO order_items (order_id, dish_id, dish_name, qty, unit_price, note)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [orderId, item.dish_id, item.dish_name, item.qty, item.unit_price, item.note ?? null]
+        [orderId, item.dish_id, item.dish_name, item.qty, item.unit_price, item.note]
       );
 
       // Scala magazzino per ogni unità ordinata
@@ -50,7 +72,7 @@ router.post('/', async (req, res) => {
 
     await client.query('COMMIT');
 
-    res.status(201).json({ ...order.rows[0], items });
+    res.status(201).json({ ...order.rows[0], items: trustedItems });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
@@ -96,13 +118,16 @@ router.patch('/:orderId/status', async (req, res) => {
     const { orderId } = req.params;
     const { status } = req.body;
 
-    const validStatuses = ['PENDING', 'CONFIRMED', 'IN_KITCHEN', 'READY', 'SERVED', 'PAID'];
+    // Questa rotta è pubblica (usata dal Kitchen Display, che non ha login):
+    // NON deve poter impostare 'PAID' — quello spetta solo ai webhook POS
+    // (packages/api/src/routes/pos.ts) o al dashboard autenticato del ristoratore.
+    const validStatuses = ['CONFIRMED', 'IN_KITCHEN', 'READY', 'SERVED'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
 
     const result = await db.query(
-      'UPDATE orders SET status = $1 WHERE id = $2 RETURNING *',
+      `UPDATE orders SET status = $1 WHERE id = $2 AND status != 'PAID' RETURNING *`,
       [status, orderId]
     );
 

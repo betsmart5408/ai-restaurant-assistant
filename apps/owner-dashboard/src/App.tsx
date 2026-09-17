@@ -54,13 +54,23 @@ function loadAuth(): AuthData | null {
 function clearAuth() { localStorage.removeItem('owner_auth'); }
 
 // ─── API helper ─────────────────────────────────────────────
+class ApiError extends Error { status: number; constructor(status: number) { super(`${status}`); this.status = status; } }
+
 async function apiFetch(path: string, token: string, opts?: RequestInit) {
   const res = await fetch(`${API}${path}`, {
     ...opts,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(opts?.headers ?? {}) },
   });
-  if (!res.ok) throw new Error(`${res.status}`);
+  if (!res.ok) throw new ApiError(res.status);
   return res.json();
+}
+// Da usare al posto di `.catch(() => null)` quando un 401 (token scaduto/non
+// valido) non deve essere silenziato come "endpoint non disponibile": senza
+// questo, un token scaduto lascia la dashboard bloccata su dati vecchi per
+// sempre, senza che l'utente capisca perche' (nessun errore, nessun re-login).
+function ignoraSeNonAuth(err: unknown) {
+  if (err instanceof ApiError && err.status === 401) throw err;
+  return null;
 }
 
 // ─── Login Screen ───────────────────────────────────────────
@@ -81,12 +91,13 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
     setLoading(true);
     try {
       const url = mode === 'admin' ? `${API}/api/admin/login` : `${API}/api/auth/login`;
-      const data = await fetch(url, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
-      }).then(r => r.json());
-      if (data.error) { setError(data.error); return; }
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) { setError(data.error || 'Accesso non riuscito'); return; }
       saveAuth(data);
       onLogin(data);
     } catch {
@@ -252,8 +263,12 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
 
   useEffect(() => { load(); }, []);
 
+  const [creatingRestaurant, setCreatingRestaurant] = useState(false);
+
   async function createRestaurant() {
+    if (creatingRestaurant) return; // evita doppie richieste da doppio click
     setNewMsg('');
+    setCreatingRestaurant(true);
     try {
       const res = await fetch(`${API}/api/admin/restaurants`, {
         method: 'POST',
@@ -266,7 +281,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
         setNewForm({ restaurant_name: '', owner_email: '', owner_password: '', monthly_price: '30' });
         load();
       } else setNewMsg(`❌ ${data.error}`);
-    } catch { setNewMsg('❌ Errore di rete'); }
+    } catch { setNewMsg('❌ Errore di rete'); } finally { setCreatingRestaurant(false); }
   }
 
   async function patchRestaurant(id: string, action: string, extra?: object) {
@@ -417,8 +432,8 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
               </div>
               {newMsg && <div style={{ marginTop: 12, fontSize: 14, padding: '10px 14px', borderRadius: 8, background: newMsg.startsWith('✅') ? '#f0fdf4' : '#fef2f2', color: newMsg.startsWith('✅') ? '#166534' : '#991b1b', border: `1px solid ${newMsg.startsWith('✅') ? '#86efac' : '#fca5a5'}` }}>{newMsg}</div>}
               <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-                <button style={S.btnPrimary} onClick={createRestaurant} disabled={!newForm.restaurant_name || !newForm.owner_email || !newForm.owner_password}>
-                  ➕ Crea ristorante
+                <button style={S.btnPrimary} onClick={createRestaurant} disabled={creatingRestaurant || !newForm.restaurant_name || !newForm.owner_email || !newForm.owner_password}>
+                  {creatingRestaurant ? 'Creazione...' : '➕ Crea ristorante'}
                 </button>
                 <button style={S.btnSecondary} onClick={() => { setNewForm({ restaurant_name: '', owner_email: '', owner_password: '', monthly_price: '30' }); setNewMsg(''); }}>Reset</button>
               </div>
@@ -511,6 +526,7 @@ export default function App() {
   const [menu, setMenu] = useState<Dish[]>([]);
   const [menuForm, setMenuForm] = useState<Partial<Dish> | null>(null);
   const [menuSaving, setMenuSaving] = useState(false);
+  const [menuSaveError, setMenuSaveError] = useState('');
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -536,6 +552,11 @@ export default function App() {
     ['pt', 'Portoghese'], ['ru', 'Russo'], ['zh', 'Cinese'], ['ja', 'Giapponese'], ['ar', 'Arabo'],
   ];
   const [trLang, setTrLang] = useState('en');
+  // loadTab e' ricreata a ogni render e chiusa sul trLang di quel render:
+  // per accorgersi che nel frattempo l'utente ha scelto un'altra lingua
+  // serve leggere il valore PIU' RECENTE, non quello catturato alla chiamata.
+  const trLangRef = useRef('en');
+  useEffect(() => { trLangRef.current = trLang; }, [trLang]);
   const [trRows, setTrRows] = useState<any[]>([]);
   const [trMsg, setTrMsg] = useState('');
   const [trBusy, setTrBusy] = useState(false);
@@ -547,6 +568,27 @@ export default function App() {
   const [colSaving, setColSaving] = useState(false);
   const coloriCaricati = useRef(false);
   const [colFont, setColFont] = useState('system');
+
+  // Il logout NON smonta questo componente (stesso App, torna solo a mostrare
+  // <LoginScreen/>): senza questo reset esplicito, tutto lo stato del
+  // ristorante precedente (colori, menu, nome AI, coloriCaricati...) resta in
+  // memoria e "trapela" nel prossimo login fatto nella stessa scheda.
+  function handleLogout() {
+    clearAuth();
+    setAuth(null);
+    setRestaurant(null);
+    setMenu([]);
+    setMenuForm(null);
+    setBilling(null);
+    setAiName('Marco');
+    setLocale({ city: '', region: '', country: '', timezone: '', latitude: null, longitude: null, cuisine_type: '', about: '', instagram_url: '', ig_popup_shown: 0, ig_follow_clicks: 0 });
+    setTrRows([]);
+    setColBg('#0f0f1a');
+    setColPrimary('#e94560');
+    setColFont('system');
+    coloriCaricati.current = false;
+    setTab('menu');
+  }
 
   const CARATTERI: [string, string, string][] = [
     ['system', 'Predefinito', "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"],
@@ -702,13 +744,16 @@ export default function App() {
         const data = await apiFetch(`/api/menu/${restaurant.slug}/dishes`, auth.token);
         setMenu(data);
       } else if (t === 'traduzioni') {
-        const data = await apiFetch(`/api/menu/${restaurant.slug}/translations?lang=${trLang}`, auth.token);
+        const linguaRichiesta = trLang;
+        const data = await apiFetch(`/api/menu/${restaurant.slug}/translations?lang=${linguaRichiesta}`, auth.token);
+        // Se nel frattempo l'utente ha cambiato lingua, questa risposta e' vecchia: scartala.
+        if (linguaRichiesta !== trLangRef.current) return;
         setTrRows(Array.isArray(data) ? data : []);
       } else if (t === 'ia') {
-        const data = await apiFetch(`/api/dashboard/${restaurant.id}/settings`, auth.token).catch(() => null);
+        const data = await apiFetch(`/api/dashboard/${restaurant.id}/settings`, auth.token).catch(ignoraSeNonAuth);
         if (data?.ai_name) setAiName(data.ai_name);
       } else if (t === 'settings') {
-        const data = await apiFetch(`/api/dashboard/${restaurant.id}/locale`, auth.token).catch(() => null);
+        const data = await apiFetch(`/api/dashboard/${restaurant.id}/locale`, auth.token).catch(ignoraSeNonAuth);
         if (data) setLocale({
           city: data.city ?? '', region: '', country: data.country ?? '',
           timezone: data.timezone ?? '',
@@ -723,7 +768,7 @@ export default function App() {
         const data = await apiFetch('/api/billing/status', auth.token);
         setBilling(data);
       } else if (t === 'aspetto') {
-        const restFull = await apiFetch(`/api/menu/${restaurant.slug}/info`, auth.token).catch(() => null);
+        const restFull = await apiFetch(`/api/menu/${restaurant.slug}/info`, auth.token).catch(ignoraSeNonAuth);
         if (restFull?.logo_url) {
           const nuovo = `${API}${restFull.logo_url}`;
           setRestaurant(r => (r && r.logo_url === nuovo ? r : (r ? { ...r, logo_url: nuovo } : r)));
@@ -737,7 +782,9 @@ export default function App() {
           coloriCaricati.current = true;
         }
       }
-    } catch { /* ignora */ } finally { setLoading(false); }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) { handleLogout(); alert('Sessione scaduta: effettua di nuovo l\'accesso.'); }
+    } finally { setLoading(false); }
   }
 
   async function uploadLogo(file: File) {
@@ -833,20 +880,32 @@ export default function App() {
 
   async function saveDish() {
     if (!auth || !restaurant || !menuForm) return;
+    if (!menuForm.name?.trim() || !(menuForm.category ?? '').trim() || !Number.isFinite(menuForm.price) || (menuForm.price as number) < 0) {
+      setMenuSaveError('Nome, categoria e prezzo (≥ 0) sono obbligatori.');
+      return;
+    }
     setMenuSaving(true);
+    setMenuSaveError('');
     try {
       const method = menuForm.id ? 'PATCH' : 'POST';
       const url = menuForm.id
         ? `${API}/api/menu/${restaurant.slug}/dishes/${menuForm.id}`
         : `${API}/api/menu/${restaurant.slug}/dishes`;
-      await fetch(url, {
+      const res = await fetch(url, {
         method,
         headers: { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(menuForm),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setMenuSaveError(data.error || `Salvataggio non riuscito (errore ${res.status})`);
+        return; // il form resta aperto: niente si perde
+      }
       setMenuForm(null);
       const data = await apiFetch(`/api/menu/${restaurant.slug}/dishes`, auth.token);
       setMenu(data);
+    } catch {
+      setMenuSaveError('Errore di rete: il piatto potrebbe non essere stato salvato.');
     } finally { setMenuSaving(false); }
   }
 
@@ -961,7 +1020,7 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <button style={S.logoutBtn} onClick={() => { clearAuth(); setAuth(null); }}>
+        <button style={S.logoutBtn} onClick={handleLogout}>
           ← Esci
         </button>
       </aside>
@@ -975,13 +1034,14 @@ export default function App() {
           <div style={S.content}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
               <h1 style={S.pageTitle}>📋 Gestione Menu</h1>
-              <button style={S.btnPrimary} onClick={() => setMenuForm({ name: '', description: '', price: 0, category: categorieDelMenu(menu)[0] ?? '', available: true })}>
+              <button style={S.btnPrimary} onClick={() => { setMenuSaveError(''); setMenuForm({ name: '', description: '', price: 0, category: categorieDelMenu(menu)[0] ?? '', available: true }); }}>
                 + Aggiungi piatto
               </button>
             </div>
             {menuForm !== null && (
               <div style={S.formCard}>
                 <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>{menuForm.id ? 'Modifica' : 'Nuovo piatto'}</h2>
+                {menuSaveError && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 12 }}>⚠️ {menuSaveError}</div>}
                 <div style={S.formGrid}>
                   <label style={S.formLabel}>Nome<input style={S.formInput} value={menuForm.name ?? ''} onChange={e => setMenuForm(f => ({ ...f, name: e.target.value }))} /></label>
                   <label style={S.formLabel}>Categoria
@@ -1001,7 +1061,7 @@ export default function App() {
                 <label style={{ ...S.formLabel, marginTop: 8 }}>Descrizione<textarea style={{ ...S.formInput, minHeight: 64, resize: 'vertical' }} value={menuForm.description ?? ''} onChange={e => setMenuForm(f => ({ ...f, description: e.target.value }))} /></label>
                 <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
                   <button style={S.btnPrimary} disabled={menuSaving} onClick={saveDish}>{menuSaving ? 'Salvataggio...' : 'Salva'}</button>
-                  <button style={S.btnSecondary} onClick={() => setMenuForm(null)}>Annulla</button>
+                  <button style={S.btnSecondary} onClick={() => { setMenuForm(null); setMenuSaveError(''); }}>Annulla</button>
                 </div>
               </div>
             )}
@@ -1021,7 +1081,7 @@ export default function App() {
                         <span style={{ color: '#64748b', fontSize: 13 }}>{d.description}</span>
                         <span>{simboloValuta(restaurant?.currency)}{parseFloat(String(d.price)).toFixed(2)}</span>
                         <span style={{ color: d.available ? '#22c55e' : '#ef4444', fontWeight: 600 }}>{d.available ? '✓ Attivo' : '✗ Nascosto'}</span>
-                        <button style={S.btnEdit} onClick={() => setMenuForm({ ...d })}>Modifica</button>
+                        <button style={S.btnEdit} onClick={() => { setMenuSaveError(''); setMenuForm({ ...d }); }}>Modifica</button>
                         <button style={{ ...S.btnEdit, color: '#ef4444', borderColor: '#ef4444' }} onClick={() => deleteDish(d.id)}>✕</button>
                       </div>
                     ))}

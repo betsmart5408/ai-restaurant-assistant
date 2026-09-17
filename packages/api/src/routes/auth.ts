@@ -7,7 +7,8 @@ const router = Router();
 
 // POST /api/auth/register — registra nuovo ristorante + owner
 router.post('/register', async (req, res) => {
-  const { restaurant_name, email, password, languages = ['it', 'en'], whatsapp } = req.body;
+  const { restaurant_name, password, languages = ['it', 'en'], whatsapp } = req.body;
+  const email = String(req.body.email ?? '').toLowerCase().trim();
 
   if (!restaurant_name || !email || !password) {
     return res.status(400).json({ error: 'restaurant_name, email e password sono obbligatori' });
@@ -88,7 +89,8 @@ router.post('/register', async (req, res) => {
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = String(req.body.email ?? '').toLowerCase().trim();
 
     if (!email || !password) {
       return res.status(400).json({ error: 'email e password obbligatori' });

@@ -9,11 +9,14 @@ export async function deductInventory(
   qty: number,
   orderId: string
 ): Promise<void> {
+  // Il join su dishes.restaurant_id impedisce che un dish_id di un altro ristorante
+  // (es. inoltrato per errore o manipolato) scali il magazzino di un tenant sbagliato.
   const recipe = await client.query(
     `SELECT ri.ingredient_id, ri.qty, ri.unit
      FROM recipe_ingredients ri
-     WHERE ri.dish_id = $1`,
-    [dishId]
+     JOIN dishes d ON d.id = ri.dish_id
+     WHERE ri.dish_id = $1 AND d.restaurant_id = $2`,
+    [dishId, restaurantId]
   );
 
   for (const ingredient of recipe.rows) {
