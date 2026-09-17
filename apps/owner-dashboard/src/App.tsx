@@ -550,6 +550,7 @@ export default function App() {
   const LINGUE: [string, string][] = [
     ['en', 'Inglese'], ['it', 'Italiano'], ['de', 'Tedesco'], ['fr', 'Francese'],
     ['pt', 'Portoghese'], ['ru', 'Russo'], ['zh', 'Cinese'], ['ja', 'Giapponese'], ['ar', 'Arabo'],
+    ['ko', 'Coreano'], ['id', 'Indonesiano'], ['hi', 'Hindi'],
   ];
   const [trLang, setTrLang] = useState('en');
   // loadTab e' ricreata a ogni render e chiusa sul trLang di quel render:

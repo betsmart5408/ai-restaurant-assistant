@@ -26,6 +26,7 @@ caricaEnv();
 const LANG_NAMES: Record<string, string> = {
   it: 'Italian', en: 'English', de: 'German', es: 'Spanish', fr: 'French',
   pt: 'Portuguese', ru: 'Russian', zh: 'Chinese (Simplified)', ja: 'Japanese', ar: 'Arabic',
+  ko: 'Korean', id: 'Indonesian', hi: 'Hindi',
 };
 
 // I nomi dei modelli cambiano nel tempo e quelli vecchi vengono spenti: invece di

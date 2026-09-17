@@ -86,6 +86,9 @@ router.post('/session', async (req, res) => {
       zh: `欢迎回来！😊 很高兴再次在${restaurantName}见到您！\n上次您点了：**${dishList}** — 希望您喜欢！今天我能为您推荐什么特别的吗？`,
       ja: `おかえりなさい！😊 ${restaurantName}でまたお会いできて嬉しいです！\n前回は：**${dishList}** をお選びになりました — お気に召しましたか？今日は何か特別なものをおすすめしましょうか？`,
       ar: `أهلاً بعودتك! 😊 يسعدنا رؤيتك مجدداً في ${restaurantName}!\nفي آخر زيارة اخترت: **${dishList}** — آمل أنك استمتعت! هل يمكنني أن أوصي بشيء مميز اليوم؟`,
+      ko: `다시 오신 걸 환영해요! 😊 ${restaurantName}에서 다시 뵙게 되어 정말 반가워요!\n지난번엔 **${dishList}**를 선택하셨죠 — 입맛에 맞으셨길 바라요! 오늘은 특별한 걸 추천해 드릴까요, 아니면 새로운 메뉴를 살펴보시겠어요?`,
+      id: `Selamat datang kembali! 😊 Senang sekali bertemu Anda lagi di ${restaurantName}!\nTerakhir kali Anda memilih: **${dishList}** — semoga Anda menyukainya! Hari ini boleh saya rekomendasikan sesuatu yang istimewa, atau Anda ingin melihat menu terbaru?`,
+      hi: `वापसी पर स्वागत है! 😊 ${restaurantName} में आपको दोबारा देखकर बहुत खुशी हुई!\nपिछली बार आपने चुना था: **${dishList}** — उम्मीद है आपको पसंद आया होगा! आज मैं आपको कुछ खास सुझाऊं, या आप मेन्यू की नई चीज़ें देखना चाहेंगे?`,
     } : returning_customer ? {
       it: `Bentornato! 😊 Che bello rivederti da ${restaurantName}!\nSono ${nomeAI}, il tuo assistente virtuale. Cosa ti va oggi — vuoi esplorare il menu o hai già qualcosa in mente?`,
       en: `Welcome back! 😊 Great to see you again at ${restaurantName}!\nI'm ${nomeAI}, your virtual assistant. What are you in the mood for today?`,
@@ -97,6 +100,9 @@ router.post('/session', async (req, res) => {
       zh: `欢迎回来！😊 很高兴再次在${restaurantName}见到您！\n我是${nomeAI}。今天想吃什么？`,
       ja: `おかえりなさい！😊 ${restaurantName}でまたお会いできて嬉しいです！\n私は${nomeAI}です。今日は何がお好みですか？`,
       ar: `أهلاً بعودتك! 😊 يسعدنا رؤيتك مجدداً في ${restaurantName}!\nأنا ${nomeAI}. ماذا تريد اليوم؟`,
+      ko: `다시 오신 걸 환영해요! 😊 ${restaurantName}에서 다시 뵙게 되어 반가워요!\n저는 ${nomeAI}, 당신의 가상 어시스턴트예요. 오늘은 무엇이 당기세요 — 메뉴를 둘러보시겠어요, 아니면 이미 생각해 두신 게 있나요?`,
+      id: `Selamat datang kembali! 😊 Senang bertemu Anda lagi di ${restaurantName}!\nSaya ${nomeAI}, asisten virtual Anda. Apa yang Anda inginkan hari ini — ingin menjelajahi menu atau sudah punya ide?`,
+      hi: `वापसी पर स्वागत है! 😊 ${restaurantName} में आपको फिर से देखकर अच्छा लगा!\nमैं ${nomeAI} हूं, आपका वर्चुअल असिस्टेंट। आज आपका मन क्या खाने का है — मेन्यू देखना चाहेंगे या पहले से कुछ सोच रखा है?`,
     } : {
       it: `Ciao! 👋 Sono ${nomeAI}, il tuo assistente virtuale da ${restaurantName}.\nSono qui per aiutarti a scoprire i piatti migliori e rispondere a qualsiasi domanda. Hai allergie o intolleranze di cui dovrei sapere?`,
       en: `Hello! 👋 I'm ${nomeAI}, your virtual assistant at ${restaurantName}.\nI'm here to help you discover the best dishes and answer any questions. Do you have any allergies or intolerances I should know about?`,
@@ -108,6 +114,9 @@ router.post('/session', async (req, res) => {
       zh: `你好！👋 我是${nomeAI}，${restaurantName}的虚拟助手。\n我在这里帮您发现最好的菜肴。您有任何过敏或不耐受症状吗？`,
       ja: `こんにちは！👋 私は${nomeAI}、${restaurantName}のバーチャルアシスタントです。\n最高の料理を見つけるお手伝いをします。アレルギーや食物不耐症はありますか？`,
       ar: `مرحباً! 👋 أنا ${nomeAI}، مساعدك الافتراضي في ${restaurantName}.\nأنا هنا لمساعدتك في اكتشاف أفضل الأطباق. هل لديك أي حساسية؟`,
+      ko: `안녕하세요! 👋 저는 ${restaurantName}의 가상 어시스턴트 ${nomeAI}예요.\n최고의 메뉴를 찾으실 수 있도록 도와드리고 궁금하신 점에 답해드릴게요. 혹시 제가 알아야 할 알레르기나 못 드시는 음식이 있나요?`,
+      id: `Halo! 👋 Saya ${nomeAI}, asisten virtual Anda di ${restaurantName}.\nSaya di sini untuk membantu Anda menemukan hidangan terbaik dan menjawab pertanyaan apa pun. Apakah Anda punya alergi atau intoleransi makanan yang perlu saya ketahui?`,
+      hi: `नमस्ते! 👋 मैं ${nomeAI} हूं, ${restaurantName} में आपका वर्चुअल असिस्टेंट।\nमैं यहां आपको बेहतरीन व्यंजन खोजने में मदद करने और आपके सवालों के जवाब देने के लिए हूं। क्या आपको कोई एलर्जी या खाने से जुड़ी कोई समस्या है जो मुझे पता होनी चाहिए?`,
     };
     const welcomeMsg = welcomeMessages[language] ?? welcomeMessages['it'];
     const defaultSuggestions: Record<string, string[]> = {
@@ -121,6 +130,9 @@ router.post('/session', async (req, res) => {
       zh: ['您推荐什么？', '我有过敏', '品鉴菜单'],
       ja: ['何がおすすめですか？', 'アレルギーがあります', 'テイスティングメニュー'],
       ar: ['ماذا توصي؟', 'لدي حساسية', 'قائمة التذوق'],
+      ko: ['무엇을 추천하세요?', '알레르기가 있어요', '테이스팅 메뉴'],
+      id: ['Apa yang Anda rekomendasikan?', 'Saya punya alergi', 'Menu cicip'],
+      hi: ['आप क्या सुझाएंगे?', 'मुझे एलर्जी है', 'टेस्टिंग मेन्यू'],
     };
     const suggestions = defaultSuggestions[language] ?? defaultSuggestions['it'];
 
@@ -289,6 +301,9 @@ router.post('/:sessionId/message', async (req, res) => {
       zh: "抱歉，我现在无法回复。菜单仍可在旁边查看。",
       ja: "申し訳ありません、今はお答えできません。メニューは横からご覧いただけます。",
       ar: "عذرًا، لا أستطيع الرد الآن. القائمة ما زالت متاحة بجانب هذه المحادثة.",
+      ko: "죄송해요, 지금은 답변을 드릴 수 없어요. 메뉴는 옆에서 계속 확인하실 수 있어요.",
+      id: "Maaf, saat ini saya tidak bisa menjawab. Menu tetap bisa dilihat di sebelah sini.",
+      hi: "क्षमा करें, अभी मैं जवाब नहीं दे पा रहा हूं। मेन्यू यहां बगल में देखा जा सकता है।",
     };
     const lingua = String(req.body?.language || 'it');
     res.json({

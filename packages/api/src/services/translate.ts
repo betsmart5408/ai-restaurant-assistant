@@ -14,6 +14,7 @@ import { modelliDisponibili } from './groq-model';
 export const LANG_NAMES: Record<string, string> = {
   it: 'Italian', en: 'English', de: 'German', es: 'Spanish', fr: 'French',
   pt: 'Portuguese', ru: 'Russian', zh: 'Chinese (Simplified)', ja: 'Japanese', ar: 'Arabic',
+  ko: 'Korean', id: 'Indonesian', hi: 'Hindi',
 };
 
 export const TUTTE_LE_LINGUE = Object.keys(LANG_NAMES);

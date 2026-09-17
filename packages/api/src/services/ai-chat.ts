@@ -248,6 +248,7 @@ function buildSystemPrompt(
   const langName: Record<string, string> = {
     it: 'italiano', en: 'English', de: 'Deutsch', es: 'español', fr: 'français',
     pt: 'português', ru: 'русский', zh: '中文', ja: '日本語', ar: 'العربية',
+    ko: '한국어', id: 'Bahasa Indonesia', hi: 'हिन्दी',
   };
 
   const dove = [luogo.city, luogo.country].filter(Boolean).join(', ');
@@ -376,6 +377,7 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
   const nomiLingua: Record<string, string> = {
     it: 'italiano', en: 'inglese', de: 'tedesco', es: 'spagnolo', fr: 'francese',
     pt: 'portoghese', ru: 'russo', zh: 'cinese', ja: 'giapponese', ar: 'arabo',
+    ko: 'coreano', id: 'indonesiano', hi: 'hindi',
   };
   const promptFinale = systemPrompt + `
 

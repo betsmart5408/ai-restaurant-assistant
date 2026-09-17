@@ -115,7 +115,7 @@ router.post('/translate-batch', async (req, res) => {
   try {
     const { items, lang, restaurant_slug }: { items: { id: string; text: string }[]; lang: string; restaurant_slug?: string } = req.body;
     if (!items?.length || lang === 'es') return res.json(items.map(i => ({ id: i.id, translated: i.text })));
-    const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese (Simplified)', ja: 'Japanese', ar: 'Arabic' };
+    const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese (Simplified)', ja: 'Japanese', ar: 'Arabic', ko: 'Korean', id: 'Indonesian', hi: 'Hindi' };
     const compact = items.map((item, idx) => `${idx}|${item.text}`).join('\n');
     const groqKey = await getRestaurantGroqKey(restaurant_slug);
     const groq = getGroqClient(groqKey);
@@ -144,7 +144,7 @@ router.post('/translate-desc', async (req, res) => {
   try {
     const { text, lang, restaurant_slug } = req.body;
     if (!text || !lang || lang === 'es') return res.json({ translated: text });
-    const langNames: Record<string, string> = { en: 'English', de: 'German', fr: 'French', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese (Simplified)', ja: 'Japanese', ar: 'Arabic', es: 'Spanish' };
+    const langNames: Record<string, string> = { it: 'Italian', en: 'English', de: 'German', fr: 'French', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese (Simplified)', ja: 'Japanese', ar: 'Arabic', es: 'Spanish', ko: 'Korean', id: 'Indonesian', hi: 'Hindi' };
     const groqKey = await getRestaurantGroqKey(restaurant_slug);
     const groq = getGroqClient(groqKey);
     const modello = await scegliModello(groq, groqKey || process.env.GROQ_API_KEY || '');
