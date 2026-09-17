@@ -1,5 +1,5 @@
 # ============================================================
-#  AI Restaurant Assistant  ->  pubblica le 3 interfacce su
+#  AI Restaurant Assistant  ->  pubblica le 2 interfacce su
 #  CLOUDFLARE PAGES (deploy diretti ILLIMITATI, gratis).
 #  L'API resta su Railway.
 #
@@ -19,12 +19,11 @@ $PSNativeCommandUseErrorActionPreference = $false
 $root = "C:\Users\pippo\Desktop\AI Restaurant Assistant"
 Set-Location $root
 
-$RID = "385da86d-9bca-47e5-b6ab-64670a072903"   # VITE_RESTAURANT_ID (dashboard + cucina)
+$RID = "385da86d-9bca-47e5-b6ab-64670a072903"   # VITE_RESTAURANT_ID (dashboard)
 $vite = Join-Path $root "node_modules\.bin\vite.cmd"
 
 $apps = @(
     @{ dir = "customer-chat";   name = "gustobolsa-chat";      rid = $false },
-    @{ dir = "kitchen-display"; name = "gustobolsa-cucina";    rid = $true  },
     @{ dir = "owner-dashboard"; name = "gustobolsa-dashboard"; rid = $true  }
 )
 
@@ -86,6 +85,5 @@ Write-Host ""
 Write-Host "================= FATTO =================" -ForegroundColor Yellow
 Write-Host "API (Railway):    $ApiUrl"
 Write-Host "Chat clienti:     $($results['customer-chat'])"
-Write-Host "Monitor cucina:   $($results['kitchen-display'])"
 Write-Host "Dashboard owner:  $($results['owner-dashboard'])"
 Write-Host "========================================" -ForegroundColor Yellow
