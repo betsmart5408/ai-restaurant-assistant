@@ -9,6 +9,8 @@
     "migrate": "tsx src/db/migrate.ts",
     "translate": "tsx src/db/translate-menu.ts",
     "load-translations": "tsx src/db/load-translations.ts",
+    "import-dish-translations": "tsx src/db/import-dish-translations.ts",
+    "export-batch-dishes": "tsx src/db/export-batch-dishes.ts",
     "migrate:all": "tsx src/db/migrate-all.ts",
     "crea-utente": "tsx src/db/crea-utente.ts",
     "crea-superadmin": "tsx src/db/crea-superadmin.ts",
