@@ -40,6 +40,12 @@ const limite = Number(valore('--limite')) || null;
 const riprova = argomenti.includes('--riprova');
 const rifai = argomenti.includes('--rifai');   // rilegge anche quelli gia' letti
 const citta = (valore('--citta') || 'sydney').toLowerCase();
+// Quante lingue puo' avere gia' un sito prima di dire "non e' un nostro
+// candidato". Di default 1 (come per Sydney, dove un sito bilingue e' raro).
+// In paesi col bilinguismo diffuso (Spagna: castigliano+catalano) va alzata,
+// altrimenti si scartano ristoranti che comunque non hanno cinese, arabo,
+// giapponese eccetera.
+const maxLingue = Number(valore('--max-lingue')) || 1;
 
 const attesa = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -442,13 +448,15 @@ async function leggiSito(ristorante) {
 
   // ── Giudizio ──
   const motivi = [];
-  if (esito.n_lingue > 1 || strumentoTraduzione) motivi.push('ha gia\' piu\' lingue');
+  if (esito.n_lingue > maxLingue || strumentoTraduzione) motivi.push('ha gia\' piu\' lingue');
   if (!esito.email) motivi.push('nessuna email trovata');
   if (!esito.pagina_menu && !esito.menu_pdf) motivi.push('nessun menu trovato sul sito');
 
   if (motivi.length === 0) {
     esito.candidato = 'SI';
-    esito.motivo = 'Sito in una lingua sola, menu online, email disponibile.';
+    esito.motivo = maxLingue > 1
+      ? `Sito in al massimo ${maxLingue} lingue, menu online, email disponibile.`
+      : 'Sito in una lingua sola, menu online, email disponibile.';
   } else if (motivi.includes('ha gia\' piu\' lingue')) {
     esito.candidato = 'no';
     esito.motivo = 'Gia\' multilingua: non ha il problema che risolviamo.';
