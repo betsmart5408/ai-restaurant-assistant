@@ -1,0 +1,19 @@
+{
+  "_nota": "Zone turistiche di Sydney. Ogni riquadro e' sud,ovest,nord,est in gradi. Per aggiungere una zona nuova: apri openstreetmap.org, inquadra la zona, ed esporta le coordinate del riquadro.",
+  "citta": "Sydney",
+  "paese": "Australia",
+  "zone": [
+    { "nome": "circular-quay-the-rocks", "etichetta": "Circular Quay e The Rocks", "riquadro": [-33.8640, 151.2050, -33.8540, 151.2160] },
+    { "nome": "cbd", "etichetta": "Centro citta' (CBD)", "riquadro": [-33.8760, 151.2000, -33.8630, 151.2150] },
+    { "nome": "darling-harbour-barangaroo", "etichetta": "Darling Harbour e Barangaroo", "riquadro": [-33.8760, 151.1950, -33.8570, 151.2060] },
+    { "nome": "haymarket-chinatown", "etichetta": "Haymarket e Chinatown", "riquadro": [-33.8850, 151.1990, -33.8750, 151.2090] },
+    { "nome": "surry-hills-darlinghurst", "etichetta": "Surry Hills e Darlinghurst", "riquadro": [-33.8940, 151.2050, -33.8750, 151.2260] },
+    { "nome": "potts-point-kings-cross", "etichetta": "Potts Point e Kings Cross", "riquadro": [-33.8790, 151.2190, -33.8660, 151.2300] },
+    { "nome": "pyrmont", "etichetta": "Pyrmont", "riquadro": [-33.8730, 151.1880, -33.8620, 151.2000] },
+    { "nome": "glebe", "etichetta": "Glebe", "riquadro": [-33.8880, 151.1810, -33.8730, 151.1960] },
+    { "nome": "newtown", "etichetta": "Newtown", "riquadro": [-33.9050, 151.1700, -33.8910, 151.1870] },
+    { "nome": "bondi-beach", "etichetta": "Bondi Beach", "riquadro": [-33.8970, 151.2650, -33.8810, 151.2830] },
+    { "nome": "manly", "etichetta": "Manly", "riquadro": [-33.8050, 151.2760, -33.7900, 151.2940] },
+    { "nome": "double-bay", "etichetta": "Double Bay e Darling Point", "riquadro": [-33.8820, 151.2350, -33.8700, 151.2500] }
+  ]
+}

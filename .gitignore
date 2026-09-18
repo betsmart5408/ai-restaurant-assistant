@@ -14,3 +14,14 @@ apps/*/.wrangler/
 
 # render/video di lavoro (Blender, Higgsfield): pesanti, non vanno su git
 Claude outputs/
+
+# dati raccolti dalla prospezione demo: email e telefoni veri dei ristoranti,
+# e comunque rigenerabili rilanciando gli script in prospezione/. Non su git.
+prospezione/dati/
+prospezione/dati-prova*/
+prospezione/menu/
+prospezione/demo/
+prospezione/superato/
+database/traduzioni/
+contattioutreach.csv
+*.xlsx

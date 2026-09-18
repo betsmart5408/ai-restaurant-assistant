@@ -1,0 +1,17 @@
+{
+  "_nota": "Zone turistiche di Barcellona. Ogni riquadro e' sud,ovest,nord,est in gradi. Per aggiungere una zona nuova: apri openstreetmap.org, inquadra la zona, ed esporta le coordinate del riquadro.",
+  "citta": "Barcellona",
+  "paese": "Spagna",
+  "zone": [
+    { "nome": "barri-gotic", "etichetta": "Barri Gotic", "riquadro": [41.3790, 2.1690, 41.3850, 2.1770] },
+    { "nome": "el-born", "etichetta": "El Born e La Ribera", "riquadro": [41.3820, 2.1780, 41.3880, 2.1850] },
+    { "nome": "raval", "etichetta": "El Raval", "riquadro": [41.3760, 2.1650, 41.3820, 2.1710] },
+    { "nome": "barceloneta", "etichetta": "Barceloneta", "riquadro": [41.3730, 2.1870, 41.3820, 2.1980] },
+    { "nome": "eixample-dreta", "etichetta": "Eixample Dreta (Passeig de Gracia)", "riquadro": [41.3880, 2.1550, 41.3980, 2.1680] },
+    { "nome": "eixample-esquerra", "etichetta": "Eixample Esquerra", "riquadro": [41.3800, 2.1400, 41.3900, 2.1550] },
+    { "nome": "gracia", "etichetta": "Gracia", "riquadro": [41.3980, 2.1480, 41.4080, 2.1600] },
+    { "nome": "poble-sec", "etichetta": "Poble Sec", "riquadro": [41.3700, 2.1550, 41.3780, 2.1650] },
+    { "nome": "sagrada-familia", "etichetta": "Sagrada Familia", "riquadro": [41.3980, 2.1720, 41.4060, 2.1820] },
+    { "nome": "port-vell", "etichetta": "Port Vell e Rambla del Mar", "riquadro": [41.3740, 2.1780, 41.3800, 2.1850] }
+  ]
+}
