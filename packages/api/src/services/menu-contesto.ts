@@ -38,10 +38,19 @@ export interface MenuPerPrompt {
   totali: number;
 }
 
-// Sotto questa soglia il menu ci sta comodo: si manda intero e non si sceglie
-// niente. Sopra, meglio un estratto ragionato che duemila token di elenco.
-const SOGLIA_SELEZIONE = 45;
-const QUANTI_SE_PARZIALE = 35;
+// Soglia alta apposta, e va tenuta alta.
+//
+// Un menu INTERO e' identico a ogni messaggio, quindi finisce nella cache del
+// prefisso e i token riusati non contano nei limiti di frequenza: costa quasi
+// zero. Un menu SCELTO cambia a ogni domanda, rompe il prefisso e fa ricontare
+// tutto da capo. Sotto i numeri veri, quindi, selezionare fa SPENDERE di piu'
+// invece di risparmiare.
+//
+// La selezione resta solo per i menu cosi' enormi da essere un problema anche
+// alla prima richiesta, quando la cache e' ancora fredda.
+// Vedi l'ordine dei blocchi in ai-chat.ts (buildSystemPrompt).
+const SOGLIA_SELEZIONE = 120;
+const QUANTI_SE_PARZIALE = 60;
 const MINIMO_PER_CATEGORIA = 2;
 
 /** "Carbonara 14.50 [glutine,uova]" */
