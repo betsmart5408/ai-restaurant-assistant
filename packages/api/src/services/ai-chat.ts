@@ -3,6 +3,7 @@ import { db } from '../db/client';
 import { modelliDisponibili } from './groq-model';
 import { rispostaDiretta } from './risposte-dirette';
 import { costruisciMenuPerPrompt, avvisoMenuParziale } from './menu-contesto';
+import { registraIntento } from './conta-intenti';
 
 function getGroqClient(apiKey?: string) {
   return new Groq({ apiKey: apiKey || process.env.GROQ_API_KEY });
@@ -352,7 +353,10 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
       restaurantId, dishes, language, currency: ctx.currency,
       messaggio: userMessage,
     });
-    if (diretta) return { message: diretta.message, suggestions: diretta.suggestions };
+    if (diretta) {
+      registraIntento(restaurantId, diretta.intento, language);
+      return { message: diretta.message, suggestions: diretta.suggestions };
+    }
   } catch (err) {
     // Una scorciatoia rotta non deve mai togliere la risposta al cliente:
     // si annota e si passa al modello.
@@ -437,6 +441,10 @@ REGOLE FINALI, PIU' IMPORTANTI DI TUTTE:
   if (!assistantMessage) {
     throw new Error(ultimoErrore instanceof Error ? ultimoErrore.message : 'L\'assistente non ha risposto');
   }
+
+  // Il modello ha risposto: si segna, cosi' il rapporto sa dire quante
+  // domande sono finite qui invece che nelle risposte diretta.
+  registraIntento(restaurantId, 'modello', language);
 
   const suggestionsMatch = assistantMessage.match(/SUGGESTIONS_JSON:\s*(\[[\s\S]+?\])\s*$/m);
   let suggestions: string[] = [];

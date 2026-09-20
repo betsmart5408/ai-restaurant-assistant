@@ -15,7 +15,8 @@
     "crea-utente": "tsx src/db/crea-utente.ts",
     "crea-superadmin": "tsx src/db/crea-superadmin.ts",
     "seed": "tsx src/db/seed.ts",
-    "carica-demo": "tsx src/db/carica-demo.ts"
+    "carica-demo": "tsx src/db/carica-demo.ts",
+    "intenti": "tsx src/db/intenti.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
