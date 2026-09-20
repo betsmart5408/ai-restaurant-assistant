@@ -1,6 +1,7 @@
 import Groq from 'groq-sdk';
 import { db } from '../db/client';
 import { modelliDisponibili } from './groq-model';
+import { rispostaDiretta } from './risposte-dirette';
 
 function getGroqClient(apiKey?: string) {
   return new Groq({ apiKey: apiKey || process.env.GROQ_API_KEY });
@@ -44,6 +45,7 @@ interface ChatContext {
   timezone?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  currency?: string | null;
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
   groupSize?: number;
   savedPreferences?: string;
@@ -338,6 +340,22 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
     contextCache.set(restaurantId, ctxData);
   }
   const { dishes, expiring, highStock, topMargin, popular } = ctxData.data;
+
+  // Scorciatoia: se la domanda e' una di quelle a cui il database risponde
+  // meglio del modello (un piatto, i suoi allergeni, "voglio ordinare", un
+  // grazie), si risponde qui e si risparmiano 3.400 token di menu.
+  // Nel dubbio rispostaDiretta restituisce null e si prosegue come sempre.
+  try {
+    const diretta = await rispostaDiretta({
+      restaurantId, dishes, language, currency: ctx.currency,
+      messaggio: userMessage,
+    });
+    if (diretta) return { message: diretta.message, suggestions: diretta.suggestions };
+  } catch (err) {
+    // Una scorciatoia rotta non deve mai togliere la risposta al cliente:
+    // si annota e si passa al modello.
+    console.error('risposta diretta non riuscita, passo al modello:', err);
+  }
 
   // Meteo del posto giusto: senza coordinate si salta del tutto,
   // meglio niente meteo che il meteo di un'altra citta'.

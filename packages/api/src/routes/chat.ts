@@ -204,7 +204,7 @@ router.post('/:sessionId/message', async (req, res) => {
 
     const session = await db.query(
       `SELECT cs.id, cs.language, cs.messages, cs.restaurant_id, cs.table_id,
-              r.name as restaurant_name, r.groq_api_key, r.ai_name,
+              r.name as restaurant_name, r.groq_api_key, r.ai_name, r.currency,
               r.city, r.country, r.cuisine_type, r.about, r.timezone, r.latitude, r.longitude, t.number as table_number
        FROM chat_sessions cs
        JOIN restaurants r ON r.id = cs.restaurant_id
@@ -251,6 +251,7 @@ router.post('/:sessionId/message', async (req, res) => {
         latitude: s.latitude != null ? Number(s.latitude) : null,
         longitude: s.longitude != null ? Number(s.longitude) : null,
         tableNumber: s.table_number,
+        currency: s.currency,
         language: language || s.language,
         conversationHistory: history,
         existingOrders,
