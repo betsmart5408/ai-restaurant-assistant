@@ -16,6 +16,8 @@ import billingRoutes from './routes/billing';
 import uploadRoutes from './routes/upload';
 import whatsappRoutes from './routes/whatsapp';
 import assistenteRoutes from './routes/assistente';
+import recensioniRoutes from './routes/recensioni';
+
 import { startAlertScheduler } from './services/alerts';
 
 const app = express();
@@ -64,6 +66,7 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/assistente', assistenteRoutes);
+app.use('/api/recensioni', recensioniRoutes);
 
 app.listen(PORT, () => {
   console.log(`API server running on http://localhost:${PORT}`);
