@@ -2,6 +2,7 @@ import Groq from 'groq-sdk';
 import { db } from '../db/client';
 import { modelliDisponibili } from './groq-model';
 import { rispostaDiretta } from './risposte-dirette';
+import { costruisciMenuPerPrompt, avvisoMenuParziale } from './menu-contesto';
 
 function getGroqClient(apiKey?: string) {
   return new Groq({ apiKey: apiKey || process.env.GROQ_API_KEY });
@@ -208,12 +209,12 @@ function buildSystemPrompt(
   previousDishes?: string[],
   aiName: string = 'Marco',
   luogo: { city?: string | null; country?: string | null; cuisineType?: string | null; about?: string | null; timezone?: string | null } = {},
+  messaggioCliente: string = '',
 ): string {
   const time = getTimeContext(luogo.timezone);
-  const menuJson = JSON.stringify(dishes.map(d => ({
-    name: d.name, price: d.price, category: d.category,
-    ...(Array.isArray(d.allergens) && d.allergens.length > 0 ? { allergeni: d.allergens } : {}),
-  })));
+  // Il menu e' la voce piu' pesante del prompt e si rispedisce a ogni
+  // messaggio: si scrive stretto, e se e' enorme si sceglie. Vedi menu-contesto.ts.
+  const menu = costruisciMenuPerPrompt(dishes, messaggioCliente);
   const quantiConAllergeni = dishes.filter(d => Array.isArray(d.allergens) && d.allergens.length > 0).length;
 
   const promos: string[] = [];
@@ -265,8 +266,8 @@ Rispondi SEMPRE in ${langName[language] ?? language}. Tavolo ${tableNumber}. Ora
 Tono: amichevole e coinvolgente, mai robotico. Max 4 righe salvo richiesta dettagli.
 ${weatherSection}${groupSection}${preferencesSection}${existingOrdersSection}${returningSection}
 
-MENU DISPONIBILE:
-${menuJson}
+MENU DISPONIBILE (una riga per categoria; fra parentesi quadre gli allergeni registrati):
+${menu.testo}${avvisoMenuParziale(menu)}
 ${promoSection}${popularSection}
 
 ALLERGIE — REGOLA DI SICUREZZA, NON NEGOZIABILE:
@@ -277,8 +278,9 @@ ALLERGIE — REGOLA DI SICUREZZA, NON NEGOZIABILE:
 - Non dedurre gli ingredienti dal nome o dalla descrizione del piatto. Una descrizione non e' una scheda allergeni.
 - Puoi riportare SOLO gli allergeni scritti nel campo "allergeni" del menu qui sopra, dicendo che sono le informazioni registrate dal ristorante.
 - Quando qualcuno dichiara un'allergia: ringrazia, di' che avvisi il personale, e indirizzalo SEMPRE al cameriere per la conferma prima di ordinare.
-- Frase da usare: "Per la tua sicurezza faccio verificare al personale: gli allergeni li conferma la cucina."
-- Questo ristorante NON ha ancora registrato gli allergeni dei piatti: dillo con chiarezza e rimanda al personale, senza fare ipotesi.
+- Frase da usare: "Per la tua sicurezza faccio verificare al personale: gli allergeni li conferma la cucina."${quantiConAllergeni === 0
+  ? '\n- Questo ristorante NON ha ancora registrato gli allergeni dei piatti: dillo con chiarezza e rimanda al personale, senza fare ipotesi.'
+  : ''}
 
 
 FORMATTAZIONE (obbligatoria):
@@ -377,6 +379,7 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
     language, tableNumber, weather, groupSize, savedPreferences, existingOrders,
     returningCustomer, previousDishes, aiName,
     { city: ctx.city, country: ctx.country, cuisineType: ctx.cuisineType, about: ctx.about, timezone: ctx.timezone },
+    userMessage,
   );
 
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [

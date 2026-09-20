@@ -107,8 +107,10 @@ function elencoAllergeni(allergens: unknown, lang: string): string[] {
  * Minuscolo, via gli accenti, via la punteggiatura, spazi normalizzati.
  * Serve perche' "Tagliatelle al ragù," e "tagliatelle al ragu" sono lo stesso
  * piatto, e il cliente scrive come gli pare.
+ *
+ * Esportata perche' la usa anche menu-contesto.ts per pesare i piatti.
  */
-function normalizza(s: string): string {
+export function normalizza(s: string): string {
   return (s || '')
     .toLowerCase()
     .normalize('NFD')
