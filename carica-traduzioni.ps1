@@ -6,5 +6,6 @@ Write-Host ""
 Write-Host "Carico le traduzioni di '$Slug' nel database..." -ForegroundColor Cyan
 npm run load-translations --workspace=packages/api -- $Slug
 Write-Host ""
-Write-Host "Fatto. Ora lancia .\deploy-tutto.ps1 per pubblicare." -ForegroundColor Yellow
+Write-Host "Fatto: le traduzioni sono gia' online." -ForegroundColor Green
+Write-Host "Il menu le legge dal database, non serve pubblicare niente." -ForegroundColor Gray
 Read-Host "Premi INVIO per chiudere"

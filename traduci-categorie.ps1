@@ -22,5 +22,6 @@ Write-Host "Traduco le sezioni del menu..." -ForegroundColor Cyan
 node prospezione/traduci-categorie.mjs @argomenti
 
 Write-Host ""
-Write-Host "Fatto. Ora lancia .\deploy-tutto.ps1 se non l'hai gia' fatto." -ForegroundColor Yellow
+Write-Host "Fatto: le categorie tradotte sono gia' online." -ForegroundColor Green
+Write-Host "Il menu le legge dal database, non serve pubblicare niente." -ForegroundColor Gray
 Read-Host "Premi INVIO per chiudere"

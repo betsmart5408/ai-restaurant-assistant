@@ -25,5 +25,6 @@ Write-Host ""
 npm run translate --workspace=packages/api -- $Slug $LinguaOriginale $Lingue
 
 Write-Host ""
-Write-Host "Fatto. Ora rilancia .\deploy-tutto.ps1 per pubblicare l'API aggiornata." -ForegroundColor Yellow
+Write-Host "Fatto: le traduzioni sono gia' online." -ForegroundColor Green
+Write-Host "Il menu le legge dal database, non serve pubblicare niente." -ForegroundColor Gray
 Read-Host "Premi INVIO per chiudere"
