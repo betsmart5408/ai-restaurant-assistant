@@ -148,16 +148,33 @@ async function chiediCatena(piatti: Piatto[], lang: string): Promise<any[] | nul
       continue;
     }
     for (const model of modelli) {
-      try {
-        const res = await cliente.chat.completions.create({
-          model, temperature: 0.4, max_tokens: 4096,
-          messages: [{ role: 'user', content: costruisciPrompt(piatti, lang) }],
-        });
-        const arr = estraiJson(res.choices[0]?.message?.content ?? '');
-        if (arr) return arr;
-      } catch (err: any) {
-        const m = String(err?.message ?? err);
-        console.log(`   ! ${fornitore.nome}/${model}: ${m.slice(0, 90)}`);
+      // Sul piano gratuito il 429 non e' un errore: e' la quota al minuto che
+      // si e' esaurita e fra poco torna. Saltare il blocco lascerebbe buchi
+      // nel menu; si aspetta e si riprova, come fa gia' estrai-menu.mjs.
+      for (let tentativo = 1; tentativo <= 4; tentativo++) {
+        try {
+          const res = await cliente.chat.completions.create({
+            model, temperature: 0.4, max_tokens: 4096,
+            messages: [{ role: 'user', content: costruisciPrompt(piatti, lang) }],
+          });
+          const arr = estraiJson(res.choices[0]?.message?.content ?? '');
+          if (arr) return arr;
+          break;   // ha risposto ma non era JSON: cambiare modello, non aspettare
+        } catch (err: any) {
+          const m = String(err?.message ?? err);
+          const limite = err?.status === 429 || /rate limit|429/i.test(m);
+          if (!limite) {
+            console.log(`   ! ${fornitore.nome}/${model}: ${m.slice(0, 90)}`);
+            break;
+          }
+          if (tentativo === 4) {
+            console.log(`   ! ${fornitore.nome}/${model}: limite non superato dopo 4 tentativi`);
+            break;
+          }
+          const attesa = 30 * tentativo;   // 30s, 60s, 90s
+          console.log(`   (limite ${fornitore.nome}: aspetto ${attesa}s)`);
+          await sleep(attesa * 1000);
+        }
       }
     }
   }
@@ -171,10 +188,10 @@ async function main() {
     process.exit(1);
   }
 
-  const ristoranti = await db.query<{ id: string; slug: string; name: string; languages: string[] }>(
+  const ristoranti = await db.query<{ id: string; slug: string; name: string; base_lang: string | null }>(
     soloSlug
-      ? `SELECT id, slug, name, languages FROM restaurants WHERE slug = $1`
-      : `SELECT id, slug, name, languages FROM restaurants ORDER BY created_at`,
+      ? `SELECT id, slug, name, base_lang FROM restaurants WHERE slug = $1`
+      : `SELECT id, slug, name, base_lang FROM restaurants ORDER BY created_at`,
     soloSlug ? [soloSlug] : [],
   );
   if (ristoranti.rows.length === 0) {
@@ -186,9 +203,29 @@ async function main() {
   let scritte = 0, saltate = 0, scartate = 0, senzaDescrizioneTotale = 0;
 
   for (const r of ristoranti.rows) {
-    const lingue = soloLingue.length > 0
-      ? soloLingue
-      : (Array.isArray(r.languages) && r.languages.length > 0 ? r.languages : ['en']);
+    // Le lingue in cui il menu ESISTE davvero, non quelle dichiarate.
+    //
+    // Quasi tutti i ristoranti dichiarano 10 lingue nel campo "languages", ma
+    // 452 su 519 non hanno una sola traduzione. Scrivere il racconto in
+    // giapponese per un menu che in giapponese non c'e' e' lavoro buttato: il
+    // cliente vedrebbe un racconto giapponese sotto un nome di piatto inglese.
+    // E moltiplica per sei il consumo della quota gratuita.
+    //
+    // Quando il menu verra' tradotto, si rilancia lo script e le lingue nuove
+    // si aggiungono da sole: salta quello che c'e' gia'.
+    let lingue: string[];
+    if (soloLingue.length > 0) {
+      lingue = soloLingue;
+    } else {
+      const l = await db.query<{ lang: string }>(
+        `SELECT DISTINCT t.lang FROM dish_translations t
+           JOIN dishes d ON d.id = t.dish_id
+          WHERE d.restaurant_id = $1`,
+        [r.id],
+      );
+      lingue = l.rows.map(x => x.lang);
+      if (lingue.length === 0) lingue = [(r.base_lang || 'en').trim() || 'en'];
+    }
 
     // SOLO i piatti che hanno una descrizione.
     //
