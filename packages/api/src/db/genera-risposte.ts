@@ -2,7 +2,7 @@
  * Scrive PRIMA le risposte che oggi il modello improvvisa davanti al cliente.
  *
  *   npm run genera-risposte --workspace=packages/api
- *   npm run genera-risposte --workspace=packages/api -- --slug demo-al-aseel
+ *   npm run genera-risposte --workspace=packages/api -- --slug al-aseel
  *   npm run genera-risposte --workspace=packages/api -- --lingue it,en,ja
  *   npm run genera-risposte --workspace=packages/api -- --claude
  *   npm run genera-risposte --workspace=packages/api -- --rifai
@@ -28,6 +28,7 @@ import { config as caricaEnv } from 'dotenv';
 import { Pool } from 'pg';
 import { LANG_NAMES } from '../services/translate';
 import { catenaFornitori, clientePer } from '../services/fornitori-ia';
+import { modelliDisponibili } from '../services/groq-model';
 
 caricaEnv({ path: join(__dirname, '../../../../.env') });
 caricaEnv();
@@ -117,7 +118,14 @@ async function chiediClaude(piatti: Piatto[], lang: string): Promise<any[] | nul
         messages: [{ role: 'user', content: costruisciPrompt(piatti, lang) }],
       }),
     });
-    if (!res.ok) { console.log(`   ! Claude: ${res.status}`); return null; }
+    if (!res.ok) {
+      // Il corpo della risposta dice ESATTAMENTE cosa non va (modello
+      // sbagliato, parametro fuori intervallo, chiave scaduta). Stamparlo:
+      // sei righe con scritto solo "400" non servono a nessuno.
+      const dettaglio = await res.text().catch(() => '');
+      console.log(`   ! Claude ${res.status}: ${dettaglio.slice(0, 300)}`);
+      return null;
+    }
     const dati: any = await res.json();
     return estraiJson(dati?.content?.[0]?.text ?? '');
   } catch (err) {
@@ -129,7 +137,16 @@ async function chiediClaude(piatti: Piatto[], lang: string): Promise<any[] | nul
 async function chiediCatena(piatti: Piatto[], lang: string): Promise<any[] | null> {
   for (const fornitore of catenaFornitori()) {
     const cliente = clientePer(fornitore);
-    const modelli = fornitore.modelli.length > 0 ? fornitore.modelli : ['llama-3.3-70b-versatile'];
+    // Niente nomi di modello scritti fissi: vengono ritirati e lo script
+    // smetterebbe di funzionare senza che nessuno abbia toccato niente.
+    // E' la stessa ragione per cui esiste services/groq-model.ts.
+    const modelli = fornitore.modelli.length > 0
+      ? fornitore.modelli
+      : await modelliDisponibili(cliente, fornitore.chiave);
+    if (modelli.length === 0) {
+      console.log(`   ! ${fornitore.nome}: nessun modello disponibile con questa chiave`);
+      continue;
+    }
     for (const model of modelli) {
       try {
         const res = await cliente.chat.completions.create({
@@ -166,21 +183,41 @@ async function main() {
     return;
   }
 
-  let scritte = 0, saltate = 0, scartate = 0;
+  let scritte = 0, saltate = 0, scartate = 0, senzaDescrizioneTotale = 0;
 
   for (const r of ristoranti.rows) {
     const lingue = soloLingue.length > 0
       ? soloLingue
       : (Array.isArray(r.languages) && r.languages.length > 0 ? r.languages : ['en']);
 
-    const piatti = await db.query<Piatto>(
+    // SOLO i piatti che hanno una descrizione.
+    //
+    // Senza descrizione il modello ha solo il nome, e da un nome non si
+    // ricava cosa c'e' dentro: "Arnabeet" (cavolfiore, in arabo) e' diventato
+    // "melanzane grigliate" alla prima prova. Su un menu libanese, dove i nomi
+    // sono traslitterazioni, e' successo quasi ovunque.
+    //
+    // Un piatto senza racconto non e' un problema: la chat mostra comunque
+    // nome, prezzo e allergeni. Un racconto che sbaglia l'ingrediente
+    // principale e' un problema del ristoratore, stampato e ripetuto per mesi.
+    const tutti = await db.query<Piatto>(
       `SELECT id, name, description, category, price FROM dishes
         WHERE restaurant_id = $1 AND available = true ORDER BY category, sort_order`,
       [r.id],
     );
-    if (piatti.rows.length === 0) continue;
+    const piatti = { rows: tutti.rows.filter(p => (p.description || '').trim() !== '') };
+    const senzaDescrizione = tutti.rows.length - piatti.rows.length;
+    if (piatti.rows.length === 0) {
+      console.log(`\n${r.name}  - saltato: nessuno dei ${tutti.rows.length} piatti ha una descrizione`);
+      senzaDescrizioneTotale += senzaDescrizione;
+      continue;
+    }
 
-    console.log(`\n${r.name}  (${piatti.rows.length} piatti, ${lingue.length} lingue)`);
+    console.log(`\n${r.name}  (${piatti.rows.length} piatti con descrizione, ${lingue.length} lingue)`);
+    if (senzaDescrizione > 0) {
+      console.log(`  ${senzaDescrizione} piatti saltati: senza descrizione nel menu`);
+      senzaDescrizioneTotale += senzaDescrizione;
+    }
 
     for (const lang of lingue) {
       // Chi ha gia' entrambe le risposte in questa lingua si salta.
@@ -230,6 +267,11 @@ async function main() {
   console.log(`\nScritte ${scritte} risposte, saltati ${saltate} piatti gia' fatti.`);
   if (scartate > 0) {
     console.log(`Scartate ${scartate} risposte che nominavano allergeni (non devono finire qui).`);
+  }
+  if (senzaDescrizioneTotale > 0) {
+    console.log(`\n${senzaDescrizioneTotale} piatti saltati perche' nel menu non hanno una descrizione.`);
+    console.log('Dal nome soltanto il modello si inventerebbe gli ingredienti.');
+    console.log('Per sbloccarli basta scrivere una riga di descrizione nel pannello Menu.');
   }
   await db.end();
 }
