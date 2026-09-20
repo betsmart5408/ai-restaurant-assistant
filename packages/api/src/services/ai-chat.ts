@@ -365,6 +365,10 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
     const diretta = await rispostaDiretta({
       restaurantId, dishes, language, currency: ctx.currency,
       messaggio: userMessage,
+      // L'ultima cosa detta dall'assistente: e' li' che sta il piatto a cui
+      // si riferisce "e da bere che ci sta?".
+      ultimaRisposta: [...conversationHistory].reverse()
+        .find(m => m.role === 'assistant')?.content ?? '',
     });
     if (diretta) {
       registraIntento(restaurantId, diretta.intento, language);

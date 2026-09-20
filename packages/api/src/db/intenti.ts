@@ -37,6 +37,7 @@ const db = new Pool({ connectionString: process.env.DATABASE_URL });
 const ETICHETTE: Record<string, string> = {
   piatto: 'Scheda di un piatto',
   allergeni: 'Domanda sugli allergeni',
+  abbinamento: 'Cosa bere col piatto',
   ordine: '"Voglio ordinare"',
   saluto: 'Ringraziamenti',
   modello: 'Passate al modello',

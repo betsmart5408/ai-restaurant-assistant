@@ -33,7 +33,7 @@ export interface PiattoBase {
 export interface RispostaDiretta {
   message: string;
   suggestions: string[];
-  intento: 'piatto' | 'allergeni' | 'ordine' | 'saluto';
+  intento: 'piatto' | 'allergeni' | 'ordine' | 'saluto' | 'abbinamento';
 }
 
 // ── Valuta: stessa tabella del menu pubblico (App.tsx), cosi' il prezzo nella
@@ -175,6 +175,23 @@ const PAROLE_ORDINE = [
   'أريد أن أطلب',
   '주문', 'saya mau pesan', 'pesan',
   'ऑर्डर',
+];
+
+// "e da bere?" / "che vino ci sta?" — l'abbinamento e' scritto in dish_answers.
+const PAROLE_BEVUTA = [
+  'vino', 'bere', 'abbinament', 'abbino', 'abbina', 'birra', 'cocktail', 'bevanda', 'calice',
+  'wine', 'drink', 'pairing', 'pair with', 'beer', 'sommelier',
+  'wein', 'trinken', 'getrank', 'bier', 'passt dazu',
+  'maridaje', 'marida', 'cerveza', 'beber', 'copa',
+  'accord', 'boire', 'biere', 'verre de',
+  'vinho', 'harmoniza', 'cerveja', 'beber',
+  'вино', 'напиток', 'пиво',
+  '配什么酒', '醍配', '喝什么', '葡萄酒', '啤酒',
+  'ワイン', '飲み物', 'ビール', '合うお酒',
+  'نبيذ', 'مشروب',
+  '와인', '음료', '맥주', '마실',
+  'anggur', 'minum', 'minuman',
+  'वाइन', 'पेय', 'शराब',
 ];
 
 const PAROLE_GRAZIE = [
@@ -331,6 +348,10 @@ function testi(lang: string): Testi {
 interface PiattoRisolto extends PiattoBase {
   nomeMostrato: string;
   descrizioneMostrata: string;
+  /** Il piatto raccontato bene, scritto prima (dish_answers). Vuoto se non generato. */
+  racconto: string;
+  /** Cosa bere con questo piatto. Vuoto se non generato. */
+  abbinamento: string;
   chiavi: string[];   // nome base + nome tradotto, normalizzati
 }
 
@@ -356,8 +377,25 @@ async function piattiNellaLingua(
     tradotti = new Map(r.rows.map(x => [x.dish_id, { name: x.name, description: x.description }]));
   } catch { /* si resta alla lingua originale */ }
 
+  // Le risposte scritte prima (racconto, abbinamento). Stessa regola delle
+  // traduzioni: se mancano si va avanti lo stesso, con quello che c'e'.
+  let scritte = new Map<string, { racconto?: string; abbinamento?: string }>();
+  try {
+    const r = await db.query<{ dish_id: string; kind: string; text: string }>(
+      `SELECT dish_id, kind, text FROM dish_answers
+        WHERE lang = $1 AND dish_id = ANY($2::uuid[])`,
+      [lang, dishes.map(d => d.id)],
+    );
+    for (const x of r.rows) {
+      const voce = scritte.get(x.dish_id) ?? {};
+      if (x.kind === 'racconto' || x.kind === 'abbinamento') voce[x.kind] = x.text;
+      scritte.set(x.dish_id, voce);
+    }
+  } catch { /* tabella non ancora creata: si prosegue senza */ }
+
   const risolti: PiattoRisolto[] = dishes.map(d => {
     const t = tradotti.get(d.id);
+    const s = scritte.get(d.id);
     const nomeMostrato = (t?.name || '').trim() || d.name;
     const chiavi = [normalizza(d.name)];
     const nt = normalizza(nomeMostrato);
@@ -366,6 +404,8 @@ async function piattiNellaLingua(
       ...d,
       nomeMostrato,
       descrizioneMostrata: (t?.description || '').trim() || d.description || '',
+      racconto: (s?.racconto || '').trim(),
+      abbinamento: (s?.abbinamento || '').trim(),
       chiavi,
     };
   });
@@ -409,9 +449,30 @@ function piattoCitato(msg: string, piatti: PiattoRisolto[]): PiattoRisolto | nul
   return candidati.size === 1 ? [...candidati.values()][0] : null;
 }
 
+/**
+ * Il piatto nominato nell'ULTIMA risposta dell'assistente, per capire a cosa
+ * si riferisce "e da bere che ci sta?". Il prompt impone i nomi dei piatti in
+ * **grassetto** (serve al cliente per aprirne la scheda), quindi il riferimento
+ * e' gia' li' dentro, marcato: basta leggerlo.
+ */
+function piattoDalContesto(ultimaRisposta: string, piatti: PiattoRisolto[]): PiattoRisolto | null {
+  if (!ultimaRisposta) return null;
+  const nomi = [...ultimaRisposta.matchAll(/\*\*(.+?)\*\*/g)].map(m => normalizza(m[1]));
+  // Dall'ultimo nominato al primo: e' quello di cui si stava parlando.
+  for (const n of nomi.reverse()) {
+    const p = piatti.find(x => x.chiavi.includes(n));
+    if (p) return p;
+  }
+  return null;
+}
+
 function schedaPiatto(p: PiattoRisolto, valuta: string, lang: string, t: Testi): string {
   const righe = [`**${p.nomeMostrato}** · ${valuta}${Number(p.price).toFixed(2)}`];
-  if (p.descrizioneMostrata) righe.push(p.descrizioneMostrata);
+  // Il racconto scritto prima batte la descrizione del menu: e' piu' ricco ed
+  // e' stato riletto dal ristoratore. Se non c'e' si usa la descrizione.
+  if (p.racconto) righe.push(p.racconto);
+  else if (p.descrizioneMostrata) righe.push(p.descrizioneMostrata);
+  if (p.abbinamento) righe.push(p.abbinamento);
   const elenco = elencoAllergeni(p.allergens, lang);
   if (elenco.length > 0) {
     // Solo la prima riga: nella scheda l'elenco e' un'informazione, non una
@@ -431,6 +492,8 @@ export async function rispostaDiretta(p: {
   language: string;
   currency?: string | null;
   messaggio: string;
+  /** L'ultima cosa detta dall'assistente: serve a capire "e da bere?". */
+  ultimaRisposta?: string;
 }): Promise<RispostaDiretta | null> {
   const grezzo = (p.messaggio || '').trim();
   if (!grezzo || troppoLunga(grezzo)) return null;
@@ -442,7 +505,19 @@ export async function rispostaDiretta(p: {
   const valuta = simboloValuta(p.currency);
   const piatti = await piattiNellaLingua(p.restaurantId, p.language, p.dishes);
 
-  // 1. ALLERGENI — prima di tutto: "allergeni della carbonara" non e' una
+  // 1. IL MESSAGGIO E' ESATTAMENTE UN PIATTO — il cliente ha toccato un nome
+  //    in grassetto o l'ha scritto. Va provato PRIMA degli altri intenti:
+  //    "Pollo al vino" e' una richiesta di scheda, non una domanda sul vino.
+  const esatto = piattoEsatto(msg, piatti);
+  if (esatto) {
+    return {
+      message: schedaPiatto(esatto, valuta, p.language, t),
+      suggestions: t.suggerimenti,
+      intento: 'piatto',
+    };
+  }
+
+  // 2. ALLERGENI — prima degli altri: "allergeni della carbonara" non e' una
   //    richiesta della scheda del piatto, e la risposta deve essere la frase
   //    di sicurezza, sempre identica, mai generata.
   if (contiene(msg, PAROLE_ALLERGENI) || contieneParolaIntera(msg, PAROLE_ALLERGENI_INTERE)) {
@@ -460,18 +535,23 @@ export async function rispostaDiretta(p: {
     };
   }
 
-  // 2. IL MESSAGGIO E' UN PIATTO — il cliente ha toccato un nome in grassetto
-  //    o l'ha scritto. La scheda ce l'abbiamo in casa, tradotta e con il prezzo.
-  const esatto = piattoEsatto(msg, piatti);
-  if (esatto) {
-    return {
-      message: schedaPiatto(esatto, valuta, p.language, t),
-      suggestions: t.suggerimenti,
-      intento: 'piatto',
-    };
+  // 3. COSA CI BEVO — l'abbinamento e' scritto prima in dish_answers.
+  //    Il piatto puo' essere nominato ("che vino con la carbonara?") oppure
+  //    sottinteso ("e da bere?"), e allora lo si prende dall'ultima risposta.
+  //    Se l'abbinamento non e' ancora stato generato si passa al modello:
+  //    meglio una risposta viva che una riga vuota.
+  if (contiene(msg, PAROLE_BEVUTA)) {
+    const piatto = piattoCitato(msg, piatti) ?? piattoDalContesto(p.ultimaRisposta || '', piatti);
+    if (piatto?.abbinamento) {
+      return {
+        message: `**${piatto.nomeMostrato}** — ${piatto.abbinamento}`,
+        suggestions: t.suggerimenti,
+        intento: 'abbinamento',
+      };
+    }
   }
 
-  // 3. VUOLE ORDINARE — il prompt impone gia' una risposta fissa: qui la
+  // 4. VUOLE ORDINARE — il prompt impone gia' una risposta fissa: qui la
   //    diamo senza spendere una chiamata per riscriverla ogni volta.
   if (contiene(msg, PAROLE_ORDINE)) {
     return { message: t.ordine, suggestions: t.suggerimenti, intento: 'ordine' };
