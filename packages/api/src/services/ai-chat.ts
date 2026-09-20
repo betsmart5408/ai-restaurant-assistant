@@ -4,10 +4,7 @@ import { modelliDisponibili } from './groq-model';
 import { rispostaDiretta } from './risposte-dirette';
 import { costruisciMenuPerPrompt, avvisoMenuParziale } from './menu-contesto';
 import { registraIntento } from './conta-intenti';
-
-function getGroqClient(apiKey?: string) {
-  return new Groq({ apiKey: apiKey || process.env.GROQ_API_KEY });
-}
+import { catenaFornitori, clientePer } from './fornitori-ia';
 
 // `saved_preferences` e `previous_dishes` arrivano dal body pubblico di
 // POST /api/chat/session, quindi sono testo scelto dal cliente: non vanno mai
@@ -349,7 +346,6 @@ function pulisciRisposta(testo: string): string {
 export async function processChat(ctx: ChatContext, userMessage: string, groqApiKey?: string) {
   const { restaurantId, restaurantName, tableNumber, language, conversationHistory, groupSize, savedPreferences, existingOrders, returningCustomer, previousDishes } = ctx;
   const aiName = ctx.aiName?.trim() || 'Marco';
-  const groq = getGroqClient(groqApiKey);
 
   // Cache contesto ristorante per 5 minuti
   const now = Date.now();
@@ -410,10 +406,9 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
 
   // Il modello si sceglie al volo: i nomi fissi vengono ritirati e l'assistente
   // smetterebbe di rispondere senza che nessuno abbia toccato il codice.
-  const chiave = groqApiKey || process.env.GROQ_API_KEY || '';
-  const modelli = await modelliDisponibili(groq, chiave);
-  if (modelli.length === 0) {
-    throw new Error('Nessun modello disponibile con questa chiave Groq. Controlla la chiave in Impostazioni IA.');
+  const catena = catenaFornitori(groqApiKey);
+  if (catena.length === 0) {
+    throw new Error('Nessun fornitore IA configurato. Controlla la chiave in Impostazioni IA o AI_PROVIDERS nel .env.');
   }
 
   const nomiLingua: Record<string, string> = {
@@ -431,29 +426,40 @@ REGOLE FINALI, PIU' IMPORTANTI DI TUTTE:
   let assistantMessage = '';
   let modelloUsato = '';
   let ultimoErrore: unknown = null;
-  for (const model of modelli) {
-    // primo tentativo chiedendo di nascondere il ragionamento; se il modello
-    // non conosce quel parametro, si riprova senza
-    for (const nascondiRagionamento of [true, false]) {
-      try {
-        const parametri: Record<string, unknown> = {
-          model,
-          max_tokens: 900,
-          temperature: 0.7,
-          messages: [
-            { role: 'system', content: promptFinale },
-            ...messages,
-          ],
-        };
-        if (nascondiRagionamento) parametri.reasoning_format = 'hidden';
-        const response = await groq.chat.completions.create(parametri as any);
-        assistantMessage = pulisciRisposta(response.choices[0]?.message?.content ?? '');
-        if (assistantMessage) { modelloUsato = model; break; }
-      } catch (err) {
-        ultimoErrore = err;
+
+  // Si scorre la catena: la chiave del ristorante per prima (e' la sua quota
+  // gratuita), poi i fornitori della piattaforma. Quando uno ha finito la
+  // quota giornaliera risponde 429 e si passa semplicemente al successivo.
+  catena: for (const fornitore of catena) {
+    const cliente = clientePer(fornitore);
+    const modelli = fornitore.modelli.length > 0
+      ? fornitore.modelli
+      : await modelliDisponibili(cliente, fornitore.chiave);
+    if (modelli.length === 0) continue;
+
+    for (const model of modelli) {
+      // primo tentativo chiedendo di nascondere il ragionamento; se il modello
+      // non conosce quel parametro, si riprova senza
+      for (const nascondiRagionamento of [true, false]) {
+        try {
+          const parametri: Record<string, unknown> = {
+            model,
+            max_tokens: 900,
+            temperature: 0.7,
+            messages: [
+              { role: 'system', content: promptFinale },
+              ...messages,
+            ],
+          };
+          if (nascondiRagionamento) parametri.reasoning_format = 'hidden';
+          const response = await cliente.chat.completions.create(parametri as any);
+          assistantMessage = pulisciRisposta(response.choices[0]?.message?.content ?? '');
+          if (assistantMessage) { modelloUsato = `${fornitore.nome}/${model}`; break catena; }
+        } catch (err) {
+          ultimoErrore = err;
+        }
       }
     }
-    if (assistantMessage) break;
   }
   if (!assistantMessage) {
     throw new Error(ultimoErrore instanceof Error ? ultimoErrore.message : 'L\'assistente non ha risposto');
