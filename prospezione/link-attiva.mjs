@@ -4,7 +4,7 @@
  *   node prospezione/link-attiva.mjs                    tutte le demo
  *   node prospezione/link-attiva.mjs --slug al-aseel    una sola
  *   node prospezione/link-attiva.mjs --rifai            rigenera anche i token già fatti
- *   node prospezione/link-attiva.mjs --url https://tua-dashboard.vercel.app
+ *   node prospezione/link-attiva.mjs --url https://app.lingofork.com
  *
  * Ogni link porta a /attiva?attiva=<slug>&token=<token>: il ristoratore
  * sceglie email e password, la demo diventa il suo account (parte il trial).
@@ -26,7 +26,7 @@ const argomenti = process.argv.slice(2);
 const valore = (n) => { const i = argomenti.indexOf(n); return i !== -1 ? argomenti[i + 1] : null; };
 const soloSlug = valore('--slug');
 const rifai = argomenti.includes('--rifai');
-const DASHBOARD = (valore('--url') || 'https://restaurant-dashboard-two-hazel.vercel.app').replace(/\/+$/, '');
+const DASHBOARD = (valore('--url') || 'https://app.lingofork.com').replace(/\/+$/, '');
 
 function daEnv(nome) {
   if (process.env[nome]) return process.env[nome];

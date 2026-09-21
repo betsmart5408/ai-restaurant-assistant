@@ -21,7 +21,7 @@ const QUI = dirname(fileURLToPath(import.meta.url));
 const RADICE = join(QUI, '..');
 const CARTELLA_MENU = join(QUI, 'menu');
 
-const MENU_PUBBLICO = 'https://restaurant-chat-gustobolsa.vercel.app';
+const MENU_PUBBLICO = 'https://menu.lingofork.com';
 
 const argomenti = process.argv.slice(2);
 const valore = (n) => { const i = argomenti.indexOf(n); return i !== -1 ? argomenti[i + 1] : null; };

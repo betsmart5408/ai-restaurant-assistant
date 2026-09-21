@@ -3,7 +3,7 @@
 #   .\link-attiva.ps1                     tutte le demo
 #   .\link-attiva.ps1 -Slug al-aseel      una sola
 #   .\link-attiva.ps1 -Rifai             rigenera anche i token già fatti
-#   .\link-attiva.ps1 -Url https://tua-dashboard.vercel.app
+#   .\link-attiva.ps1 -Url https://app.lingofork.com
 #
 # Ogni link porta il ristoratore a scegliere email e password: la demo
 # diventa il suo account e parte il trial di 14 giorni. Serve la migrazione

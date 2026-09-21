@@ -1021,7 +1021,7 @@ ${data.dettaglio}` : ''));
   }
 
   // Indirizzo pubblico del menu del ristorante (uno solo, niente piu' tavoli)
-  const menuBase = (import.meta as any).env?.VITE_MENU_URL ?? 'https://restaurant-chat-gustobolsa.vercel.app';
+  const menuBase = MENU_PUBBLICO;
   const menuUrl = restaurant ? `${menuBase}/?restaurant=${restaurant.slug}` : '';
   const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(menuUrl)}`;
   const statusColor = billing?.subscription_status === 'active' ? '#22c55e' : billing?.subscription_status === 'trialing' ? '#f59e0b' : '#ef4444';

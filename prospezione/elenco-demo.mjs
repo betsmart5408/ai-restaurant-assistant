@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 import pg from 'pg';
 
 const RADICE = join(dirname(fileURLToPath(import.meta.url)), '..');
-const MENU_PUBBLICO = 'https://restaurant-chat-gustobolsa.vercel.app';
+const MENU_PUBBLICO = 'https://menu.lingofork.com';
 
 function daEnv(nome) {
   if (process.env[nome]) return process.env[nome];
