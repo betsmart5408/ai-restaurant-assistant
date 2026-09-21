@@ -2,6 +2,8 @@
 // HTTP: niente SDK. Senza RESEND_API_KEY non parte niente e lo si dice nei log.
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
 const EMAIL_FROM = process.env.EMAIL_FROM ?? 'LingoFork <noreply@lingofork.com>';
+// Le risposte dei ristoratori non devono finire nel vuoto di noreply@
+const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO ?? 'ciao@lingofork.com';
 
 export interface Email {
   to: string;
@@ -19,7 +21,7 @@ export async function mandaEmail(email: Email): Promise<boolean> {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: EMAIL_FROM, to: [email.to], subject: email.subject, html: email.html, text: email.text }),
+      body: JSON.stringify({ from: EMAIL_FROM, reply_to: EMAIL_REPLY_TO, to: [email.to], subject: email.subject, html: email.html, text: email.text }),
     });
     if (!res.ok) {
       console.error(`[email] Resend ha risposto ${res.status}:`, await res.text());
