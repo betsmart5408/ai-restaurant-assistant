@@ -551,6 +551,13 @@ function AssistenteWidget({ token }: { token: string }) {
 export default function App() {
   const [auth, setAuth] = useState<AuthData | null>(() => loadAuth());
   const [tab, setTab] = useState<Tab>('menu');
+  // Stripe rimanda qui con ?billing=success dopo il pagamento
+  const [benvenutoPro, setBenvenutoPro] = useState(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('billing') === 'success');
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has('billing')) return;
+    try { window.history.replaceState(null, '', window.location.pathname); } catch { /* ignora */ }
+  }, []);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 860);
   const [navOpen, setNavOpen] = useState(false);
   useEffect(() => {
@@ -1037,6 +1044,25 @@ ${data.dettaglio}` : ''));
 
   return (
     <div style={S.root}>
+      {benvenutoPro && (
+        <div style={S.benvenutoOverlay} onClick={() => setBenvenutoPro(false)}>
+          <div style={S.benvenutoCard} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+            <button style={S.benvenutoX} onClick={() => setBenvenutoPro(false)} aria-label="Chiudi">✕</button>
+            <div style={{ fontSize: 52, lineHeight: 1 }}>🎉</div>
+            <h2 style={{ margin: '14px 0 8px', fontSize: 22, color: '#1e293b' }}>Benvenuto in LingoFork Pro!</h2>
+            <p style={{ margin: 0, color: '#475569', lineHeight: 1.55 }}>
+              Il tuo abbonamento è attivo. Da oggi ogni cliente che inquadra il QR trova il tuo menu
+              nella sua lingua, con Marco pronto a consigliarlo.
+            </p>
+            <p style={{ margin: '12px 0 0', color: '#64748b', fontSize: 13, lineHeight: 1.5 }}>
+              Il rinnovo è automatico ogni mese. Ricevute e metodo di pagamento sono in 💳 Abbonamento.
+            </p>
+            <button style={{ ...S.btnPrimary, marginTop: 22, width: '100%' }} onClick={() => setBenvenutoPro(false)}>
+              Iniziamo
+            </button>
+          </div>
+        </div>
+      )}
       {isMobile && (
         <div style={S.mobileBar}>
           <button style={S.hamburger} onClick={() => setNavOpen(true)} aria-label="Menu">☰</button>
@@ -1666,6 +1692,9 @@ const S: Record<string, React.CSSProperties> = {
   mobileBar: { position: 'fixed', top: 0, left: 0, right: 0, height: 52, zIndex: 50, background: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px' },
   hamburger: { background: 'none', border: 'none', fontSize: 22, lineHeight: 1, cursor: 'pointer', color: '#1e293b', padding: 4 },
   navBackdrop: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 55 },
+  benvenutoOverlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
+  benvenutoCard: { position: 'relative', background: '#fff', borderRadius: 16, padding: '32px 28px 24px', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 20px 60px #0004' },
+  benvenutoX: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, border: 'none', borderRadius: 8, background: '#f1f5f9', color: '#475569', fontSize: 16, cursor: 'pointer' },
   sidebar: { width: 240, background: '#1e293b', color: '#f8fafc', display: 'flex', flexDirection: 'column', padding: '20px 16px', gap: 4, flexShrink: 0 },
   sidebarHeader: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24, padding: '0 4px' },
   sidebarLogo: { fontSize: 28 },

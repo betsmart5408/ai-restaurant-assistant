@@ -148,8 +148,8 @@ router.post('/webhook', async (req: Request, res: Response) => {
               [rid]
             );
             await db.query(
-              `UPDATE billing_events SET amount=$1, status='paid' WHERE stripe_event_id=$2`,
-              [(inv.amount_paid / 100).toFixed(2), event.id]
+              `UPDATE billing_events SET amount=$1, status='paid', restaurant_id=$3 WHERE stripe_event_id=$2`,
+              [(inv.amount_paid / 100).toFixed(2), event.id, rid]
             );
           }
         }
@@ -164,6 +164,10 @@ router.post('/webhook', async (req: Request, res: Response) => {
           if (rid) {
             await db.query(
               `UPDATE restaurants SET subscription_status='past_due' WHERE id=$1`, [rid]
+            );
+            await db.query(
+              `UPDATE billing_events SET status='failed', restaurant_id=$1 WHERE stripe_event_id=$2`,
+              [rid, event.id]
             );
           }
         }
