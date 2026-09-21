@@ -1379,10 +1379,12 @@ ${data.dettaglio}` : ''));
               {label}
             </button>
           ))}
+          {/* Subito sotto le voci, non in fondo alla barra: la barra e' alta
+              quanto la pagina e con un menu lungo "Esci" finiva fuori vista */}
+          <button style={S.logoutBtn} onClick={handleLogout}>
+            ← Esci
+          </button>
         </nav>
-        <button style={S.logoutBtn} onClick={handleLogout}>
-          ← Esci
-        </button>
       </aside>
 
       {/* Main */}
