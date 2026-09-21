@@ -82,13 +82,14 @@ router.get('/stats', async (_req, res) => {
   try {
     const result = await db.query(`
       SELECT
-        (SELECT COUNT(*) FROM restaurants) as total_restaurants,
-        (SELECT COUNT(*) FROM restaurants WHERE subscription_status = 'active') as active_subscriptions,
-        (SELECT COUNT(*) FROM restaurants WHERE subscription_status = 'trialing') as trialing,
-        (SELECT COUNT(*) FROM restaurants WHERE suspended_at IS NOT NULL) as suspended,
-        (SELECT COALESCE(SUM(monthly_price), 0) FROM restaurants WHERE subscription_status = 'active') as mrr,
+        (SELECT COUNT(*) FROM restaurants WHERE is_demo IS NOT TRUE) as total_restaurants,
+        (SELECT COUNT(*) FROM restaurants WHERE is_demo IS NOT TRUE AND subscription_status = 'active') as active_subscriptions,
+        (SELECT COUNT(*) FROM restaurants WHERE is_demo IS NOT TRUE AND subscription_status = 'trialing') as trialing,
+        (SELECT COUNT(*) FROM restaurants WHERE is_demo = TRUE) as demos,
+        (SELECT COUNT(*) FROM restaurants WHERE is_demo IS NOT TRUE AND suspended_at IS NOT NULL) as suspended,
+        (SELECT COALESCE(SUM(monthly_price), 0) FROM restaurants WHERE is_demo IS NOT TRUE AND subscription_status = 'active') as mrr,
         (SELECT COUNT(*) FROM chat_sessions WHERE created_at >= CURRENT_DATE - INTERVAL '30 days') as sessions_30d,
-        (SELECT COUNT(*) FROM restaurants WHERE created_at >= CURRENT_DATE - INTERVAL '30 days') as new_30d
+        (SELECT COUNT(*) FROM restaurants WHERE is_demo IS NOT TRUE AND created_at >= CURRENT_DATE - INTERVAL '30 days') as new_30d
     `);
     res.json(result.rows[0]);
   } catch (err) {

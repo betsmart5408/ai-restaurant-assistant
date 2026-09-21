@@ -13,7 +13,7 @@ interface AdminRestaurant {
 }
 interface AdminStats {
   total_restaurants: number; active_subscriptions: number; trialing: number;
-  suspended: number; mrr: string; sessions_30d: number; new_30d: number;
+  suspended: number; mrr: string; sessions_30d: number; new_30d: number; demos?: number | string;
 }
 interface Restaurant { id: string; name: string; slug: string; logo_url?: string; currency?: string; }
 
@@ -352,6 +352,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
               <KPI label="Ristoranti totali" value={String(stats.total_restaurants)} color="#6366f1" />
               <KPI label="Abbonamenti attivi" value={String(stats.active_subscriptions)} color="#22c55e" />
               <KPI label="In trial" value={String(stats.trialing)} color="#f59e0b" />
+              <KPI label="Demo in attivazione" value={String(stats.demos ?? 0)} color="#0ea5e9" sub="Non ancora attivate dal ristoratore" />
               <KPI label="Sospesi" value={String(stats.suspended)} color="#ef4444" />
               <KPI label="MRR" value={`A$${parseFloat(stats.mrr || '0').toFixed(0)}`} color="#6366f1" sub="Ricavo mensile ricorrente" />
               <KPI label="Sessioni (30gg)" value={String(stats.sessions_30d)} color="#0ea5e9" />
@@ -424,20 +425,28 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
                       </div>
                       <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
                         Creato: {new Date(r.created_at).toLocaleDateString('it-IT')}
-                        {r.trial_ends_at && ` · Trial fino: ${new Date(r.trial_ends_at).toLocaleDateString('it-IT')}`}
+                        {!r.is_demo && r.trial_ends_at && ` · Trial fino: ${new Date(r.trial_ends_at).toLocaleDateString('it-IT')}`}
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 700, color: statusColor(r.subscription_status) }}>{statusLabel(r.subscription_status)}</div>
-                        <div style={{ fontSize: 13, color: '#64748b' }}>A${Number(r.monthly_price ?? 30).toFixed(0)}/mese</div>
+                        {r.is_demo ? (
+                          // Una demo non e' ancora un cliente: niente trial,
+                          // il trial parte solo quando il ristoratore la attiva.
+                          <div style={{ fontWeight: 700, color: '#0ea5e9' }}>⏳ In attivazione</div>
+                        ) : (
+                          <>
+                            <div style={{ fontWeight: 700, color: statusColor(r.subscription_status) }}>{statusLabel(r.subscription_status)}</div>
+                            <div style={{ fontSize: 13, color: '#64748b' }}>A${Number(r.monthly_price ?? 30).toFixed(0)}/mese</div>
+                          </>
+                        )}
                       </div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {!r.is_demo && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {r.suspended_at
                           ? <button style={{ ...S.btnEdit, color: '#22c55e', borderColor: '#22c55e' }} onClick={() => patchRestaurant(r.id, 'activate')}>✅ Riattiva</button>
                           : <button style={{ ...S.btnEdit, color: '#ef4444', borderColor: '#ef4444' }} onClick={() => { if (confirm(`Sospendere ${r.name}?`)) patchRestaurant(r.id, 'suspend'); }}>🔴 Sospendi</button>
                         }
-                      </div>
+                      </div>}
                     </div>
                   </div>
                 </div>
