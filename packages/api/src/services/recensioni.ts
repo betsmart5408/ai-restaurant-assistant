@@ -115,7 +115,10 @@ export async function generaRispostaRecensione(
     'SELECT id, name FROM restaurants WHERE slug = $1',
     [r.slug],
   );
-  if (rist.rows.length === 0) return null;
+  if (rist.rows.length === 0) {
+    console.error(`recensioni: nessun ristorante con slug "${r.slug}"`);
+    return null;
+  }
   const { id, name } = rist.rows[0];
 
   const piatti = await db.query(
@@ -132,11 +135,16 @@ export async function generaRispostaRecensione(
   const prompt = costruisciPrompt(name, menu.testo, stelle, testo, ripulisci(r.autore || '', 60));
 
   let risposta = '';
-  for (const fornitore of catenaFornitori()) {
+  const catena = catenaFornitori();
+  if (catena.length === 0) console.error('recensioni: nessun fornitore IA configurato (GROQ_API_KEY vuota?)');
+  for (const fornitore of catena) {
     const cliente = clientePer(fornitore);
     const modelli = fornitore.modelli.length > 0
       ? fornitore.modelli
       : await modelliDisponibili(cliente, fornitore.chiave);
+    if (modelli.length === 0) {
+      console.error(`recensioni: ${fornitore.nome} non ha dato nessun modello (chiave scaduta o fornitore giu')`);
+    }
     for (const model of modelli) {
       try {
         const out = await cliente.chat.completions.create({
@@ -145,11 +153,18 @@ export async function generaRispostaRecensione(
         });
         risposta = (out.choices[0]?.message?.content ?? '').trim();
         if (risposta) break;
-      } catch { /* si prova il prossimo */ }
+      } catch (err: any) {
+        // Prima era un catch muto: se l'IA non risponde bisogna saperlo dai log,
+        // non indovinarlo da un 503. La chiave non si stampa mai.
+        console.error(`recensioni: ${fornitore.nome}/${model} ha fallito:`, err?.status ?? '', String(err?.message ?? err).slice(0, 200));
+      }
     }
     if (risposta) break;
   }
-  if (!risposta) return null;
+  if (!risposta) {
+    console.error('recensioni: nessun modello ha scritto una risposta');
+    return null;
+  }
 
   // Il modello a volte incornicia la risposta fra virgolette o la introduce.
   risposta = risposta
