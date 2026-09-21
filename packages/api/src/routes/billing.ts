@@ -13,6 +13,14 @@ const PRICE_ID = process.env.STRIPE_PRICE_ID ?? '';
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? '';
 const APP_URL = process.env.APP_URL ?? 'http://localhost:5174';
 
+// Dalla versione API 2025 la fattura non ha piu' `subscription`:
+// l'abbonamento sta in parent.subscription_details.
+function abbonamentoDellaFattura(inv: Stripe.Invoice): string | null {
+  const sub = inv.parent?.subscription_details?.subscription;
+  if (!sub) return null;
+  return typeof sub === 'string' ? sub : sub.id;
+}
+
 // POST /api/billing/checkout — crea sessione Stripe Checkout
 router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -41,6 +49,9 @@ router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
       success_url: `${APP_URL}/dashboard?billing=success`,
       cancel_url: `${APP_URL}/dashboard?billing=cancelled`,
       metadata: { restaurant_id: rest.id },
+      // Anche sull'abbonamento: rinnovi, pagamenti falliti e disdette
+      // arrivano senza la sessione e trovano il ristorante solo da qui.
+      subscription_data: { metadata: { restaurant_id: rest.id } },
     });
 
     res.json({ url: session.url });
@@ -124,7 +135,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
       }
       case 'invoice.payment_succeeded': {
         const inv = event.data.object as Stripe.Invoice;
-        const subId = (inv as { subscription?: string }).subscription;
+        const subId = abbonamentoDellaFattura(inv);
         if (subId) {
           const sub = await stripe.subscriptions.retrieve(subId);
           const rid = sub.metadata?.restaurant_id;
@@ -143,7 +154,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
       }
       case 'invoice.payment_failed': {
         const inv = event.data.object as Stripe.Invoice;
-        const subId = (inv as { subscription?: string }).subscription;
+        const subId = abbonamentoDellaFattura(inv);
         if (subId) {
           const sub = await stripe.subscriptions.retrieve(subId);
           const rid = sub.metadata?.restaurant_id;
