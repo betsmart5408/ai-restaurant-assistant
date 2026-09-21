@@ -3,7 +3,7 @@
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
 const EMAIL_FROM = process.env.EMAIL_FROM ?? 'LingoFork <noreply@lingofork.com>';
 // Le risposte dei ristoratori non devono finire nel vuoto di noreply@
-const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO ?? 'ciao@lingofork.com';
+const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO ?? 'info@lingofork.com';
 
 export interface Email {
   to: string;
