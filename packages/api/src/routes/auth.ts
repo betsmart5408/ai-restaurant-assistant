@@ -1,7 +1,12 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { db } from '../db/client';
 import { signToken, requireAuth } from '../middleware/auth';
+import { mandaEmail, emailConPulsante, escapeHtml } from '../services/email';
+
+const DASHBOARD_URL = (process.env.DASHBOARD_URL || 'https://app.lingofork.com').replace(/\/+$/, '');
+const hashToken = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
 
 const router = Router();
 
@@ -167,7 +172,8 @@ router.post('/change-password', requireAuth, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'Utente non trovato' });
 
     const ok = await bcrypt.compare(current_password, result.rows[0].password_hash);
-    if (!ok) return res.status(401).json({ error: 'Password attuale errata' });
+    // 400 e non 401: la dashboard tratta ogni 401 come sessione scaduta.
+    if (!ok) return res.status(400).json({ error: 'La password attuale non è corretta' });
 
     const hash = await bcrypt.hash(new_password, 10);
     await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.auth!.userId]);
@@ -176,6 +182,112 @@ router.post('/change-password', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Password dimenticata ────────────────────────────────────────────────────
+// POST /api/auth/forgot-password { email }
+// Risponde sempre allo stesso modo, che l'email esista o no: altrimenti
+// chiunque potrebbe scoprire quali email sono registrate.
+router.post('/forgot-password', async (req, res) => {
+  const email = String(req.body?.email ?? '').toLowerCase().trim();
+  const risposta = { ok: true };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.json(risposta);
+
+  try {
+    const u = await db.query(
+      `SELECT u.id, r.name AS restaurant_name FROM users u
+       JOIN restaurants r ON r.id = u.restaurant_id WHERE u.email = $1`,
+      [email]
+    );
+    const user = u.rows[0];
+    if (!user) return res.json(risposta);
+
+    // Al massimo 3 richieste l'ora per utente: niente caselle intasate.
+    const recenti = await db.query(
+      `SELECT COUNT(*)::int AS n FROM password_resets WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
+      [user.id]
+    );
+    if (recenti.rows[0].n >= 3) return res.json(risposta);
+
+    const token = crypto.randomBytes(32).toString('base64url');
+    await db.query(
+      `INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
+      [user.id, hashToken(token)]
+    );
+
+    const link = `${DASHBOARD_URL}/?reset=${token}`;
+    await mandaEmail({
+      to: email,
+      subject: 'Reimposta la password di LingoFork',
+      html: emailConPulsante({
+        titolo: 'Reimposta la password',
+        paragrafi: [
+          `Qualcuno ha chiesto di reimpostare la password della dashboard di <strong>${escapeHtml(user.restaurant_name)}</strong>.`,
+          "Clicca il pulsante per sceglierne una nuova. Il link vale per un'ora e si può usare una volta sola.",
+        ],
+        pulsante: 'Scegli una nuova password',
+        link,
+        nota: 'Se non sei stato tu, ignora questa email: la tua password resta quella di prima.',
+      }),
+      text: `Per reimpostare la password della dashboard di ${user.restaurant_name} apri questo link (vale un'ora):
+${link}
+
+Se non sei stato tu, ignora questa email.`,
+    });
+    res.json(risposta);
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.json(risposta);
+  }
+});
+
+// POST /api/auth/reset-password { token, password } — sceglie la nuova password ed entra
+router.post('/reset-password', async (req, res) => {
+  const token = String(req.body?.token ?? '');
+  const password = String(req.body?.password ?? '');
+  if (!token) return res.status(400).json({ error: 'Link non valido' });
+  if (password.length < 8) return res.status(400).json({ error: 'La password deve avere almeno 8 caratteri' });
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const r = await client.query(
+      `SELECT pr.id, pr.user_id FROM password_resets pr
+       WHERE pr.token_hash = $1 AND pr.used_at IS NULL AND pr.expires_at > NOW()
+       FOR UPDATE`,
+      [hashToken(token)]
+    );
+    if (!r.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Il link è scaduto o è già stato usato. Chiedine uno nuovo.' });
+    }
+    const { user_id } = r.rows[0];
+
+    const hash = await bcrypt.hash(password, 10);
+    await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, user_id]);
+    // Brucia questo link e tutti gli altri ancora aperti per lo stesso utente
+    await client.query('UPDATE password_resets SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL', [user_id]);
+
+    const u = await client.query(
+      `SELECT u.id, u.role, u.restaurant_id, r.name AS restaurant_name, r.slug
+       FROM users u JOIN restaurants r ON r.id = u.restaurant_id WHERE u.id = $1`,
+      [user_id]
+    );
+    await client.query('COMMIT');
+
+    const user = u.rows[0];
+    res.json({
+      token: signToken({ userId: user.id, restaurantId: user.restaurant_id, role: user.role }),
+      restaurant: { id: user.restaurant_id, name: user.restaurant_name, slug: user.slug },
+      role: user.role,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: 'Non è stato possibile cambiare la password' });
+  } finally {
+    client.release();
   }
 });
 

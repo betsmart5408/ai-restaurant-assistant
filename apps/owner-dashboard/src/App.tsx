@@ -85,6 +85,7 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
   // caso il form parte gia' in modalita' Super Admin.
   const adminSbloccato = /[?&]admin\b/.test(window.location.search) || window.location.hash.includes('admin');
   const [mode, setMode] = useState<'owner' | 'admin'>(adminSbloccato ? 'admin' : 'owner');
+  const [dimenticata, setDimenticata] = useState(false);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -108,6 +109,8 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
     }
   }
 
+  if (dimenticata) return <PasswordDimenticata emailIniziale={email} onIndietro={() => setDimenticata(false)} />;
+
   return (
     <div style={S.loginWrap}>
       <div style={S.loginCard}>
@@ -120,6 +123,11 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
           {error && <div style={S.errorBox}>{error}</div>}
           <button style={S.btnPrimary} type="submit" disabled={loading}>{loading ? 'Accesso...' : 'Accedi →'}</button>
         </form>
+        {mode === 'owner' && (
+          <button type="button" style={S.linkLogin} onClick={() => { setDimenticata(true); setError(''); }}>
+            Hai dimenticato la password?
+          </button>
+        )}
         {(adminSbloccato || mode === 'admin') && (
           <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid rgba(148,163,184,0.25)' }}>
             <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 10 }}>
@@ -138,6 +146,168 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Password dimenticata ───────────────────────────────────
+function PasswordDimenticata({ emailIniziale, onIndietro }: { emailIniziale: string; onIndietro: () => void }) {
+  const [email, setEmail] = useState(emailIniziale);
+  const [inviata, setInviata] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function invia(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) { setError('Qualcosa non ha funzionato, riprova tra poco'); return; }
+      setInviata(true);
+    } catch {
+      setError('Errore di connessione');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={S.loginWrap}>
+      <div style={S.loginCard}>
+        <div style={S.loginLogo}>🔑</div>
+        <h1 style={S.loginTitle}>Password dimenticata</h1>
+        {inviata ? (
+          <>
+            <p style={S.loginSub}>
+              Se <strong>{email}</strong> è registrata, tra un minuto ti arriva un'email con il link per
+              scegliere una nuova password. Il link vale un'ora. Controlla anche lo spam.
+            </p>
+            <button style={{ ...S.btnPrimary, width: '100%' }} onClick={onIndietro}>Torna all'accesso</button>
+          </>
+        ) : (
+          <>
+            <p style={S.loginSub}>Scrivi l'email con cui accedi: ti mandiamo un link per sceglierne una nuova.</p>
+            <form onSubmit={invia} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <label style={S.formLabel}>Email<input style={S.formInput} type="email" value={email} onChange={e => setEmail(e.target.value)} required autoFocus /></label>
+              {error && <div style={S.errorBox}>{error}</div>}
+              <button style={S.btnPrimary} type="submit" disabled={loading}>{loading ? 'Invio...' : 'Mandami il link'}</button>
+            </form>
+            <button type="button" style={S.linkLogin} onClick={onIndietro}>← Torna all'accesso</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Nuova password dal link ricevuto via email (?reset=...) ─
+function ReimpostaPassword({ token, onDone }: { token: string; onDone: (d: AuthData) => void }) {
+  const [password, setPassword] = useState('');
+  const [conferma, setConferma] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function salva(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    if (password.length < 8) { setError('La password deve avere almeno 8 caratteri'); return; }
+    if (password !== conferma) { setError('Le due password non coincidono'); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error || 'Non è stato possibile cambiare la password'); return; }
+      saveAuth(data);
+      try { window.history.replaceState(null, '', window.location.pathname); } catch { /* ignora */ }
+      onDone(data);
+    } catch {
+      setError('Errore di connessione');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={S.loginWrap}>
+      <div style={S.loginCard}>
+        <div style={S.loginLogo}>🔑</div>
+        <h1 style={S.loginTitle}>Scegli una nuova password</h1>
+        <p style={S.loginSub}>Almeno 8 caratteri. Dopo entri subito nella tua dashboard.</p>
+        <form onSubmit={salva} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <label style={S.formLabel}>Nuova password<input style={S.formInput} type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required autoFocus /></label>
+          <label style={S.formLabel}>Ripeti la password<input style={S.formInput} type="password" autoComplete="new-password" value={conferma} onChange={e => setConferma(e.target.value)} required /></label>
+          {error && <div style={S.errorBox}>{error}</div>}
+          <button style={S.btnPrimary} type="submit" disabled={loading}>{loading ? 'Salvo...' : 'Salva ed entra →'}</button>
+        </form>
+        <button type="button" style={S.linkLogin} onClick={() => { window.location.href = window.location.pathname; }}>
+          Il link è scaduto? Chiedine uno nuovo
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Cambia password (Impostazioni) ─────────────────────────
+function CambiaPassword({ token }: { token: string }) {
+  const [attuale, setAttuale] = useState('');
+  const [nuova, setNuova] = useState('');
+  const [conferma, setConferma] = useState('');
+  const [stato, setStato] = useState<{ ok: boolean; testo: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function salva(e: React.FormEvent) {
+    e.preventDefault();
+    setStato(null);
+    if (nuova.length < 8) { setStato({ ok: false, testo: 'La nuova password deve avere almeno 8 caratteri' }); return; }
+    if (nuova !== conferma) { setStato({ ok: false, testo: 'Le due password nuove non coincidono' }); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/auth/change-password`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_password: attuale, new_password: nuova }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setStato({ ok: false, testo: data.error || 'Non è stato possibile cambiare la password' }); return; }
+      setAttuale(''); setNuova(''); setConferma('');
+      setStato({ ok: true, testo: 'Password cambiata. Dalla prossima volta accedi con quella nuova.' });
+    } catch {
+      setStato({ ok: false, testo: 'Errore di connessione' });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ ...S.formCard, marginTop: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Cambia password</h2>
+      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 16 }}>
+        Per sicurezza serve anche quella attuale. Se non la ricordi, esci e usa "Hai dimenticato la password?".
+      </p>
+      <form onSubmit={salva} style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 360 }}>
+        <label style={S.formLabel}>Password attuale<input style={S.formInput} type="password" autoComplete="current-password" value={attuale} onChange={e => setAttuale(e.target.value)} required /></label>
+        <label style={S.formLabel}>Nuova password<input style={S.formInput} type="password" autoComplete="new-password" value={nuova} onChange={e => setNuova(e.target.value)} required /></label>
+        <label style={S.formLabel}>Ripeti la nuova password<input style={S.formInput} type="password" autoComplete="new-password" value={conferma} onChange={e => setConferma(e.target.value)} required /></label>
+        {stato && (
+          <div style={stato.ok
+            ? { background: '#f0fdf4', border: '1px solid #86efac', color: '#166534', borderRadius: 10, padding: '10px 12px', fontSize: 14 }
+            : S.errorBox}>
+            {stato.testo}
+          </div>
+        )}
+        <button style={{ ...S.btnPrimary, alignSelf: 'flex-start' }} type="submit" disabled={loading}>
+          {loading ? 'Salvo...' : 'Cambia password'}
+        </button>
+      </form>
     </div>
   );
 }
@@ -1007,6 +1177,10 @@ ${data.dettaglio}` : ''));
     if (claimSlug && claimToken) {
       return <ClaimScreen slug={claimSlug} token={claimToken} onDone={d => { saveAuth(d); setAuth(d); }} />;
     }
+    const resetToken = qp.get('reset');
+    if (resetToken) {
+      return <ReimpostaPassword token={resetToken} onDone={d => { saveAuth(d); setAuth(d); }} />;
+    }
   }
 
   // ?admin nell'URL: mostra sempre il login Super Admin, anche se in questo
@@ -1649,6 +1823,8 @@ ${data.dettaglio}` : ''));
                 </code>
               </div>
             </div>
+
+            <CambiaPassword token={auth.token} />
           </div>
         )}
       </main>
@@ -1692,6 +1868,7 @@ const S: Record<string, React.CSSProperties> = {
   mobileBar: { position: 'fixed', top: 0, left: 0, right: 0, height: 52, zIndex: 50, background: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px' },
   hamburger: { background: 'none', border: 'none', fontSize: 22, lineHeight: 1, cursor: 'pointer', color: '#1e293b', padding: 4 },
   navBackdrop: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 55 },
+  linkLogin: { display: 'block', margin: '16px auto 0', background: 'none', border: 'none', color: '#6366f1', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' },
   benvenutoOverlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
   benvenutoCard: { position: 'relative', background: '#fff', borderRadius: 16, padding: '32px 28px 24px', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 20px 60px #0004' },
   benvenutoX: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, border: 'none', borderRadius: 8, background: '#f1f5f9', color: '#475569', fontSize: 16, cursor: 'pointer' },
