@@ -970,8 +970,14 @@ export default function App() {
   async function startCheckout() {
     if (!auth) return;
     try {
-      const data = await apiFetch('/api/billing/checkout', auth.token, { method: 'POST' });
-      if (data.url) window.location.href = data.url;
+      const res = await fetch(`${API}/api/billing/checkout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) { window.location.href = data.url; return; }
+      alert('Errore checkout Stripe' + (data.dettaglio ? `:
+${data.dettaglio}` : ''));
     } catch { alert('Errore checkout Stripe'); }
   }
 

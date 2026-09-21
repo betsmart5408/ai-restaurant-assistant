@@ -57,7 +57,10 @@ router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
     res.json({ url: session.url });
   } catch (err: unknown) {
     console.error('Billing checkout error:', err);
-    res.status(500).json({ error: 'Errore creazione checkout' });
+    // Il messaggio di Stripe (chiave sbagliata, prezzo inesistente...) serve
+    // a chi configura: non contiene segreti, Stripe maschera le chiavi.
+    const dettaglio = err instanceof Stripe.errors.StripeError ? err.message : undefined;
+    res.status(500).json({ error: 'Errore creazione checkout', dettaglio });
   }
 });
 
