@@ -521,7 +521,11 @@ export default function App() {
           // L'hashtag finale (#slug) fa riconoscere al bot di quale ristorante
           // si tratta: il ristoratore preme solo invio. Su una riga a parte
           // sembra un riferimento, non testo strano in mezzo alla frase.
-          const msg = `Ciao! Vorrei attivare la demo del mio ristorante 🙌\n#${params.restaurant}`;
+          // Il bot risponde nella lingua del messaggio: italiano solo se la
+          // demo e' aperta in italiano, altrimenti inglese (mercato Sydney).
+          const msg = (lang === 'it'
+            ? 'Ciao! Vorrei attivare la demo del mio ristorante 🙌'
+            : "Hi! I'd like to activate the demo for my restaurant 🙌") + `\n#${params.restaurant}`;
           setDemoWa(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`);
         }
         if (r.name) setNomeLocale(r.name);
