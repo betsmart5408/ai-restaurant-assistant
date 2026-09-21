@@ -109,6 +109,26 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
     }
   }
 
+  async function accediConGoogle(credential: string) {
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error || 'Accesso con Google non riuscito'); return; }
+      saveAuth(data);
+      onLogin(data);
+    } catch {
+      setError('Errore di connessione');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (dimenticata) return <PasswordDimenticata emailIniziale={email} onIndietro={() => setDimenticata(false)} />;
 
   return (
@@ -124,9 +144,12 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
           <button style={S.btnPrimary} type="submit" disabled={loading}>{loading ? 'Accesso...' : 'Accedi →'}</button>
         </form>
         {mode === 'owner' && (
-          <button type="button" style={S.linkLogin} onClick={() => { setDimenticata(true); setError(''); }}>
-            Hai dimenticato la password?
-          </button>
+          <>
+            <GoogleButton testo="signin_with" onCredential={accediConGoogle} />
+            <button type="button" style={S.linkLogin} onClick={() => { setDimenticata(true); setError(''); }}>
+              Hai dimenticato la password?
+            </button>
+          </>
         )}
         {(adminSbloccato || mode === 'admin') && (
           <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid rgba(148,163,184,0.25)' }}>
@@ -146,6 +169,58 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Pulsante "Accedi con Google" ───────────────────────────
+// Carica lo script di Google una volta sola. L'ID client arriva dall'API:
+// se su Railway non c'e' GOOGLE_CLIENT_ID il pulsante semplicemente non compare.
+let googleScript: Promise<void> | null = null;
+function caricaGoogle(): Promise<void> {
+  if (!googleScript) {
+    googleScript = new Promise((ok, ko) => {
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.async = true;
+      s.onload = () => ok();
+      s.onerror = () => { googleScript = null; ko(new Error('Google non raggiungibile')); };
+      document.head.appendChild(s);
+    });
+  }
+  return googleScript;
+}
+
+function GoogleButton({ testo, onCredential }: { testo: 'signin_with' | 'continue_with'; onCredential: (credential: string) => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [pronto, setPronto] = useState(false);
+  // l'ultima callback, senza reinizializzare Google a ogni render
+  const cb = useRef(onCredential);
+  cb.current = onCredential;
+
+  useEffect(() => {
+    let annullato = false;
+    (async () => {
+      try {
+        const cfg = await fetch(`${API}/api/auth/google-config`).then(r => r.json());
+        if (!cfg.client_id || annullato) return;
+        await caricaGoogle();
+        if (annullato || !box.current) return;
+        const g = (window as any).google.accounts.id;
+        g.initialize({ client_id: cfg.client_id, callback: (r: { credential: string }) => cb.current(r.credential) });
+        g.renderButton(box.current, { theme: 'outline', size: 'large', text: testo, shape: 'pill', locale: 'it', width: box.current.offsetWidth || 320 });
+        setPronto(true);
+      } catch { /* senza Google resta il login con password */ }
+    })();
+    return () => { annullato = true; };
+  }, [testo]);
+
+  return (
+    <div style={{ display: pronto ? 'block' : 'none' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0 14px', color: '#94a3b8', fontSize: 12 }}>
+        <span style={{ flex: 1, height: 1, background: '#e2e8f0' }} />oppure<span style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+      </div>
+      <div ref={box} style={{ display: 'flex', justifyContent: 'center', minHeight: 44 }} />
     </div>
   );
 }
@@ -331,15 +406,19 @@ function ClaimScreen({ slug, token, onDone }: { slug: string; token: string; onD
 
   async function attiva(e: React.FormEvent) {
     e.preventDefault();
-    setError('');
     if (password.length < 8) { setError('La password deve avere almeno 8 caratteri'); return; }
     if (password !== password2) { setError('Le due password non coincidono'); return; }
+    await invia({ slug, token, email, password });
+  }
+
+  async function invia(corpo: Record<string, string>) {
+    setError('');
     setLoading(true);
     try {
       const res = await fetch(`${API}/api/auth/claim`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, token, email, password }),
+        body: JSON.stringify(corpo),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Attivazione non riuscita'); return; }
@@ -376,6 +455,9 @@ function ClaimScreen({ slug, token, onDone }: { slug: string; token: string; onD
               {error && <div style={S.errorBox}>{error}</div>}
               <button style={S.btnPrimary} type="submit" disabled={loading || !info}>{loading ? 'Attivazione...' : 'Attiva e entra →'}</button>
             </form>
+            {info && (
+              <GoogleButton testo="continue_with" onCredential={credential => invia({ slug, token, google_credential: credential })} />
+            )}
           </>
         )}
       </div>

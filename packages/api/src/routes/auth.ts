@@ -185,6 +185,60 @@ router.post('/change-password', requireAuth, async (req, res) => {
   }
 });
 
+// ── Accedi con Google ───────────────────────────────────────────────────────
+// Il browser riceve da Google un "ID token" firmato; qui lo facciamo
+// verificare a Google stesso (tokeninfo) e controlliamo che sia stato emesso
+// per la NOSTRA app e che l'email sia verificata. Nessuna libreria in piu'.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
+
+async function verificaGoogle(credential: string): Promise<{ email: string }> {
+  if (!GOOGLE_CLIENT_ID) throw new Error('Accesso con Google non configurato');
+  const r = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+  if (!r.ok) throw new Error('Accesso Google non valido o scaduto, riprova');
+  const t = await r.json() as { aud?: string; iss?: string; email?: string; email_verified?: string | boolean };
+  const issOk = t.iss === 'accounts.google.com' || t.iss === 'https://accounts.google.com';
+  if (t.aud !== GOOGLE_CLIENT_ID || !issOk) throw new Error('Accesso Google non valido');
+  if (!t.email || String(t.email_verified) !== 'true') throw new Error("L'email di questo account Google non è verificata");
+  return { email: t.email.toLowerCase().trim() };
+}
+
+// GET /api/auth/google-config — l'ID client e' pubblico: la pagina di login
+// lo chiede qui, cosi' si configura solo su Railway senza ricompilare.
+router.get('/google-config', (_req, res) => {
+  res.json({ client_id: GOOGLE_CLIENT_ID || null });
+});
+
+// POST /api/auth/google { credential } — entra se l'email Google ha un ristorante
+router.post('/google', async (req, res) => {
+  let email: string;
+  try {
+    email = (await verificaGoogle(String(req.body?.credential ?? ''))).email;
+  } catch (err) {
+    return res.status(400).json({ error: (err as Error).message });
+  }
+  try {
+    const result = await db.query(
+      `SELECT u.id, u.role, u.restaurant_id, r.name AS restaurant_name, r.slug
+       FROM users u JOIN restaurants r ON r.id = u.restaurant_id WHERE u.email = $1`,
+      [email]
+    );
+    const user = result.rows[0];
+    if (!user) {
+      return res.status(404).json({
+        error: `Nessun ristorante registrato con ${email}. Usa l'email con cui hai attivato l'account, oppure accedi con la password.`,
+      });
+    }
+    res.json({
+      token: signToken({ userId: user.id, restaurantId: user.restaurant_id, role: user.role }),
+      restaurant: { id: user.restaurant_id, name: user.restaurant_name, slug: user.slug },
+      role: user.role,
+    });
+  } catch (err) {
+    console.error('Google login error:', err);
+    res.status(500).json({ error: 'Accesso non riuscito' });
+  }
+});
+
 // ── Password dimenticata ────────────────────────────────────────────────────
 // POST /api/auth/forgot-password { email }
 // Risponde sempre allo stesso modo, che l'email esista o no: altrimenti
@@ -327,9 +381,20 @@ router.get('/claim', async (req, res) => {
   }
 });
 
-// POST /api/auth/claim  { slug, token, email, password }
+// POST /api/auth/claim  { slug, token, email, password } oppure { slug, token, google_credential }
 router.post('/claim', async (req, res) => {
-  const { slug, token, email, password } = req.body ?? {};
+  const { slug, token, google_credential } = req.body ?? {};
+  let { email, password } = req.body ?? {};
+  if (google_credential) {
+    try {
+      email = (await verificaGoogle(String(google_credential))).email;
+    } catch (err) {
+      return res.status(400).json({ error: (err as Error).message });
+    }
+    // Chi entra con Google non sceglie una password: ne mettiamo una casuale
+    // che nessuno conosce. Se un giorno la vuole, usa "password dimenticata".
+    password = crypto.randomBytes(24).toString('base64url');
+  }
   if (!slug || !token || !email || !password) {
     return res.status(400).json({ error: 'Dati mancanti' });
   }
