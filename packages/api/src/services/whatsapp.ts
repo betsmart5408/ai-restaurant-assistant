@@ -25,6 +25,27 @@ export async function sendWhatsApp(to: string, message: string): Promise<boolean
   }
 }
 
+// Messaggio da modello approvato (Twilio Content): l'unico modo per scrivere
+// per primi a chi non ci ha scritto nelle ultime 24 ore.
+export async function sendWhatsAppModello(to: string, contentSid: string, variabili: Record<string, string>): Promise<boolean> {
+  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+    console.log('[WhatsApp MOCK modello]', to, contentSid, variabili);
+    return true;
+  }
+  try {
+    await client.messages.create({
+      from: FROM,
+      to: `whatsapp:${to}`,
+      contentSid,
+      contentVariables: JSON.stringify(variabili),
+    });
+    return true;
+  } catch (err) {
+    console.error('WhatsApp (modello) send failed:', err);
+    return false;
+  }
+}
+
 // ── Messaggi predefiniti ─────────────────────────────────────
 
 export function msgStockCritical(restaurantName: string, name: string, qty: number, unit: string, hoursLeft?: number) {

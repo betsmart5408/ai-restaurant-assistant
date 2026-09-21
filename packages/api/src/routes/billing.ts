@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import { db } from '../db/client';
 import { requireAuth } from '../middleware/auth';
+import { SQL_IN_PAUSA, GIORNI_TOLLERANZA } from '../services/prova';
 
 const router = Router();
 
@@ -88,8 +89,9 @@ router.post('/portal', requireAuth, async (req: Request, res: Response) => {
 router.get('/status', requireAuth, async (req: Request, res: Response) => {
   try {
     const result = await db.query(
-      `SELECT plan, subscription_status, trial_ends_at, monthly_price, suspended_at
-       FROM restaurants WHERE id = $1`,
+      `SELECT plan, subscription_status, trial_ends_at, monthly_price, suspended_at,
+              ${SQL_IN_PAUSA} AS in_pausa, ${GIORNI_TOLLERANZA} AS giorni_tolleranza
+       FROM restaurants r WHERE id = $1`,
       [req.auth!.restaurantId]
     );
     res.json(result.rows[0] ?? {});

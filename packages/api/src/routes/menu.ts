@@ -4,6 +4,7 @@ import Groq from 'groq-sdk';
 import { traduciESalva, lingueDelRistorante, TUTTE_LE_LINGUE } from '../services/translate';
 import { scegliModello } from '../services/groq-model';
 import { requireAuth, requireOwnSlug } from '../middleware/auth';
+import { SQL_IN_PAUSA, menuInPausa } from '../services/prova';
 
 function getGroqClient(apiKey?: string | null) {
   return new Groq({ apiKey: apiKey || process.env.GROQ_API_KEY });
@@ -66,12 +67,20 @@ router.get('/:restaurantSlug', async (req, res) => {
     if (inCache) return res.json(inCache);
 
     const restaurant = await db.query(
-      'SELECT id, name, languages, currency, logo_url, primary_color, background_color, ai_name, font_family, instagram_url, is_demo FROM restaurants WHERE slug = $1',
+      `SELECT id, name, languages, currency, logo_url, primary_color, background_color, ai_name, font_family, instagram_url, is_demo,
+              ${SQL_IN_PAUSA} AS in_pausa
+       FROM restaurants r WHERE slug = $1`,
       [restaurantSlug]
     );
 
     if (restaurant.rows.length === 0) {
       return res.status(404).json({ error: 'Restaurant not found' });
+    }
+
+    // Prova finita e non pagata: niente piatti, la pagina mostra "in pausa"
+    if (restaurant.rows[0].in_pausa) {
+      const { id: _id, ...pubblico } = restaurant.rows[0];
+      return res.json({ restaurant: { ...pubblico, sales_whatsapp: null }, menu: {} });
     }
 
     const restaurantId = restaurant.rows[0].id;
@@ -167,6 +176,8 @@ router.get('/:restaurantSlug/dishes/translated', async (req, res) => {
   try {
     const { restaurantSlug } = req.params;
     const lang = (req.query.lang as string) || 'es';
+
+    if (await menuInPausa(restaurantSlug)) return res.status(402).json({ error: 'Menu in pausa', in_pausa: true });
 
     const inCache = cacheGet(`t:${restaurantSlug}:${lang}`);
     if (inCache) return res.json(inCache);

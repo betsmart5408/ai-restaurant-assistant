@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db/client';
 import { processChat } from '../services/ai-chat';
+import { menuInPausa } from '../services/prova';
 
 const router = Router();
 
@@ -42,6 +43,7 @@ router.post('/session', async (req, res) => {
       [restaurant_slug]
     );
     if (restaurant.rows.length === 0) return res.status(404).json({ error: 'Restaurant not found' });
+    if (await menuInPausa(restaurant_slug)) return res.status(402).json({ error: 'Menu in pausa', in_pausa: true });
 
     const { id: restaurantId, name: restaurantName, groq_api_key } = restaurant.rows[0];
 

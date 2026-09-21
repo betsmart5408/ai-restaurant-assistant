@@ -44,7 +44,7 @@ function categorieDelMenu(piatti: { category: string }[]): string[] {
   return [...conosciute, ...presenti.filter(c => !CATEGORIE_SUGGERITE.includes(c))];
 }
 interface Dish { id: string; name: string; description: string; price: number; category: string; available: boolean; }
-interface BillingStatus { plan: string; subscription_status: string; trial_ends_at: string; monthly_price: number | string; suspended_at: string | null; }
+interface BillingStatus { plan: string; subscription_status: string; trial_ends_at: string; monthly_price: number | string; suspended_at: string | null; in_pausa?: boolean; giorni_tolleranza?: number; }
 type Tab = 'menu' | 'traduzioni' | 'aspetto' | 'qr' | 'ia' | 'billing' | 'settings';
 
 // ─── Auth helpers ───────────────────────────────────────────
@@ -802,7 +802,10 @@ function AssistenteWidget({ token }: { token: string }) {
 
 export default function App() {
   const [auth, setAuth] = useState<AuthData | null>(() => loadAuth());
-  const [tab, setTab] = useState<Tab>('menu');
+  // ?vai=abbonamento (link nelle email e nei WhatsApp di fine prova) apre
+  // direttamente la scheda per pagare
+  const [tab, setTab] = useState<Tab>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('vai') === 'abbonamento' ? 'billing' : 'menu');
   // Stripe rimanda qui con ?billing=success dopo il pagamento
   const [benvenutoPro, setBenvenutoPro] = useState(() =>
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('billing') === 'success');
@@ -970,6 +973,16 @@ export default function App() {
     apiFetch('/api/auth/me', auth.token)
       .then((me: any) => setRestaurant({ id: me.restaurant_id, name: me.restaurant_name, slug: me.slug }))
       .catch(() => { clearAuth(); setAuth(null); });
+  }, [auth]);
+
+  // Stato dell'abbonamento subito, non solo nella sua scheda: serve al
+  // banner di fine prova in cima a ogni pagina.
+  useEffect(() => {
+    if (!auth || auth.role === 'superadmin') return;
+    apiFetch('/api/billing/status', auth.token).then(setBilling).catch(() => {});
+    if (new URLSearchParams(window.location.search).has('vai')) {
+      try { window.history.replaceState(null, '', window.location.pathname); } catch { /* ignora */ }
+    }
   }, [auth]);
 
   // La valuta del ristorante: serve per scrivere i prezzi con il simbolo
@@ -1280,6 +1293,26 @@ ${data.dettaglio}` : ''));
   const menuBase = MENU_PUBBLICO;
   const menuUrl = restaurant ? `${menuBase}/?restaurant=${restaurant.slug}` : '';
   const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(menuUrl)}`;
+  // Banner di fine prova: da 3 giorni prima della scadenza fino al pagamento
+  const bannerProva = (() => {
+    if (!billing) return null;
+    const rosso = { background: '#fef2f2', borderColor: '#fca5a5', color: '#991b1b' };
+    const giallo = { background: '#fffbeb', borderColor: '#fcd34d', color: '#92400e' };
+    if (billing.in_pausa) {
+      return { stile: rosso, testo: "⏸️ Il tuo menu è in pausa: i clienti non lo vedono. Menu e QR code sono salvati, attiva l'abbonamento e torna online subito." };
+    }
+    if (billing.subscription_status !== 'trialing' || !billing.trial_ends_at) return null;
+    const fine = new Date(billing.trial_ends_at);
+    const giorni = Math.ceil((fine.getTime() - Date.now()) / 86400000);
+    if (giorni <= 0) {
+      const pausa = new Date(fine.getTime() + (billing.giorni_tolleranza ?? 3) * 86400000);
+      return { stile: rosso, testo: `⏳ La prova gratuita è finita. Il menu resta online fino al ${pausa.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}, poi va in pausa.` };
+    }
+    if (giorni <= 3) {
+      return { stile: giallo, testo: `⏳ La prova gratuita finisce ${giorni === 1 ? 'domani' : `tra ${giorni} giorni`}.` };
+    }
+    return null;
+  })();
   const statusColor = billing?.subscription_status === 'active' ? '#22c55e' : billing?.subscription_status === 'trialing' ? '#f59e0b' : '#ef4444';
   const statusLabel = billing?.subscription_status === 'active' ? '✅ Attivo' : billing?.subscription_status === 'trialing' ? '🟡 Trial' : billing?.subscription_status === 'past_due' ? '🔴 Pagamento in ritardo' : billing?.subscription_status === 'cancelled' ? '❌ Cancellato' : '—';
 
@@ -1355,6 +1388,14 @@ ${data.dettaglio}` : ''));
       {/* Main */}
       <main style={{ ...S.main, ...(isMobile ? { paddingTop: 52 } : {}) }}>
         {loading && <div style={S.loader}>Caricamento...</div>}
+        {bannerProva && (
+          <div style={{ ...S.bannerProva, ...bannerProva.stile }}>
+            <span>{bannerProva.testo}</span>
+            {tab !== 'billing' && (
+              <button style={S.bannerProvaBtn} onClick={() => setTab('billing')}>Attiva l'abbonamento</button>
+            )}
+          </div>
+        )}
 
         {/* ── MENU ── */}
         {tab === 'menu' && (
@@ -1950,6 +1991,8 @@ const S: Record<string, React.CSSProperties> = {
   mobileBar: { position: 'fixed', top: 0, left: 0, right: 0, height: 52, zIndex: 50, background: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px' },
   hamburger: { background: 'none', border: 'none', fontSize: 22, lineHeight: 1, cursor: 'pointer', color: '#1e293b', padding: 4 },
   navBackdrop: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 55 },
+  bannerProva: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', border: '1px solid', borderRadius: 12, padding: '12px 16px', margin: '0 0 18px', fontSize: 14, fontWeight: 600 },
+  bannerProvaBtn: { background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' },
   linkLogin: { display: 'block', margin: '16px auto 0', background: 'none', border: 'none', color: '#6366f1', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' },
   benvenutoOverlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
   benvenutoCard: { position: 'relative', background: '#fff', borderRadius: 16, padding: '32px 28px 24px', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 20px 60px #0004' },

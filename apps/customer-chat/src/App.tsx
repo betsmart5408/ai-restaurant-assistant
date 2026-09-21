@@ -229,6 +229,8 @@ const UI: Record<string, Record<string, string>> = {
   igTitle:     { it: 'Ti è piaciuto? Seguici su Instagram per foto e novità 📸', en: 'Enjoying it? Follow us on Instagram for photos & news 📸', de: 'Gefällt es dir? Folge uns auf Instagram für Fotos & News 📸', es: '¿Te gusta? Síguenos en Instagram para fotos y novedades 📸', fr: 'Ça vous plaît ? Suivez-nous sur Instagram pour photos et actus 📸', pt: 'Está a gostar? Siga-nos no Instagram para fotos e novidades 📸', ru: 'Нравится? Подпишитесь на нас в Instagram — фото и новости 📸', zh: '喜欢吗？在 Instagram 关注我们，看照片和最新消息 📸', ja: '気に入りましたか？写真や最新情報はInstagramで 📸', ar: 'أعجبك المكان؟ تابعنا على إنستغرام للصور والأخبار 📸', ko: '마음에 드셨나요? 인스타그램에서 사진과 소식을 확인하세요 📸', id: 'Suka? Ikuti kami di Instagram untuk foto & kabar terbaru 📸', hi: 'पसंद आया? फ़ोटो और अपडेट के लिए हमें Instagram पर फ़ॉलो करें 📸' },
   igBtn:       { it: 'Segui su Instagram', en: 'Follow on Instagram', de: 'Auf Instagram folgen', es: 'Seguir en Instagram', fr: 'Suivre sur Instagram', pt: 'Seguir no Instagram', ru: 'Подписаться в Instagram', zh: '在 Instagram 关注', ja: 'Instagramでフォロー', ar: 'تابع على إنستغرام', ko: '인스타그램 팔로우', id: 'Ikuti di Instagram', hi: 'Instagram पर फ़ॉलो करें' },
   igLater:     { it: 'Più tardi', en: 'Maybe later', de: 'Später', es: 'Más tarde', fr: 'Plus tard', pt: 'Mais tarde', ru: 'Позже', zh: '以后再说', ja: '後で', ar: 'لاحقاً', ko: '나중에', id: 'Nanti saja', hi: 'बाद में' },
+  menuPausa:   { it: 'Il menu digitale non è disponibile al momento', en: 'The digital menu is not available right now', de: 'Die digitale Speisekarte ist gerade nicht verfügbar', es: 'La carta digital no está disponible en este momento', fr: "Le menu numérique n'est pas disponible pour le moment", pt: 'O menu digital não está disponível de momento', zh: '电子菜单暂时无法使用', ja: 'デジタルメニューは現在ご利用いただけません', ko: '디지털 메뉴를 지금은 이용할 수 없습니다' },
+  menuPausaSub:{ it: 'Chiedi il menu al personale, sarà felice di aiutarti.', en: 'Please ask the staff for a menu, they will be happy to help.', de: 'Bitte fragen Sie das Personal nach der Speisekarte.', es: 'Pide la carta al personal, estarán encantados de ayudarte.', fr: 'Demandez le menu au personnel, il se fera un plaisir de vous aider.', pt: 'Peça o menu ao pessoal, terão todo o gosto em ajudar.', zh: '请向服务员索取菜单。', ja: 'スタッフにメニューをお尋ねください。', ko: '직원에게 메뉴를 요청해 주세요.' },
   demoCta:     { it: 'Attiva questo menu per il tuo ristorante', en: 'Activate this menu for your restaurant', de: 'Diese Speisekarte für Ihr Restaurant aktivieren', es: 'Activa este menú para tu restaurante', fr: 'Activez ce menu pour votre restaurant', pt: 'Ative este menu para o seu restaurante', ru: 'Активируйте это меню для вашего ресторана', zh: '为您的餐厅启用此菜单', ja: 'このメニューをあなたのレストランで使う', ar: 'فعّل هذه القائمة لمطعمك', ko: '내 레스토랑에 이 메뉴 적용하기', id: 'Aktifkan menu ini untuk restoran Anda', hi: 'अपने रेस्तरां के लिए यह मेन्यू चालू करें' },
 };
 // Ripiego in inglese, non in italiano: un turista coreano che trova una
@@ -482,6 +484,8 @@ export default function App() {
   // Al suo posto scriviamo il nome del locale.
   const [logoSrc, setLogoSrc] = useState<string>('');
   const [nomeLocale, setNomeLocale] = useState<string>('');
+  // Prova finita e non pagata: l'API lo dice e niente menu ne' chat
+  const [inPausa, setInPausa] = useState(false);
   const [aiName, setAiName] = useState<string>('Marco');
   const [valuta, setValuta] = useState<string>('\u20AC');
   const [instagramUrl, setInstagramUrl] = useState<string>('');
@@ -509,6 +513,7 @@ export default function App() {
       .then(data => {
         if (annullato || !data?.restaurant) return;
         const r = data.restaurant;
+        if (r.in_pausa) setInPausa(true);
         if (r.logo_url) setLogoSrc(r.logo_url.startsWith('http') ? r.logo_url : `${API}${r.logo_url}`);
         if (r.instagram_url) setInstagramUrl(r.instagram_url);
         if (r.sales_whatsapp) {
@@ -840,7 +845,13 @@ export default function App() {
           </div>
         )}
 
-        {loading ? (
+        {inPausa ? (
+          <div style={{ textAlign: 'center', maxWidth: 320, margin: '24px auto 0', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🍽️</div>
+            <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>{t('menuPausa', lang)}</div>
+            <div style={{ opacity: 0.75 }}>{t('menuPausaSub', lang)}</div>
+          </div>
+        ) : loading ? (
           <div style={S.loadingChef}>👨‍🍳</div>
         ) : (
           <>

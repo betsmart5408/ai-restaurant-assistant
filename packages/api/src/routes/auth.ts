@@ -444,10 +444,15 @@ router.post('/claim', async (req, res) => {
          demo_email = COALESCE(demo_email, $2),
          plan = 'trial',
          subscription_status = 'trialing',
-         trial_ends_at = NOW() + make_interval(days => $3)
+         trial_ends_at = NOW() + make_interval(days => $3),
+         -- il numero con cui ci ha scritto su WhatsApp per questa demo:
+         -- serve per i promemoria di fine prova
+         whatsapp = COALESCE(NULLIF(whatsapp, ''),
+           (SELECT phone FROM whatsapp_leads WHERE slug = $4 ORDER BY last_msg_at DESC LIMIT 1))
        WHERE id = $1`,
-      [rest.id, emailPulita, giorniProva]
+      [rest.id, emailPulita, giorniProva, rest.slug]
     );
+    await client.query(`UPDATE whatsapp_leads SET stato = 'attivato' WHERE slug = $1`, [rest.slug]);
 
     // Le demo hanno un solo tavolo: un ristorante vero ne vuole di più.
     await client.query(

@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { db } from '../db/client';
+import { controllaProve } from './prova';
 import {
   sendWhatsApp,
   msgStockCritical,
@@ -176,6 +177,10 @@ export function startAlertScheduler() {
   );
   cron.schedule('30 8 * * 1', () =>
     sendWeeklyReport().catch(err => console.error('Weekly report error:', err))
+  );
+  // Fine prova gratuita: promemoria, scadenza, pausa del menu
+  cron.schedule('15 * * * *', () =>
+    controllaProve().catch(err => console.error('Controllo prove error:', err))
   );
 
   console.log('✅ Scheduler: stock/ora · scadenze/8:00 · riepilogo/22:00 · report/lunedì-8:30');
