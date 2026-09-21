@@ -9,6 +9,7 @@ interface AdminRestaurant {
   id: string; name: string; slug: string; owner_email: string; logo_url?: string;
   plan: string; subscription_status: string; trial_ends_at: string; monthly_price: number | string;
   suspended_at: string | null; dish_count: number; sessions_30d: number; created_at: string;
+  is_demo?: boolean; dishes_with_description?: number | string;
 }
 interface AdminStats {
   total_restaurants: number; active_subscriptions: number; trialing: number;
@@ -299,6 +300,13 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
     (r.owner_email ?? '').toLowerCase().includes(cerca)
   );
 
+  // Menu con descrizione = almeno un piatto con la descrizione scritta
+  // (es. "Bruschetta — pane tostato con pomodoro"). Vanno in cima.
+  const conDesc = (r: AdminRestaurant) => Number(r.dishes_with_description ?? 0) > 0;
+  const quotaDesc = (r: AdminRestaurant) => Number(r.dish_count) > 0 ? Number(r.dishes_with_description ?? 0) / Number(r.dish_count) : 0;
+  const conDescrizione = filtered.filter(conDesc).sort((a, b) => quotaDesc(b) - quotaDesc(a) || Number(b.dish_count) - Number(a.dish_count));
+  const senzaDescrizione = filtered.filter(r => !conDesc(r));
+
   const statusColor = (s: string) => s === 'active' ? '#22c55e' : s === 'trialing' ? '#f59e0b' : s === 'past_due' ? '#f97316' : '#ef4444';
   const statusLabel = (s: string) => s === 'active' ? '✅ Attivo' : s === 'trialing' ? '🟡 Trial' : s === 'past_due' ? '🟠 In ritardo' : s === 'suspended' ? '🔴 Sospeso' : s === 'cancelled' ? '❌ Cancellato' : s;
 
@@ -359,14 +367,33 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
               <h1 style={S.pageTitle}>🍽️ Tutti i ristoranti</h1>
               <input style={{ ...S.formInput, width: '100%', maxWidth: 240, margin: 0 }} placeholder="🔍 Cerca..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {filtered.map(r => (
+            {([
+              ['📝 Menu con descrizione', `Almeno un piatto ha la descrizione (es. "Bruschetta — pane tostato con pomodoro"). Ordinati dal menu più completo.`, conDescrizione, '#166534'],
+              ['⚪ Menu senza descrizione', 'Solo nomi dei piatti (e prezzi), nessuna descrizione.', senzaDescrizione, '#64748b'],
+            ] as const).map(([titolo, spiega, lista, colore]) => (
+              <section key={titolo} style={{ marginTop: 8 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: colore, margin: '18px 0 2px' }}>{titolo} ({lista.length})</h2>
+                <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>{spiega}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {lista.map(r => (
                 <div key={r.id} style={{ ...S.formCard, padding: '18px 20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
                     <div style={{ minWidth: 0, flex: '1 1 240px' }}>
                       <div style={{ fontWeight: 700, fontSize: 17, color: '#1e293b', wordBreak: 'break-word' }}>{r.name}</div>
                       <div style={{ fontSize: 13, color: '#64748b', marginTop: 2, wordBreak: 'break-word' }}>
                         👤 {r.owner_email} &nbsp;|&nbsp; 📋 {r.dish_count} piatti &nbsp;|&nbsp; 💬 {r.sessions_30d} sessioni/30gg
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+                          background: conDesc(r) ? '#dcfce7' : '#f1f5f9', color: conDesc(r) ? '#166534' : '#64748b' }}>
+                          {conDesc(r)
+                            ? `📝 Con descrizione · ${Number(r.dishes_with_description)} di ${r.dish_count} piatti`
+                            : '⚪ Senza descrizione'}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 8px', borderRadius: 6,
+                          background: r.is_demo ? '#fef3c7' : '#e0e7ff', color: r.is_demo ? '#92400e' : '#3730a3' }}>
+                          {r.is_demo ? '🎭 Demo' : '🏪 Cliente'}
+                        </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                         <a
@@ -415,7 +442,9 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
                   </div>
                 </div>
               ))}
-            </div>
+                </div>
+              </section>
+            ))}
           </div>
         )}
 

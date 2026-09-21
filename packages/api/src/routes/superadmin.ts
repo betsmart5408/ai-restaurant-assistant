@@ -52,14 +52,23 @@ router.get('/restaurants', async (_req, res) => {
              r.plan, r.subscription_status, r.trial_ends_at,
              r.monthly_price, r.suspended_at, r.billing_email,
              u.email as owner_email,
+             r.is_demo,
              COUNT(DISTINCT d.id) as dish_count,
+             COUNT(DISTINCT d.id) FILTER (WHERE COALESCE(TRIM(d.description), '') <> '') as dishes_with_description,
              COUNT(DISTINCT cs.id) FILTER (WHERE cs.created_at >= NOW() - INTERVAL '30 days') as sessions_30d
       FROM restaurants r
       LEFT JOIN users u ON u.restaurant_id = r.id AND u.role = 'owner'
       LEFT JOIN dishes d ON d.restaurant_id = r.id
       LEFT JOIN chat_sessions cs ON cs.restaurant_id = r.id
       GROUP BY r.id, u.email
-      ORDER BY r.created_at DESC
+      -- Prima i menu con le descrizioni dei piatti (sono le demo che si
+      -- vendono meglio), dal piu' completo al meno; poi tutti gli altri.
+      ORDER BY
+        (COUNT(DISTINCT d.id) FILTER (WHERE COALESCE(TRIM(d.description), '') <> '') > 0) DESC,
+        COUNT(DISTINCT d.id) FILTER (WHERE COALESCE(TRIM(d.description), '') <> '')::float
+          / NULLIF(COUNT(DISTINCT d.id), 0) DESC NULLS LAST,
+        COUNT(DISTINCT d.id) DESC,
+        r.created_at DESC
     `);
     res.json(result.rows);
   } catch (err) {
