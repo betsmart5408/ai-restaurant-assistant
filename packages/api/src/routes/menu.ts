@@ -67,7 +67,7 @@ router.get('/:restaurantSlug', async (req, res) => {
     if (inCache) return res.json(inCache);
 
     const restaurant = await db.query(
-      `SELECT id, name, languages, currency, logo_url, primary_color, background_color, ai_name, font_family, instagram_url, is_demo,
+      `SELECT id, name, languages, currency, logo_url, primary_color, background_color, ai_name, font_family, instagram_url, is_demo, assistente_attivo,
               ${SQL_IN_PAUSA} AS in_pausa
        FROM restaurants r WHERE slug = $1`,
       [restaurantSlug]

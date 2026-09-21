@@ -486,6 +486,12 @@ export default function App() {
   const [nomeLocale, setNomeLocale] = useState<string>('');
   // Prova finita e non pagata: l'API lo dice e niente menu ne' chat
   const [inPausa, setInPausa] = useState(false);
+  // Il ristoratore puo' spegnere l'assistente: allora solo menu, nessun
+  // riferimento alla chat. Il ref serve a startSession, che puo' partire
+  // prima che lo stato si aggiorni.
+  const [assistenteAttivo, setAssistenteAttivo] = useState(true);
+  const assistenteRef = useRef(true);
+  const spegniAssistente = () => { assistenteRef.current = false; setAssistenteAttivo(false); setTab('menu'); };
   const [aiName, setAiName] = useState<string>('Marco');
   const [valuta, setValuta] = useState<string>('\u20AC');
   const [instagramUrl, setInstagramUrl] = useState<string>('');
@@ -514,6 +520,7 @@ export default function App() {
         if (annullato || !data?.restaurant) return;
         const r = data.restaurant;
         if (r.in_pausa) setInPausa(true);
+        if (r.assistente_attivo === false) spegniAssistente();
         if (r.logo_url) setLogoSrc(r.logo_url.startsWith('http') ? r.logo_url : `${API}${r.logo_url}`);
         if (r.instagram_url) setInstagramUrl(r.instagram_url);
         if (r.sales_whatsapp) {
@@ -709,7 +716,7 @@ export default function App() {
       const savedPrefs = loadPrefs(params.restaurant);
       const [menuRes, sessionRes] = await Promise.all([
         fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=${selectedLang}`),
-        fetch(`${API}/api/chat/session`, {
+        !assistenteRef.current ? Promise.resolve(null) : fetch(`${API}/api/chat/session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -724,6 +731,16 @@ export default function App() {
         }),
       ]);
       if (!menuRes.ok) throw new Error(`Menu error ${menuRes.status}`);
+      // Assistente spento (o appena spento): si va avanti col solo menu
+      if (!sessionRes || sessionRes.status === 403) {
+        if (sessionRes) spegniAssistente();
+        const soloMenu: Dish[] = await menuRes.json();
+        const disponibili = (Array.isArray(soloMenu) ? soloMenu : []).filter(d => d.available);
+        setDishes(disponibili);
+        setSelectedCat(categorieDeiPiatti(disponibili)[0] ?? '');
+        setScreen('home');
+        return;
+      }
       if (!sessionRes.ok) {
         const errBody = await sessionRes.json().catch(() => ({}));
         throw new Error(`Session ${sessionRes.status}: ${errBody.detail || errBody.error || 'unknown'}`);
@@ -888,6 +905,7 @@ export default function App() {
           <button style={S.homeBtn} onClick={() => { setScreen('main'); setTab('menu'); }}>
             {t('homeMenu', lang)}
           </button>
+          {assistenteAttivo && (<>
           <button style={S.homeBtn} onClick={() => {
             setScreen('main');
             setTab('chat');
@@ -898,6 +916,7 @@ export default function App() {
           <button style={{ ...S.homeBtn, ...S.homeBtnAI }} onClick={() => { setScreen('main'); setTab('chat'); }}>
             {t('homeAI', lang)}
           </button>
+          </>)}
         </div>
         {/* Cambio lingua */}
         <button style={S.homeLangBtn} onClick={() => { setScreen('lang'); }}>
@@ -1026,7 +1045,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Tab bar */}
+      {/* Tab bar: con l'assistente spento resta solo il menu, niente barra */}
+      {assistenteAttivo && (
       <div style={S.tabBar}>
         <button style={tab === 'menu' ? S.tabActive : S.tabInactive} onClick={() => setTab('menu')}>
           🍽️ {t('menu', lang)}
@@ -1036,6 +1056,7 @@ export default function App() {
           {messages.length > 1 && tab !== 'chat' && <span style={S.chatDot} />}
         </button>
       </div>
+      )}
 
       {/* ── TAB MENU ── */}
       {tab === 'menu' && (
@@ -1069,7 +1090,7 @@ export default function App() {
       )}
 
       {/* ── TAB CHAT ── */}
-      {tab === 'chat' && (
+      {tab === 'chat' && assistenteAttivo && (
         <>
           <div style={S.messages}>
             {messages.map((msg, i) => (
@@ -1148,9 +1169,11 @@ export default function App() {
             {(translatedDesc ?? translatedDishes[selectedDish.id] ?? selectedDish.description) && (
               <p style={S.modalDesc}>{translatedDesc ?? translatedDishes[selectedDish.id] ?? selectedDish.description}</p>
             )}
+            {assistenteAttivo && (
             <button style={S.modalAskBtn} onClick={() => askAboutDish(selectedDish)}>
               💬 {t('askMarco', lang).replace('{n}', aiName)}
             </button>
+            )}
             <button style={S.modalOrderBtn} onClick={() => {
               setSavedDishes(prev => {
                 const esistente = prev.find(i => i.dish.id === selectedDish.id);

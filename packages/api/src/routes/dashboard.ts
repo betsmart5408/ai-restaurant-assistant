@@ -141,7 +141,7 @@ router.get('/:restaurantId/margins', requireAuth, requireOwnRestaurant, async (r
 router.get('/:restaurantId/settings', requireAuth, requireOwnRestaurant, async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT groq_api_key, ai_name FROM restaurants WHERE id = $1`,
+      `SELECT groq_api_key, ai_name, assistente_attivo FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
@@ -151,6 +151,7 @@ router.get('/:restaurantId/settings', requireAuth, requireOwnRestaurant, async (
       groq_api_key: key ? `${key.slice(0, 8)}${'•'.repeat(20)}` : null,
       has_key: !!key,
       ai_name: result.rows[0].ai_name || 'Marco',
+      assistente_attivo: result.rows[0].assistente_attivo !== false,
     });
   } catch (err) {
     console.error(err);
@@ -161,7 +162,7 @@ router.get('/:restaurantId/settings', requireAuth, requireOwnRestaurant, async (
 // PUT /api/dashboard/:restaurantId/settings — salva API key
 router.put('/:restaurantId/settings', requireAuth, requireOwnRestaurant, async (req, res) => {
   try {
-    const { groq_api_key, ai_name } = req.body;
+    const { groq_api_key, ai_name, assistente_attivo } = req.body;
 
     const campi: string[] = [];
     const valori: unknown[] = [];
@@ -179,6 +180,10 @@ router.put('/:restaurantId/settings', requireAuth, requireOwnRestaurant, async (
       if (nome.length > 30) return res.status(400).json({ error: 'Il nome e\' troppo lungo (massimo 30 caratteri)' });
       // vuoto = torna al nome predefinito
       campi.push(`ai_name = $${i++}`); valori.push(nome || 'Marco');
+    }
+
+    if (typeof assistente_attivo === 'boolean') {
+      campi.push(`assistente_attivo = $${i++}`); valori.push(assistente_attivo);
     }
 
     if (campi.length === 0) return res.status(400).json({ error: 'Niente da salvare' });

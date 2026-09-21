@@ -39,11 +39,12 @@ router.post('/session', async (req, res) => {
     const { restaurant_slug, table_number, language = 'it', group_size, saved_preferences, returning_customer, previous_dishes } = req.body;
 
     const restaurant = await db.query(
-      'SELECT id, name, groq_api_key, ai_name FROM restaurants WHERE slug = $1',
+      'SELECT id, name, groq_api_key, ai_name, assistente_attivo FROM restaurants WHERE slug = $1',
       [restaurant_slug]
     );
     if (restaurant.rows.length === 0) return res.status(404).json({ error: 'Restaurant not found' });
     if (await menuInPausa(restaurant_slug)) return res.status(402).json({ error: 'Menu in pausa', in_pausa: true });
+    if (restaurant.rows[0].assistente_attivo === false) return res.status(403).json({ error: 'Assistente spento', assistente_spento: true });
 
     const { id: restaurantId, name: restaurantName, groq_api_key } = restaurant.rows[0];
 
@@ -206,7 +207,7 @@ router.post('/:sessionId/message', async (req, res) => {
 
     const session = await db.query(
       `SELECT cs.id, cs.language, cs.messages, cs.restaurant_id, cs.table_id,
-              r.name as restaurant_name, r.groq_api_key, r.ai_name, r.currency,
+              r.name as restaurant_name, r.groq_api_key, r.ai_name, r.currency, r.assistente_attivo,
               r.city, r.country, r.cuisine_type, r.about, r.timezone, r.latitude, r.longitude, t.number as table_number
        FROM chat_sessions cs
        JOIN restaurants r ON r.id = cs.restaurant_id
@@ -217,6 +218,7 @@ router.post('/:sessionId/message', async (req, res) => {
     if (session.rows.length === 0) return res.status(404).json({ error: 'Session not found' });
 
     const s = session.rows[0];
+    if (s.assistente_attivo === false) return res.status(403).json({ error: 'Assistente spento', assistente_spento: true });
     const tutti = (s.messages as Array<{ role: 'user' | 'assistant'; content: string; timestamp?: string }>) ?? [];
 
     // Consideriamo solo la visita in corso. I messaggi del pranzo non devono

@@ -835,6 +835,9 @@ export default function App() {
   const [settingsMsg, setSettingsMsg] = useState('');
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [aiName, setAiName] = useState('Marco');
+  const [assistenteAttivo, setAssistenteAttivo] = useState(true);
+  const [assistenteSalvando, setAssistenteSalvando] = useState(false);
+  const [assistenteMsg, setAssistenteMsg] = useState('');
   const [aiNameMsg, setAiNameMsg] = useState('');
   const [locale, setLocale] = useState<{ city: string; region: string; country: string; timezone: string; latitude: number | null; longitude: number | null; cuisine_type: string; about: string; instagram_url: string; ig_popup_shown: number; ig_follow_clicks: number }>(
     { city: '', region: '', country: '', timezone: '', latitude: null, longitude: null, cuisine_type: '', about: '', instagram_url: '', ig_popup_shown: 0, ig_follow_clicks: 0 }
@@ -1063,6 +1066,7 @@ export default function App() {
       } else if (t === 'ia') {
         const data = await apiFetch(`/api/dashboard/${restaurant.id}/settings`, auth.token).catch(ignoraSeNonAuth);
         if (data?.ai_name) setAiName(data.ai_name);
+        if (typeof data?.assistente_attivo === 'boolean') setAssistenteAttivo(data.assistente_attivo);
       } else if (t === 'settings') {
         const data = await apiFetch(`/api/dashboard/${restaurant.id}/locale`, auth.token).catch(ignoraSeNonAuth);
         if (data) setLocale({
@@ -1155,6 +1159,26 @@ export default function App() {
         ? 'Salvato.'
         : "Salvato, ma senza citta' scelta dall'elenco l'assistente non potra' dare ora e meteo locali.");
     } catch { setLocaleMsg('Errore di rete.'); } finally { setLocaleSaving(false); }
+  }
+
+  async function cambiaAssistente(acceso: boolean) {
+    if (!auth || !restaurant || assistenteSalvando) return;
+    setAssistenteSalvando(true);
+    setAssistenteMsg('');
+    try {
+      const res = await fetch(`${API}/api/dashboard/${restaurant.id}/settings`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assistente_attivo: acceso }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setAssistenteMsg(data.error ?? 'Salvataggio non riuscito'); return; }
+      setAssistenteAttivo(acceso);
+      setAssistenteMsg(acceso
+        ? `Assistente acceso: entro un minuto i clienti vedono di nuovo ${aiName || 'Marco'}.`
+        : 'Assistente spento: entro un minuto i clienti vedono solo il menu.');
+    } catch { setAssistenteMsg('Errore di rete.'); }
+    finally { setAssistenteSalvando(false); }
   }
 
   async function salvaNomeAI() {
@@ -1789,6 +1813,30 @@ ${data.dettaglio}` : ''));
           <div style={S.content}>
             <h1 style={S.pageTitle}>🤖 Impostazioni IA</h1>
             <div style={S.formCard}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 260px' }}>
+                  <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Assistente per i clienti</h2>
+                  <p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>
+                    {assistenteAttivo
+                      ? <>I clienti possono chattare con <strong>{aiName || 'Marco'}</strong> e chiedergli dei piatti.</>
+                      : <>Spento: i clienti vedono <strong>solo il menu tradotto</strong>, senza chat e senza pulsanti dell'assistente.</>}
+                  </p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={assistenteAttivo}
+                  aria-label="Assistente per i clienti"
+                  disabled={assistenteSalvando}
+                  onClick={() => cambiaAssistente(!assistenteAttivo)}
+                  style={{ ...S.interruttore, ...(assistenteAttivo ? S.interruttoreOn : {}) }}>
+                  <span style={{ ...S.interruttorePallino, ...(assistenteAttivo ? { transform: 'translateX(68px)' } : {}) }} />
+                  <span style={{ ...S.interruttoreTesto, ...(assistenteAttivo ? { left: 14 } : { right: 12 }) }}>{assistenteAttivo ? 'Acceso' : 'Spento'}</span>
+                </button>
+              </div>
+              {assistenteMsg && <div style={{ marginTop: 12, fontSize: 14, color: assistenteMsg.startsWith('Assistente') ? '#166534' : '#ef4444' }}>{assistenteMsg}</div>}
+            </div>
+
+            <div style={S.formCard}>
               <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Nome dell'assistente</h2>
               <p style={{ color: '#64748b', fontSize: 14, marginBottom: 16 }}>
                 E' il nome con cui si presenta ai tuoi clienti. Scegline uno che suoni bene
@@ -1995,6 +2043,10 @@ const S: Record<string, React.CSSProperties> = {
   navBackdrop: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 55 },
   bannerProva: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', border: '1px solid', borderRadius: 12, padding: '12px 16px', margin: '0 0 18px', fontSize: 14, fontWeight: 600 },
   bannerProvaBtn: { background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' },
+  interruttore: { position: 'relative', width: 104, height: 36, borderRadius: 999, border: 'none', background: '#cbd5e1', cursor: 'pointer', padding: 0, flexShrink: 0, transition: 'background .2s' },
+  interruttoreOn: { background: '#22c55e' },
+  interruttorePallino: { position: 'absolute', top: 4, left: 4, width: 28, height: 28, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px #0003', transition: 'transform .2s' },
+  interruttoreTesto: { position: 'absolute', top: 0, bottom: 0, display: 'flex', alignItems: 'center', fontSize: 13, fontWeight: 700, color: '#fff' },
   linkLogin: { display: 'block', margin: '16px auto 0', background: 'none', border: 'none', color: '#6366f1', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' },
   benvenutoOverlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
   benvenutoCard: { position: 'relative', background: '#fff', borderRadius: 16, padding: '32px 28px 24px', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 20px 60px #0004' },
