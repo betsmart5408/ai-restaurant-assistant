@@ -1,0 +1,30 @@
+/* Pagine privacy e termini: stessi colori e caratteri della landing */
+:root{
+  --paper:#FFFDF9; --paper-2:#F6F1E9; --ink:#171310; --ink-2:#5C554E; --line:#E7DFD3;
+  --coral:#FF4D5E; --coral-ink:#C7263A;
+  --font:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --display:"Fraunces", Georgia, "Times New Roman", serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 var(--font)}
+a{color:var(--coral-ink)}
+.top{max-width:760px;margin:0 auto;padding:22px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{font-family:var(--display);font-size:22px;color:var(--ink);text-decoration:none}
+.brand span{color:var(--coral)}
+.lingue{display:flex;gap:6px}
+.lingue button{font:600 13px var(--font);padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink-2);cursor:pointer}
+.lingue button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+main{max-width:760px;margin:0 auto;padding:8px 16px 48px}
+article{background:#fff;border:1px solid var(--line);border-radius:20px;padding:36px clamp(20px,5vw,48px)}
+article + article{margin-top:28px}
+/* con JavaScript si vede una lingua sola; senza, tutte e due una sotto l'altra */
+.js article[hidden]{display:none}
+h1{font-family:var(--display);font-weight:600;font-size:clamp(28px,5vw,38px);line-height:1.15;margin:0 0 6px}
+.agg{color:var(--ink-2);font-size:14px;margin:0 0 28px}
+h2{font-size:18px;margin:32px 0 8px}
+h3{font-size:15px;margin:20px 0 6px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em}
+p,li{color:#2b2622}
+ul{padding-left:22px}
+li{margin:6px 0}
+.piede{max-width:760px;margin:0 auto;padding:0 16px 40px;color:var(--ink-2);font-size:14px;text-align:center}
+.piede a{color:var(--ink-2)}

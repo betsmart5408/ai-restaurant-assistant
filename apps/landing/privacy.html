@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — LingoFork</title>
+<meta name="description" content="Come LingoFork tratta i dati personali di ristoratori e clienti dei ristoranti.">
+<meta name="theme-color" content="#FFFDF9">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/legale.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/"><b>Lingo</b><span>Fork</span></a>
+  <nav class="lingue" aria-label="Lingua">
+    <button type="button" data-l="it" aria-pressed="true">Italiano</button>
+    <button type="button" data-l="en" aria-pressed="false">English</button>
+  </nav>
+</header>
+
+<main>
+<article lang="it" data-l="it">
+  <h1>Informativa sulla privacy</h1>
+  <p class="agg">Ultimo aggiornamento: 21 settembre 2026</p>
+
+  <h2>1. Chi tratta i dati</h2>
+  <p>Il titolare del trattamento è <strong>Giuseppe Basile</strong>, persona fisica residente in Italia, che gestisce il servizio LingoFork (lingofork.com). Per qualsiasi domanda sulla privacy scrivi a <a href="mailto:ciao@lingofork.com">ciao@lingofork.com</a>.</p>
+
+  <h2>2. Di chi sono i dati</h2>
+  <p>LingoFork ha due tipi di utenti:</p>
+  <ul>
+    <li><strong>Ristoratori</strong>: chi attiva e usa la dashboard (app.lingofork.com) per gestire il menu del proprio locale.</li>
+    <li><strong>Clienti dei ristoranti</strong>: chi inquadra il QR code al tavolo e consulta il menu o chatta con l'assistente (menu.lingofork.com).</li>
+  </ul>
+
+  <h2>3. Quali dati raccogliamo e perché</h2>
+  <h3>Ristoratori</h3>
+  <ul>
+    <li><strong>Dati dell'account</strong>: email e password (salvata solo in forma cifrata, non leggibile nemmeno da noi). Servono per farti accedere.</li>
+    <li><strong>Accesso con Google</strong>: se lo usi, Google ci comunica solo la tua email e che è verificata. Non riceviamo la tua password Google né altri dati del tuo account.</li>
+    <li><strong>Dati del locale</strong>: nome, menu, prezzi, foto, logo, città e fuso orario. Servono a mostrare il menu e a far funzionare l'assistente.</li>
+    <li><strong>Pagamenti</strong>: l'abbonamento è gestito da Stripe. I dati della carta li inserisci su Stripe e <strong>non arrivano mai a noi</strong>: riceviamo solo lo stato del pagamento e dell'abbonamento.</li>
+    <li><strong>Email di servizio</strong>: ti scriviamo per cose legate al servizio (ad esempio il link per reimpostare la password).</li>
+  </ul>
+  <p>Base giuridica: esecuzione del contratto (art. 6.1.b GDPR) e, per la sicurezza del servizio, il nostro legittimo interesse (art. 6.1.f).</p>
+
+  <h3>Clienti dei ristoranti</h3>
+  <ul>
+    <li><strong>Non chiediamo nome, email o telefono</strong>: il menu si consulta senza registrarsi.</li>
+    <li><strong>Conversazioni con l'assistente</strong>: le domande che scrivi, la lingua scelta e il tavolo. Servono a rispondere e a mostrare al ristorante, in forma aggregata, cosa chiedono i clienti (ad esempio quanti chiedono dei vini). Ti chiediamo di non scrivere dati personali nella chat.</li>
+    <li><strong>Sul tuo telefono</strong>: la lingua, la conversazione e i piatti che hai salvato restano nella memoria del browser (localStorage) per 12 ore, così non li perdi se ricarichi la pagina. Non sono cookie di tracciamento.</li>
+  </ul>
+  <p>Base giuridica: il legittimo interesse del ristorante e nostro a offrirti il menu tradotto e l'assistente che hai scelto di usare (art. 6.1.f GDPR).</p>
+
+  <h3>Pagine demo e pubblicità</h3>
+  <p>Per far conoscere LingoFork ad altri ristoranti pubblichiamo menu dimostrativi. Solo su queste pagine demo, e non sui menu dei ristoranti clienti, potremmo usare i pixel pubblicitari di Meta (Facebook, Instagram) e TikTok per misurare l'efficacia degli annunci. Dove la legge lo richiede li attiviamo solo con il tuo consenso.</p>
+
+  <h2>4. A chi affidiamo i dati</h2>
+  <p>Per far funzionare il servizio usiamo fornitori esterni, che trattano i dati per nostro conto e solo per questo scopo:</p>
+  <ul>
+    <li><strong>Hosting e database</strong>: Railway (server), Neon (database), Cloudflare (siti e dominio).</li>
+    <li><strong>Intelligenza artificiale</strong>: Groq, Cerebras e Anthropic ricevono il testo delle domande per generare risposte e traduzioni. MyMemory per alcune traduzioni.</li>
+    <li><strong>Pagamenti</strong>: Stripe.</li>
+    <li><strong>Email</strong>: Resend.</li>
+    <li><strong>Accesso</strong>: Google, solo se scegli "Accedi con Google".</li>
+    <li><strong>Messaggi WhatsApp</strong>: Twilio, se il ristorante usa le notifiche WhatsApp.</li>
+    <li><strong>Meteo</strong>: Open-Meteo, a cui passiamo solo le coordinate della città del ristorante, mai dati personali.</li>
+  </ul>
+  <p>Alcuni di questi fornitori hanno sede negli Stati Uniti. Il trasferimento avviene sulla base delle garanzie previste dal GDPR (Data Privacy Framework UE-USA o clausole contrattuali standard della Commissione europea). Non vendiamo i dati a nessuno.</p>
+
+  <h2>5. Per quanto tempo li conserviamo</h2>
+  <ul>
+    <li>Dati dell'account e del locale: finché l'account è attivo. Se chiedi la cancellazione li eliminiamo entro 30 giorni, salvo quanto dobbiamo tenere per legge (ad esempio i dati fiscali dei pagamenti, 10 anni).</li>
+    <li>Conversazioni con l'assistente: finché il ristorante usa il servizio, o prima se il ristorante o tu ne chiedete la cancellazione.</li>
+    <li>Link per reimpostare la password: scadono dopo un'ora.</li>
+  </ul>
+
+  <h2>6. I tuoi diritti</h2>
+  <p>Puoi chiedere in qualsiasi momento di accedere ai tuoi dati, correggerli, cancellarli, limitarne l'uso, riceverli in un formato leggibile od opporti al trattamento. Scrivi a <a href="mailto:ciao@lingofork.com">ciao@lingofork.com</a>: rispondiamo entro 30 giorni. Hai anche il diritto di presentare reclamo al <a href="https://www.garanteprivacy.it" rel="noopener">Garante per la protezione dei dati personali</a>. Se sei in Australia puoi rivolgerti anche all'<a href="https://www.oaic.gov.au" rel="noopener">OAIC</a>.</p>
+
+  <h2>7. Sicurezza</h2>
+  <p>Le connessioni sono cifrate (HTTPS), le password sono salvate solo in forma cifrata e l'accesso ai dati di un ristorante è limitato al suo account.</p>
+
+  <h2>8. Modifiche</h2>
+  <p>Se cambiamo questa informativa aggiorniamo la data in alto. Se le modifiche sono importanti lo comunichiamo per email ai ristoratori.</p>
+</article>
+
+<article lang="en" data-l="en">
+  <h1>Privacy policy</h1>
+  <p class="agg">Last updated: 21 September 2026</p>
+
+  <h2>1. Who is responsible for your data</h2>
+  <p>The data controller is <strong>Giuseppe Basile</strong>, an individual resident in Italy, who operates the LingoFork service (lingofork.com). For any privacy question, write to <a href="mailto:ciao@lingofork.com">ciao@lingofork.com</a>.</p>
+
+  <h2>2. Whose data</h2>
+  <p>LingoFork has two kinds of users:</p>
+  <ul>
+    <li><strong>Restaurant owners</strong>: people who activate and use the dashboard (app.lingofork.com) to manage their venue's menu.</li>
+    <li><strong>Restaurant guests</strong>: people who scan the QR code at the table to read the menu or chat with the assistant (menu.lingofork.com).</li>
+  </ul>
+
+  <h2>3. What we collect and why</h2>
+  <h3>Restaurant owners</h3>
+  <ul>
+    <li><strong>Account data</strong>: email and password (stored only as a one-way hash that not even we can read). Used to let you sign in.</li>
+    <li><strong>Sign in with Google</strong>: if you use it, Google only tells us your email address and that it is verified. We never receive your Google password or any other account data.</li>
+    <li><strong>Venue data</strong>: name, menu, prices, photos, logo, city and time zone. Used to display the menu and run the assistant.</li>
+    <li><strong>Payments</strong>: subscriptions are handled by Stripe. You enter your card details on Stripe and <strong>they never reach us</strong>: we only receive the payment and subscription status.</li>
+    <li><strong>Service emails</strong>: we email you about the service (for example a password reset link).</li>
+  </ul>
+  <p>Legal basis: performance of a contract (Art. 6(1)(b) GDPR) and, for security, our legitimate interest (Art. 6(1)(f)).</p>
+
+  <h3>Restaurant guests</h3>
+  <ul>
+    <li><strong>We do not ask for your name, email or phone number</strong>: you can read the menu without signing up.</li>
+    <li><strong>Conversations with the assistant</strong>: the questions you type, your chosen language and the table. Used to answer you and to show the restaurant, in aggregate, what guests ask about (for example how many ask about wine). Please do not type personal information into the chat.</li>
+    <li><strong>On your phone</strong>: your language, the conversation and the dishes you saved stay in your browser's storage (localStorage) for 12 hours, so you don't lose them if you reload the page. These are not tracking cookies.</li>
+  </ul>
+  <p>Legal basis: the legitimate interest of the restaurant and of LingoFork in offering the translated menu and assistant you chose to use (Art. 6(1)(f) GDPR).</p>
+
+  <h3>Demo pages and advertising</h3>
+  <p>To introduce LingoFork to other restaurants we publish demonstration menus. On these demo pages only, and never on the menus of paying restaurants, we may use the Meta (Facebook, Instagram) and TikTok advertising pixels to measure ad performance. Where the law requires it, they are only enabled with your consent.</p>
+
+  <h2>4. Who processes data for us</h2>
+  <p>We rely on external providers that process data on our behalf and only for this purpose:</p>
+  <ul>
+    <li><strong>Hosting and database</strong>: Railway (servers), Neon (database), Cloudflare (websites and domain).</li>
+    <li><strong>Artificial intelligence</strong>: Groq, Cerebras and Anthropic receive the text of questions to generate answers and translations. MyMemory for some translations.</li>
+    <li><strong>Payments</strong>: Stripe.</li>
+    <li><strong>Email</strong>: Resend.</li>
+    <li><strong>Sign-in</strong>: Google, only if you choose "Sign in with Google".</li>
+    <li><strong>WhatsApp messages</strong>: Twilio, if the restaurant uses WhatsApp notifications.</li>
+    <li><strong>Weather</strong>: Open-Meteo, which only receives the coordinates of the restaurant's city, never personal data.</li>
+  </ul>
+  <p>Some of these providers are based in the United States. Transfers rely on the safeguards provided by the GDPR (the EU-US Data Privacy Framework or the European Commission's standard contractual clauses). We never sell data.</p>
+
+  <h2>5. How long we keep data</h2>
+  <ul>
+    <li>Account and venue data: while the account is active. If you ask us to delete it we do so within 30 days, except for what the law requires us to keep (for example tax records of payments, 10 years).</li>
+    <li>Conversations with the assistant: while the restaurant uses the service, or earlier if the restaurant or you ask for deletion.</li>
+    <li>Password reset links: they expire after one hour.</li>
+  </ul>
+
+  <h2>6. Your rights</h2>
+  <p>You can ask at any time to access, correct, delete or export your data, to restrict its use or to object to processing. Write to <a href="mailto:ciao@lingofork.com">ciao@lingofork.com</a>: we reply within 30 days. You can also lodge a complaint with the Italian data protection authority (<a href="https://www.garanteprivacy.it" rel="noopener">Garante per la protezione dei dati personali</a>). If you are in Australia you may also contact the <a href="https://www.oaic.gov.au" rel="noopener">OAIC</a>.</p>
+
+  <h2>7. Security</h2>
+  <p>Connections are encrypted (HTTPS), passwords are stored only as hashes, and access to a restaurant's data is limited to its own account.</p>
+
+  <h2>8. Changes</h2>
+  <p>If we change this policy we update the date at the top. If the changes are significant we notify restaurant owners by email.</p>
+</article>
+</main>
+
+<footer class="piede">
+  <a href="/">lingofork.com</a> · <a href="/termini">Termini di servizio / Terms of service</a> · <a href="mailto:ciao@lingofork.com">ciao@lingofork.com</a>
+</footer>
+<script src="/legale.js"></script>
+</body>
+</html>
