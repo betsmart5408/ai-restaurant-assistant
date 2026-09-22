@@ -480,6 +480,95 @@ function ClaimScreen({ slug, token, onDone }: { slug: string; token: string; onD
 // ─── Super Admin Panel ──────────────────────────────────────
 // Indirizzo pubblico del menu cliente: e' il link che si manda al ristoratore.
 const MENU_PUBBLICO = (import.meta as any).env?.VITE_MENU_URL ?? 'https://menu.lingofork.com';
+// ─── Conversazioni (Super Admin) ─────────────────────────────
+interface MessaggioConv { role: string; content: string; timestamp: string | null; motivi: string[]; }
+interface Conversazione { id: string; ristorante: string; slug: string; demo: boolean; lingua: string; inizio: string; domande: number; sospette: number; messaggi: MessaggioConv[]; }
+
+function Conversazioni({ token }: { token: string }) {
+  const [giorni, setGiorni] = useState(7);
+  const [slug, setSlug] = useState('');
+  const [soloSospette, setSoloSospette] = useState(false);
+  const [dati, setDati] = useState<{ conversazioni: Conversazione[]; ristoranti: Array<{ slug: string; nome: string; chat: number }> } | null>(null);
+  const [aperta, setAperta] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDati(null);
+    const q = new URLSearchParams({ giorni: String(giorni), ...(slug ? { slug } : {}), ...(soloSospette ? { sospette: '1' } : {}) });
+    fetch(`${API}/api/admin/conversazioni?${q}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(setDati)
+      .catch(() => setDati({ conversazioni: [], ristoranti: [] }));
+  }, [giorni, slug, soloSospette, token]);
+
+  const ora = (t: string | null) => t ? new Date(t).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  // Il grassetto dell'assistente (**nome**) si mostra come grassetto vero
+  const testo = (s: string) => s.split(/(\*\*[^*]+\*\*)/g).map((p, i) =>
+    p.startsWith('**') && p.endsWith('**') ? <strong key={i}>{p.slice(2, -2)}</strong> : <span key={i}>{p}</span>);
+
+  return (
+    <div style={S.content}>
+      <h1 style={S.pageTitle}>💬 Conversazioni</h1>
+      <p style={{ color: '#64748b', fontSize: 14, marginTop: -8 }}>
+        Le chat vere dei clienti. In rosso le risposte sospette: promesse impossibili, nessun fornitore IA disponibile,
+        tetto raggiunto, possibili fatti inventati sul locale. Leggerle qualche minuto al giorno è il controllo migliore.
+      </p>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '8px 0 16px' }}>
+        <select style={{ ...S.formInput, width: 'auto', minWidth: 220, margin: 0 }} value={slug} onChange={e => setSlug(e.target.value)}>
+          <option value="">Tutti i ristoranti</option>
+          {dati?.ristoranti.map(r => <option key={r.slug} value={r.slug}>{r.nome} ({r.chat})</option>)}
+        </select>
+        {[1, 7, 30].map(g => (
+          <button key={g} onClick={() => setGiorni(g)} style={{
+            padding: '7px 12px', borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            border: '1px solid ' + (giorni === g ? '#6366f1' : '#e2e8f0'), background: giorni === g ? '#6366f1' : '#fff', color: giorni === g ? '#fff' : '#475569',
+          }}>{g === 1 ? 'Oggi' : `${g} giorni`}</button>
+        ))}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: '#334155', cursor: 'pointer' }}>
+          <input type="checkbox" checked={soloSospette} onChange={e => setSoloSospette(e.target.checked)} /> Solo sospette
+        </label>
+      </div>
+      {!dati && <div style={{ color: '#64748b' }}>Caricamento...</div>}
+      {dati && dati.conversazioni.length === 0 && <div style={{ ...S.formCard, color: '#64748b', textAlign: 'center' }}>Nessuna conversazione nel periodo.</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {dati?.conversazioni.map(c => (
+          <div key={c.id} style={{ ...S.formCard, padding: 0, overflow: 'hidden', borderColor: c.sospette ? '#fca5a5' : undefined }}>
+            <button onClick={() => setAperta(aperta === c.id ? null : c.id)} style={{
+              width: '100%', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center',
+              padding: '14px 18px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 14,
+            }}>
+              <span>
+                <strong>{c.ristorante}</strong>{' '}
+                <span style={{ fontSize: 11, fontWeight: 700, color: c.demo ? '#92400e' : '#3730a3' }}>{c.demo ? 'DEMO' : 'CLIENTE'}</span>
+                <span style={{ color: '#64748b' }}> · {ora(c.inizio)} · {String(c.lingua || '').toUpperCase()} · {c.domande} domande</span>
+              </span>
+              <span style={{ fontWeight: 700, color: c.sospette ? '#b91c1c' : '#166534' }}>
+                {c.sospette ? `⚠️ ${c.sospette} sospette` : '✓'} {aperta === c.id ? '▲' : '▼'}
+              </span>
+            </button>
+            {aperta === c.id && (
+              <div style={{ padding: '4px 18px 18px', display: 'flex', flexDirection: 'column', gap: 8, background: '#f8fafc' }}>
+                {c.messaggi.map((m, i) => (
+                  <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                    <div style={{
+                      whiteSpace: 'pre-wrap', fontSize: 14, lineHeight: 1.5, padding: '9px 13px', borderRadius: 12,
+                      background: m.role === 'user' ? '#6366f1' : m.motivi.length ? '#fef2f2' : '#fff',
+                      color: m.role === 'user' ? '#fff' : '#1e293b',
+                      border: m.role === 'user' ? 'none' : `1px solid ${m.motivi.length ? '#fca5a5' : '#e2e8f0'}`,
+                    }}>{testo(m.content)}</div>
+                    <div style={{ fontSize: 11, color: m.motivi.length ? '#b91c1c' : '#94a3b8', marginTop: 2, textAlign: m.role === 'user' ? 'right' : 'left' }}>
+                      {ora(m.timestamp)}{m.motivi.length ? ` · ⚠️ ${m.motivi.join(', ')}` : ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Consumi IA (Super Admin) ───────────────────────────────
 interface ConsumoRistorante {
   id: string; name: string; slug: string; is_demo: boolean; subscription_status: string;
@@ -646,7 +735,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
 
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [restaurants, setRestaurants] = useState<AdminRestaurant[]>([]);
-  const [tab, setTab] = useState<'dashboard' | 'restaurants' | 'consumi' | 'new'>('dashboard');
+  const [tab, setTab] = useState<'dashboard' | 'restaurants' | 'conversazioni' | 'consumi' | 'new'>('dashboard');
   const [loading, setLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 860);
   const [navOpen, setNavOpen] = useState(false);
@@ -863,7 +952,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
           </div>
         </div>
         <nav style={S.nav}>
-          {([['dashboard', '📊 Dashboard'], ['restaurants', '🍽️ Ristoranti'], ['consumi', '💸 Consumi IA'], ['new', '➕ Nuovo ristorante']] as const).map(([key, label]) => (
+          {([['dashboard', '📊 Dashboard'], ['restaurants', '🍽️ Ristoranti'], ['conversazioni', '💬 Conversazioni'], ['consumi', '💸 Consumi IA'], ['new', '➕ Nuovo ristorante']] as const).map(([key, label]) => (
             <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navBtnActive : {}) }} onClick={() => { setTab(key); setNavOpen(false); }}>{label}</button>
           ))}
         </nav>
@@ -932,6 +1021,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
           </div>
         )}
 
+        {tab === 'conversazioni' && <Conversazioni token={token} />}
         {tab === 'consumi' && <ConsumiIA token={token} />}
 
         {/* ── NUOVO RISTORANTE ── */}

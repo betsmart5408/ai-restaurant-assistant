@@ -168,6 +168,57 @@ router.get('/fornitori', async (_req, res) => {
   res.json({ fornitori: esiti });
 });
 
+// GET /api/admin/conversazioni?giorni=7&slug=&sospette=1 — le chat vere dei
+// clienti, per leggerle e trovare gli errori dell'assistente. Una risposta e'
+// "sospetta" se contiene promesse impossibili, il messaggio di ripiego
+// ("non riesco a rispondere"), il tetto raggiunto o fatti sul locale.
+const SOSPETTA: Array<[RegExp, string]> = [
+  [/avviso io|faccio verificare|lo segnalo|chiamo (io )?il cameriere|i['’]ll (let|tell|inform|notify|call)|i will (let|tell|inform|notify|call)/i, 'promessa impossibile'],
+  [/non riesco a rispondere|can.t answer right now|no puedo responder/i, 'nessun fornitore IA ha risposto'],
+  [/abbiamo parlato parecchio|talked quite a lot/i, 'tetto della conversazione'],
+  [/password|campanell|bell on the table|accettiamo tutte|we accept all/i, 'possibile fatto inventato sul locale'],
+];
+router.get('/conversazioni', async (req, res) => {
+  const giorni = Math.min(Math.max(Number(req.query.giorni) || 7, 1), 90);
+  const slug = String(req.query.slug ?? '').trim();
+  const soloSospette = req.query.sospette === '1';
+  try {
+    const r = await db.query(
+      `SELECT cs.id, cs.language, cs.created_at, cs.messages, r.name, r.slug, r.is_demo
+       FROM chat_sessions cs JOIN restaurants r ON r.id = cs.restaurant_id
+       WHERE cs.created_at > NOW() - make_interval(days => $1)
+         AND ($2 = '' OR r.slug = $2)
+         AND jsonb_array_length(COALESCE(cs.messages, '[]'::jsonb)) > 1
+       ORDER BY cs.created_at DESC
+       LIMIT 300`,
+      [giorni, slug]
+    );
+    const conversazioni = r.rows.map(c => {
+      const messaggi = (Array.isArray(c.messages) ? c.messages : []).map((m: any) => {
+        const motivi = m?.role === 'assistant'
+          ? SOSPETTA.filter(([re]) => re.test(String(m.content ?? ''))).map(([, motivo]) => motivo)
+          : [];
+        return { role: m?.role, content: String(m?.content ?? ''), timestamp: m?.timestamp ?? null, motivi };
+      });
+      const sospette = messaggi.filter((m: { motivi: string[] }) => m.motivi.length > 0).length;
+      return { id: c.id, ristorante: c.name, slug: c.slug, demo: c.is_demo, lingua: c.language, inizio: c.created_at, domande: messaggi.filter((m: { role: string }) => m.role === 'user').length, sospette, messaggi };
+    }).filter(c => !soloSospette || c.sospette > 0);
+    const elenco = await db.query(
+      `SELECT r.slug, r.name AS nome, COUNT(*)::int AS chat
+       FROM chat_sessions cs JOIN restaurants r ON r.id = cs.restaurant_id
+       WHERE cs.created_at > NOW() - make_interval(days => $1)
+         AND jsonb_array_length(COALESCE(cs.messages, '[]'::jsonb)) > 1
+       GROUP BY r.slug, r.name ORDER BY chat DESC LIMIT 200`,
+      [giorni]
+    );
+    const ristoranti = elenco.rows;
+    res.json({ giorni, conversazioni: conversazioni.slice(0, 100), ristoranti });
+  } catch (err) {
+    console.error('Conversazioni error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/admin/stats — KPI globali
 router.get('/stats', async (_req, res) => {
   try {
