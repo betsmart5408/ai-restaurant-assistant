@@ -75,15 +75,27 @@ function ignoraSeNonAuth(err: unknown) {
 }
 
 // ─── Login Screen ───────────────────────────────────────────
+// Due indirizzi, una sola app: admin.lingofork.com e' solo per noi (Super
+// Admin), app.lingofork.com solo per i ristoratori, che cosi' non vedono
+// nemmeno che esiste un accesso admin. Altrove (localhost, *.pages.dev)
+// resta il vecchio ?admin per le prove.
+const HOST = typeof window !== 'undefined' ? window.location.hostname : '';
+const SITO_ADMIN = HOST.startsWith('admin.');
+const SITO_RISTORATORI = HOST === 'app.lingofork.com';
+function chiedeAdmin(): boolean {
+  if (SITO_ADMIN) return true;
+  if (SITO_RISTORATORI) return false;
+  return /[?&]admin\b/.test(window.location.search) || window.location.hash.includes('admin');
+}
+if (SITO_ADMIN && typeof document !== 'undefined') document.title = 'LingoFork Admin';
+
 function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  // L'accesso Super Admin non si mostra ai ristoratori: compare solo se
-  // l'indirizzo contiene ?admin (es. app.lingofork.com/?admin), e in quel
-  // caso il form parte gia' in modalita' Super Admin.
-  const adminSbloccato = /[?&]admin\b/.test(window.location.search) || window.location.hash.includes('admin');
+  // Super Admin solo su admin.lingofork.com (o con ?admin nelle prove)
+  const adminSbloccato = chiedeAdmin();
   const [mode, setMode] = useState<'owner' | 'admin'>(adminSbloccato ? 'admin' : 'owner');
   const [dimenticata, setDimenticata] = useState(false);
 
@@ -151,7 +163,7 @@ function LoginScreen({ onLogin }: { onLogin: (data: AuthData) => void }) {
             </button>
           </>
         )}
-        {(adminSbloccato || mode === 'admin') && (
+        {!SITO_ADMIN && !SITO_RISTORATORI && (adminSbloccato || mode === 'admin') && (
           <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid rgba(148,163,184,0.25)' }}>
             <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 10 }}>
               {mode === 'owner' ? 'Sei l\'amministratore della piattaforma?' : 'Sei il titolare di un ristorante?'}
@@ -1302,10 +1314,10 @@ ${data.dettaglio}` : ''));
     }
   }
 
-  // ?admin nell'URL: mostra sempre il login Super Admin, anche se in questo
-  // browser e' rimasta la sessione di un ristoratore (es. una demo attivata).
-  const vuoleAdmin = /[?&]admin\b/.test(window.location.search) || window.location.hash.includes('admin');
-  if (!auth || (vuoleAdmin && auth.role !== 'superadmin')) {
+  // Sul sito admin serve una sessione Super Admin, sul sito dei ristoratori
+  // una da ristoratore: altrimenti si torna al login giusto.
+  const vuoleAdmin = chiedeAdmin();
+  if (!auth || (vuoleAdmin && auth.role !== 'superadmin') || (SITO_RISTORATORI && auth.role === 'superadmin')) {
     return <LoginScreen onLogin={d => { saveAuth(d); setAuth(d); }} />;
   }
 
