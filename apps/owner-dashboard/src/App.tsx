@@ -9,7 +9,7 @@ interface AdminRestaurant {
   id: string; name: string; slug: string; owner_email: string; logo_url?: string;
   plan: string; subscription_status: string; trial_ends_at: string; monthly_price: number | string;
   suspended_at: string | null; dish_count: number; sessions_30d: number; created_at: string;
-  is_demo?: boolean; dishes_with_description?: number | string;
+  is_demo?: boolean; dishes_with_description?: number | string; demo_claim_token?: string | null;
 }
 interface AdminStats {
   total_restaurants: number; active_subscriptions: number; trialing: number;
@@ -481,18 +481,23 @@ function ClaimScreen({ slug, token, onDone }: { slug: string; token: string; onD
 // Indirizzo pubblico del menu cliente: e' il link che si manda al ristoratore.
 const MENU_PUBBLICO = (import.meta as any).env?.VITE_MENU_URL ?? 'https://menu.lingofork.com';
 const linkDemo = (slug: string) => `${MENU_PUBBLICO}/?restaurant=${slug}`;
+// Link da mandare in DM al titolare: la demo con dentro la chiave, cosi'
+// dal tasto "Attiva" va dritto all'attivazione. Solo per chi lo riceve.
+const linkPerDm = (r: AdminRestaurant) =>
+  r.is_demo && r.demo_claim_token ? `${linkDemo(r.slug)}&attiva=${encodeURIComponent(r.demo_claim_token)}` : linkDemo(r.slug);
 
 function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [copiato, setCopiato] = useState<string | null>(null);
 
-  async function copiaLink(slug: string) {
+  async function copiaLink(r: AdminRestaurant) {
+    const link = linkPerDm(r);
     try {
-      await navigator.clipboard.writeText(linkDemo(slug));
-      setCopiato(slug);
-      setTimeout(() => setCopiato(c => (c === slug ? null : c)), 2000);
+      await navigator.clipboard.writeText(link);
+      setCopiato(r.slug);
+      setTimeout(() => setCopiato(c => (c === r.slug ? null : c)), 2000);
     } catch {
       // Certi browser bloccano la copia: mostriamo il link da copiare a mano.
-      window.prompt('Copia il link:', linkDemo(slug));
+      window.prompt('Copia il link:', link);
     }
   }
 
@@ -673,7 +678,8 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
                           🔗 Apri la demo
                         </a>
                         <button
-                          onClick={() => copiaLink(r.slug)}
+                          onClick={() => copiaLink(r)}
+                          title={r.is_demo ? 'Link della demo con il tasto per attivarla: mandalo solo al titolare' : undefined}
                           style={{
                             fontSize: 13, cursor: 'pointer', fontWeight: 600,
                             border: '1px solid ' + (copiato === r.slug ? '#86efac' : '#e2e8f0'),
@@ -681,7 +687,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
                             color: copiato === r.slug ? '#166534' : '#475569',
                             padding: '5px 10px', borderRadius: 7, whiteSpace: 'nowrap',
                           }}>
-                          {copiato === r.slug ? '✓ Copiato' : '📋 Copia link'}
+                          {copiato === r.slug ? '✓ Copiato' : r.is_demo ? '📋 Copia link per DM' : '📋 Copia link'}
                         </button>
                         <code style={{ fontSize: 11, color: '#94a3b8', wordBreak: 'break-all' }}>
                           /?restaurant={r.slug}

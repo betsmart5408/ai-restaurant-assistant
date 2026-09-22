@@ -34,8 +34,11 @@ function getQRParams() {
     restaurant: p.get('restaurant') ?? '',
     table: parseInt(p.get('table') ?? '1'),
     lang: p.get('lang') ?? navigator.language.slice(0, 2) ?? 'it',
+    // Chiave di attivazione: c'e' solo nel link mandato in DM al titolare
+    attiva: p.get('attiva') ?? '',
   };
 }
+const DASHBOARD = ((import.meta.env.VITE_DASHBOARD_URL as string | undefined) || 'https://app.lingofork.com').replace(/\/+$/, '');
 
 interface Message { role: 'user' | 'assistant'; content: string; timestamp: string; }
 interface Dish { id: string; name: string; description: string; price: number; category: string; category_label?: string; available: boolean; image_url?: string; }
@@ -619,7 +622,17 @@ export default function App() {
 
   // Tasto "attiva questo menu": solo nelle demo. Con l'email del locale il
   // link arriva li'; senza, resta il vecchio passaggio da WhatsApp.
-  const demoCtaBtn = attivaEmail ? (
+  // Link ricevuto in DM (con la chiave): il tasto porta dritto all'attivazione.
+  // Se la demo e' gia' stata attivata l'API non manda piu' attiva_email ne'
+  // sales_whatsapp e il tasto sparisce da solo.
+  const linkAttivazioneDiretto = params.attiva && (attivaEmail || demoWa)
+    ? `${DASHBOARD}/attiva?attiva=${encodeURIComponent(params.restaurant)}&token=${encodeURIComponent(params.attiva)}`
+    : '';
+  const demoCtaBtn = linkAttivazioneDiretto ? (
+    <a href={linkAttivazioneDiretto} style={{ ...S.demoCta, background: 'var(--brand)', boxShadow: '0 6px 22px rgba(0,0,0,0.25)' }}>
+      <span style={{ fontSize: 17 }}>✨</span> {t('demoCta', lang)}
+    </a>
+  ) : attivaEmail ? (
     <>
       <button style={{ ...S.demoCta, background: 'var(--brand)', border: 'none', cursor: 'pointer', boxShadow: '0 6px 22px rgba(0,0,0,0.25)' }}
         onClick={() => { setAttivaAperta(true); if (attivaStato === 'errore') setAttivaStato(''); }}>

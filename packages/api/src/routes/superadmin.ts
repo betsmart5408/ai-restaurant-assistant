@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { db } from '../db/client';
 import { requireAuth, requireSuperAdmin, signToken } from '../middleware/auth';
 
@@ -47,12 +48,21 @@ router.use(requireAuth, requireSuperAdmin);
 // GET /api/admin/restaurants — tutti i ristoranti con billing
 router.get('/restaurants', async (_req, res) => {
   try {
+    // Ogni demo deve avere la sua chiave di attivazione: serve al link per
+    // il DM ("Copia link per DM"). Quelle che non ce l'hanno la ricevono ora.
+    const senza = await db.query(`SELECT id FROM restaurants WHERE is_demo = TRUE AND demo_claim_token IS NULL`);
+    for (const { id } of senza.rows) {
+      await db.query('UPDATE restaurants SET demo_claim_token = $1 WHERE id = $2 AND demo_claim_token IS NULL',
+        [crypto.randomBytes(18).toString('base64url'), id]);
+    }
+
     const result = await db.query(`
       SELECT r.id, r.name, r.slug, r.created_at, r.logo_url,
              r.plan, r.subscription_status, r.trial_ends_at,
              r.monthly_price, r.suspended_at, r.billing_email,
              u.email as owner_email,
              r.is_demo,
+             CASE WHEN r.is_demo THEN r.demo_claim_token END AS demo_claim_token,
              COUNT(DISTINCT d.id) as dish_count,
              COUNT(DISTINCT d.id) FILTER (WHERE COALESCE(TRIM(d.description), '') <> '') as dishes_with_description,
              COUNT(DISTINCT cs.id) FILTER (WHERE cs.created_at >= NOW() - INTERVAL '30 days') as sessions_30d
