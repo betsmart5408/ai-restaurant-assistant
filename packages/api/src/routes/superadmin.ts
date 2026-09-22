@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import { db } from '../db/client';
 import { requireAuth, requireSuperAdmin, signToken } from '../middleware/auth';
 import { SQL_IN_PAUSA } from '../services/prova';
+import { catenaFornitori, clientePer } from '../services/fornitori-ia';
+import { modelliDisponibili } from '../services/groq-model';
 
 const router = Router();
 
@@ -136,6 +138,34 @@ router.get('/consumi', async (req, res) => {
     console.error('Consumi error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// GET /api/admin/fornitori — prova ogni fornitore IA della catena con una
+// domanda minuscola: risponde? con quale modello? in quanto tempo? Le chiavi
+// non escono mai, si vede solo il nome del fornitore.
+router.get('/fornitori', async (_req, res) => {
+  const catena = catenaFornitori();
+  const esiti = await Promise.all(catena.map(async f => {
+    const inizio = Date.now();
+    try {
+      const cliente = clientePer(f);
+      const modelli = f.modelli.length > 0 ? f.modelli : await modelliDisponibili(cliente, f.chiave);
+      if (modelli.length === 0) return { nome: f.nome, ok: false, errore: 'nessun modello disponibile con questa chiave' };
+      const r = await cliente.chat.completions.create({
+        model: modelli[0], max_tokens: 5, messages: [{ role: 'user', content: 'Rispondi solo: ok' }],
+      } as any);
+      const testo = String(r.choices?.[0]?.message?.content ?? '').trim();
+      return { nome: f.nome, ok: true, modello: modelli[0], ms: Date.now() - inizio, risposta: testo.slice(0, 20) };
+    } catch (err: any) {
+      const stato = err?.status ? `${err.status} ` : '';
+      const quota = err?.status === 429 || /rate limit|quota|429/i.test(String(err?.message ?? ''));
+      return {
+        nome: f.nome, ok: false, quota, ms: Date.now() - inizio,
+        errore: quota ? 'quota esaurita per ora (si ricarica da sola)' : `${stato}${String(err?.message ?? err).slice(0, 160)}`,
+      };
+    }
+  }));
+  res.json({ fornitori: esiti });
 });
 
 // GET /api/admin/stats — KPI globali

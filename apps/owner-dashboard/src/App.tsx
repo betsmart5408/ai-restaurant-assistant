@@ -492,6 +492,17 @@ function ConsumiIA({ token }: { token: string }) {
   const [giorni, setGiorni] = useState(30);
   const [dati, setDati] = useState<{ ristoranti: ConsumoRistorante[]; fornitori: ConsumoFornitore[] } | null>(null);
   const [errore, setErrore] = useState('');
+  const [fornitori, setFornitori] = useState<Array<{ nome: string; ok: boolean; quota?: boolean; modello?: string; ms?: number; errore?: string }> | null>(null);
+  const [provando, setProvando] = useState(false);
+  function provaFornitori() {
+    setProvando(true);
+    fetch(`${API}/api/admin/fornitori`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setFornitori(d.fornitori ?? []))
+      .catch(() => setFornitori([]))
+      .finally(() => setProvando(false));
+  }
+  useEffect(() => { provaFornitori(); }, [token]);
 
   useEffect(() => {
     setErrore('');
@@ -528,6 +539,23 @@ function ConsumiIA({ token }: { token: string }) {
         </div>
       </div>
       {errore && <div style={S.errorBox}>{errore}</div>}
+      <div style={{ ...S.formCard, marginTop: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Stato dei fornitori IA</h2>
+          <button style={S.btnSecondary} disabled={provando} onClick={provaFornitori}>{provando ? 'Prova in corso...' : 'Riprova'}</button>
+        </div>
+        {!fornitori && <div style={{ color: '#64748b', fontSize: 14 }}>Prova in corso...</div>}
+        {fornitori && fornitori.length === 0 && <div style={{ color: '#b91c1c', fontSize: 14 }}>Nessun fornitore configurato (o prova non riuscita).</div>}
+        {fornitori?.map((f, i) => (
+          <div key={f.nome} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '8px 0', borderTop: i ? '1px solid #f1f5f9' : 'none', fontSize: 14 }}>
+            <span><strong>{i + 1}. {f.nome}</strong> {f.modello && <span style={{ color: '#64748b' }}>· {f.modello}</span>}</span>
+            <span style={{ fontWeight: 700, color: f.ok ? '#166534' : f.quota ? '#b45309' : '#b91c1c' }}>
+              {f.ok ? `✅ attivo (${((f.ms ?? 0) / 1000).toFixed(1)}s)` : f.quota ? `⏳ ${f.errore}` : `❌ ${f.errore}`}
+            </span>
+          </div>
+        ))}
+        <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 8 }}>La chat li prova in quest'ordine: se uno ha finito la quota passa al successivo.</div>
+      </div>
       {dati && (
         <>
           <div style={S.kpiGrid}>
