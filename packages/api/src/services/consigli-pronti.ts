@@ -120,9 +120,13 @@ export function chiaveMemoria(messaggio: string): ChiaveMemoria | null {
   return `q:${msg}`;
 }
 
+// Si alza quando cambiano le regole dell'assistente: tutte le risposte
+// memorizzate con le regole vecchie smettono di valere, subito.
+const VERSIONE_REGOLE = 2;   // 2: niente promesse, solo vini in carta
+
 /** Firma del menu: se cambia un piatto o un prezzo, i consigli si riscrivono. */
 export function firmaMenu(piatti: Array<{ id: string; name: string; price: number | string }>): string {
-  const base = piatti.map(p => `${p.id}:${p.name}:${p.price}`).sort().join('|');
+  const base = `v${VERSIONE_REGOLE}|` + piatti.map(p => `${p.id}:${p.name}:${p.price}`).sort().join('|');
   return crypto.createHash('md5').update(base).digest('hex');
 }
 
