@@ -105,8 +105,11 @@ const RIMANDI = new Set([
   'isto', 'isso', 'outro', 'outra',
 ]);
 
+// Domande sul locale: valgono uguali per chiunque, qualunque cosa si sia detto prima
+const SUL_LOCALE = /\b(wifi|wi fi|password|carta|carte|bancomat|contanti|pagare|pagamento|bagno|bagni|toilet|toilette|orari|orario|aperti|aperto|chiudete|chiuso|prenot|parcheggio|cane|cani|animali|card|cash|pay|payment|restroom|bathroom|open|close|closing|booking|reservation|parking|dog|dogs|pets|tarjeta|efectivo|pagar|bano|abierto|reserva|aparcamiento|perro|carte bancaire|payer|ouvert|reservation|chien|karte|bar|toilette|offnungszeiten|hund)\b/;
+
 /** La chiave con cui ricordare questa domanda, o null se non si puo' riusare. */
-export function chiaveMemoria(messaggio: string): ChiaveMemoria | null {
+export function chiaveMemoria(messaggio: string, nomiPiatti: string[] = []): ChiaveMemoria | null {
   const msg = normalizza(messaggio);
   if (!msg) return null;
   const parole = msg.split(' ');
@@ -117,12 +120,17 @@ export function chiaveMemoria(messaggio: string): ChiaveMemoria | null {
   if (/\d/.test(msg)) return null;                              // persone, eta', quantita'
   if (PAROLE_ALLERGENI.some(p => msg.includes(p))) return null;  // allergie: sempre l'IA con il contesto
   if (parole.some(p => PAROLE_ALLERGENI_INTERE.includes(p))) return null;
+  // Serve un soggetto chiaro: senza un piatto del menu o il locale nella
+  // domanda, "che vino ci abbino?" o "e' piccante?" parlano di quello che
+  // si e' detto prima, e senza la conversazione la risposta sarebbe sbagliata.
+  const suUnPiatto = nomiPiatti.some(n => n && n.length >= 3 && (' ' + msg + ' ').includes(' ' + n + ' '));
+  if (!suUnPiatto && !SUL_LOCALE.test(msg)) return null;
   return `q:${msg}`;
 }
 
 // Si alza quando cambiano le regole dell'assistente: tutte le risposte
 // memorizzate con le regole vecchie smettono di valere, subito.
-const VERSIONE_REGOLE = 2;   // 2: niente promesse, solo vini in carta
+const VERSIONE_REGOLE = 3;   // 3: niente fatti inventati sul locale, memoria solo con un soggetto chiaro
 
 /** Firma del menu: se cambia un piatto o un prezzo, i consigli si riscrivono. */
 export function firmaMenu(piatti: Array<{ id: string; name: string; price: number | string }>): string {

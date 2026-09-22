@@ -108,7 +108,10 @@ export function catenaFornitori(chiaveRistorante?: string): Fornitore[] {
 
 /** Il client da usare per un fornitore. */
 export function clientePer(f: Fornitore): Groq {
-  return new Groq({ apiKey: f.chiave, ...(f.baseURL ? { baseURL: f.baseURL } : {}) });
+  // maxRetries 0: la libreria, di suo, su un 429 aspetta e riprova (fino a
+  // 20-25 secondi col cliente davanti al telefono). Un fornitore al limite
+  // si salta subito: il prossimo della catena risponde in 2 secondi.
+  return new Groq({ apiKey: f.chiave, maxRetries: 0, timeout: 20_000, ...(f.baseURL ? { baseURL: f.baseURL } : {}) });
 }
 
 /**

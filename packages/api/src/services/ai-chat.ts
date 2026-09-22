@@ -10,7 +10,7 @@ import { riconosciConsiglio, chiaveMemoria, firmaMenu, leggiConsiglio, salvaCons
 import { normalizza, suggerimentiPredefiniti } from './risposte-dirette';
 
 // Parole di chi fa la domanda AL cliente: in un pulsante del cliente non ci stanno
-const RIVOLTO_AL_CLIENTE = /(vuoi|preferisci|desideri|indicami|dimmi|dammi|hai (allergie|intolleranze)|would you|do you want|do you prefer|tell me|let me know|quieres|prefieres|dime|indicame|voulez vous|preferez|dites moi|mochten sie|mochtest du|sagen sie mir)/;
+const RIVOLTO_AL_CLIENTE = /\b(vuoi|preferisci|desideri|indicami|hai (allergie|intolleranze)|would you|do you want|do you prefer|what would you|quieres|prefieres|indicame|voulez vous|preferez|mochten sie|mochtest du)\b/;
 
 // `saved_preferences` e `previous_dishes` arrivano dal body pubblico di
 // POST /api/chat/session, quindi sono testo scelto dal cliente: non vanno mai
@@ -300,6 +300,7 @@ ALLERGIE — REGOLA DI SICUREZZA, NON NEGOZIABILE:
 - Puoi riportare SOLO gli allergeni scritti nel campo "allergeni" del menu qui sopra, dicendo che sono le informazioni registrate dal ristorante.
 - Quando qualcuno dichiara un'allergia: ringrazia e digli SEMPRE di comunicarla al cameriere prima di ordinare, perche' la conferma la da' la cucina.
 - Frase da usare: "Prima di ordinare dillo al cameriere: la conferma la da' sempre la cucina."
+- NON INVENTARE MAI INFORMAZIONI SUL LOCALE: wifi, pagamenti e carte, orari, prenotazioni, parcheggio, animali, bagni, piatti fuori menu. Se non sono scritte in queste istruzioni non le sai: di' che non hai questa informazione e di chiedere al personale.
 - NON PROMETTERE MAI AZIONI: non puoi avvisare il personale, chiamare il cameriere, prenotare, ordinare o mandare messaggi a nessuno. Esisti solo in questa chat. Mai frasi come "avviso io", "faccio verificare", "lo segnalo", "chiamo il cameriere": di' invece al cliente di chiederlo lui al personale.${quantiConAllergeni === 0
   ? '\n- Questo ristorante NON ha ancora registrato gli allergeni dei piatti: dillo con chiarezza e rimanda al personale, senza fare ipotesi.'
   : ''}
@@ -307,6 +308,7 @@ ALLERGIE — REGOLA DI SICUREZZA, NON NEGOZIABILE:
 
 FORMATTAZIONE (obbligatoria):
 - Scrivi SEMPRE i nomi di piatti e vini in **grassetto** (es: **Caesar Salad**, **Sauvignon IGT**). Mai tra virgolette.
+- Il grassetto e' SOLO per i nomi esatti di piatti e bevande del menu: MAI per titoli o portate ("Antipasto", "Primo"), prezzi, totali o altre parole.
 - Questo permette al cliente di cliccare il nome per vedere i dettagli del piatto direttamente nell'app.
 
 PIATTI E BEVANDE:
@@ -375,7 +377,7 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
   // in questa lingua, la risposta e' pronta e non costa niente.
   const tipoConsiglio = riconosciConsiglio(userMessage, dishes.map((d: { name: string }) => normalizza(d.name)));
   // Qualsiasi altra domanda che vale uguale per chiunque: si ricorda la risposta
-  const memoria = tipoConsiglio ? null : chiaveMemoria(userMessage);
+  const memoria = tipoConsiglio ? null : chiaveMemoria(userMessage, dishes.map((d: { name: string }) => normalizza(d.name)));
   const firma = tipoConsiglio || memoria ? firmaMenu(dishes) : '';
   if (tipoConsiglio) {
     const pronto = await leggiConsiglio(restaurantId, language, tipoConsiglio, firma);
