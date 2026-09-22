@@ -17,7 +17,7 @@ import crypto from 'crypto';
 import { db } from '../db/client';
 import {
   normalizza, PAROLE_ALLERGENI, PAROLE_ALLERGENI_INTERE, SUGGERIMENTI_TUTTE_LE_LINGUE,
-  PAROLE_VEGETARIANO, PAROLE_VEGANO, SCRITTURA_SENZA_SPAZI, normalizzaElenco,
+  PAROLE_VEGETARIANO, PAROLE_VEGANO, SCRITTURA_SENZA_SPAZI, normalizzaElenco, CONTESTO_ALLERGIA,
 } from './risposte-dirette';
 
 export type TipoConsiglio = 'consiglio' | 'degustazione2' | 'vegetariano' | 'bambini';
@@ -164,8 +164,12 @@ export function chiaveMemoria(messaggio: string, nomiPiatti: string[] = []): Chi
   if (corta || (!senzaSpazi && parole.length > 12) || msg.length > 90) return null;
   if (parole.some(p => RIMANDI.has(p))) return null;
   if (/\d/.test(msg)) return null;                              // persone, eta', quantita'
-  if (PAROLE_ALLERGENI.some(p => msg.includes(p))) return null;  // allergie: sempre l'IA con il contesto
-  if (parole.some(p => PAROLE_ALLERGENI_INTERE.includes(p))) return null;
+  // Allergie: sempre l'IA con il contesto, mai una risposta riusata. Ma
+  // "pesce" e "uova" da sole sono cibo, non allergie: senza questo distinguo
+  // "Avete del pesce?" non si ricordava mai e costava una chiamata a ogni
+  // cliente. Stessa regola del ramo allergeni in risposte-dirette.ts.
+  if (PAROLE_ALLERGENI.some(p => msg.includes(p))) return null;
+  if (parole.some(p => PAROLE_ALLERGENI_INTERE.includes(p)) && CONTESTO_ALLERGIA.test(msg)) return null;
   // Serve un soggetto chiaro: senza un piatto del menu o il locale nella
   // domanda, "che vino ci abbino?" o "e' piccante?" parlano di quello che
   // si e' detto prima, e senza la conversazione la risposta sarebbe sbagliata.

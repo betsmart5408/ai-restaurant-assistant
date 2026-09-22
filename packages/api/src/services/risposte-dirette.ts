@@ -733,6 +733,17 @@ const PAROLE_GRAZIE = normalizzaElenco([
  * dentro "donut" farebbe partire l'intento sbagliato. Queste si cercano come
  * parola intera.
  */
+/**
+ * Il messaggio parla DAVVERO di un'allergia.
+ *
+ * Serve perche' "pesce", "uova", "latte", "nut" sono parole di allergeni ma
+ * anche di cibo: "Avete del pesce?" e "Do you have milk for the coffee?" si
+ * sentivano rispondere "questi piatti non nominano pesce". Dieci domande
+ * normali su ventisei finivano li'. Da sole quelle parole non bastano piu':
+ * ci vuole un segno di allergia, intolleranza o "senza".
+ */
+export const CONTESTO_ALLERGIA = /allerg|intolleran|intoleran|celiac|coeliac|zoliakie|unvertraglich|senza|\bsin\b|\bsans\b|\bohne\b|\bsem\b|without|\bfree\b(?! range)|tanpa|без|不含|过敏|アレルギ|알레르기|بدون|حساسية|बिना|एलर्जी|non posso mangiare|no puedo comer|cannot eat|can t eat|evitare|avoid/;
+
 export const PAROLE_ALLERGENI_INTERE = normalizzaElenco([
   'nut', 'nuts', 'noci', 'noce', 'soia', 'soy', 'uova', 'uovo', 'egg', 'eggs',
   'latte', 'milk', 'pesce', 'fish', 'sesamo', 'sesame', 'sedano', 'celery',
@@ -1228,7 +1239,11 @@ export async function rispostaDiretta(p: {
   // quello, qui non si risponde ("la carbonara e' vegetariana?" riceveva
   // l'elenco degli allergeni, che del guanciale non dice niente).
   const parlaDiVegetariano = contiene(msg, PAROLE_VEGETARIANO);
-  const parlaDiAllergie = contiene(msg, PAROLE_ALLERGENI) || contieneParolaIntera(msg, allergeniInteri);
+  // "glutine", "lattosio", "allergia" bastano da sole: non sono parole che si
+  // usano per ordinare. "pesce", "uova", "latte" no: quelle vogliono anche un
+  // segno di allergia, altrimenti "Avete del pesce?" finiva qui dentro.
+  const parlaDiAllergie = contiene(msg, PAROLE_ALLERGENI)
+    || (contieneParolaIntera(msg, allergeniInteri) && CONTESTO_ALLERGIA.test(msg));
   if (parlaDiAllergie && !parlaDiVegetariano) {
     const piatto = piattoCitato(msg, piatti);
     if (piatto) {

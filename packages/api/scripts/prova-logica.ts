@@ -258,6 +258,43 @@ async function main() {
   }
   ok(!sceltaGlutine.consigliati.some(c => c.name === 'Acqua naturale'), 'niente bevande fra i consigli');
 
+  sezione('11a. Chi NON parla di allergie prosegue normalmente');
+  // "pesce", "uova", "latte", "nut" sono parole di allergeni ma anche di
+  // cibo. Senza questo controllo "Avete del pesce?" si sentiva rispondere
+  // "questi piatti non nominano pesce": dieci domande normali su ventisei
+  // finivano nel ramo allergeni.
+  const NORMALI: Array<[string, string]> = [
+    ['it', 'Avete del pesce?'], ['it', 'Che pesce avete oggi?'], ['it', 'Mi piace il pesce'],
+    ['it', 'Vorrei qualcosa con le uova'], ['it', 'Avete piatti con il latte?'],
+    ['it', 'Quanto costa la carbonara?'], ['it', 'Avete il pane?'],
+    ['en', 'Do you have fish?'], ['en', 'What fish do you serve?'], ['en', 'I love fish'],
+    ['en', 'Any dish with eggs?'], ['en', 'Do you have milk for the coffee?'],
+    ['en', 'Do you serve free range eggs?'],
+    ['es', 'Teneis pescado?'], ['es', 'Hay algo con huevo?'], ['de', 'Haben Sie Fisch?'],
+    ['fr', 'Avez-vous du poisson ?'], ['zh', '有鱼吗？'], ['ko', '생선 요리 있어요?'],
+  ];
+  for (const [lang, msg] of NORMALI) {
+    const r = await chiedi(msg, lang);
+    ok(r?.intento !== 'allergeni', `[${lang}] "${msg}" NON e\' una domanda sulle allergie`,
+      r?.message?.split('\n')[0]?.slice(0, 80));
+  }
+  // E invece queste lo sono, e devono continuare a esserlo
+  const VERE: Array<[string, string]> = [
+    ['it', "Ho un'allergia al pesce"], ['it', 'Avete piatti senza uova?'], ['it', 'Sono intollerante al latte'],
+    ['en', 'I have a nut allergy'], ['en', 'Any dish without eggs?'], ['en', 'I am allergic to fish'],
+    ['es', 'Tengo alergia al marisco'], ['de', 'Ich habe eine Fischallergie'],
+    ['ja', '魚アレルギーがあります'], ['ko', '생선 알레르기가 있어요'],
+  ];
+  for (const [lang, msg] of VERE) {
+    const r = await chiedi(msg, lang);
+    ok(r?.intento === 'allergeni', `[${lang}] "${msg}" E' una domanda sulle allergie`, `ricevuto: ${r?.intento ?? 'null'}`);
+  }
+  // E la memoria segue la stessa regola: "avete del pesce" si puo' ricordare
+  ok(chiaveMemoria('la carbonara ha il pesce', NOMI) !== null,
+    'domanda normale su un piatto con la parola "pesce" -> ricordabile', String(chiaveMemoria('la carbonara ha il pesce', NOMI)));
+  ok(chiaveMemoria('la carbonara e senza uova', NOMI) === null, 'stessa domanda ma con "senza" -> mai ricordata');
+  ok(chiaveMemoria('ho un allergia al pesce', NOMI) === null, 'domanda con allergia -> mai ricordata');
+
   sezione('11b. Una carta dei vini non e\' cibo');
   // Categorie vere di China Doll: nessuna contiene la parola "wine"
   const CARTA_VINI = [
