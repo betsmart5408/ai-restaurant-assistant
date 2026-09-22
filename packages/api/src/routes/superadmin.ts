@@ -89,6 +89,55 @@ router.get('/restaurants', async (_req, res) => {
   }
 });
 
+// GET /api/admin/consumi?giorni=30 — quanto consuma l'IA, per ristorante
+// Domande = tutte quelle arrivate alla chat; "senza IA" = risolte dalle
+// risposte pronte; "IA" = chiamate al modello; "limite" = rimandate al
+// personale perche' il ristorante aveva finito le domande del giorno.
+router.get('/consumi', async (req, res) => {
+  const giorni = Math.min(Math.max(Number(req.query.giorni) || 30, 1), 365);
+  try {
+    const ristoranti = await db.query(
+      `WITH intenti AS (
+         SELECT restaurant_id,
+                SUM(quanti)::int AS domande,
+                SUM(quanti) FILTER (WHERE intento NOT IN ('modello', 'limite'))::int AS senza_ia,
+                SUM(quanti) FILTER (WHERE intento = 'limite')::int AS limite
+         FROM chat_intenti WHERE giorno > CURRENT_DATE - $1::int
+         GROUP BY restaurant_id
+       ), ia AS (
+         SELECT restaurant_id,
+                SUM(chiamate)::int AS chiamate_ia,
+                SUM(token_in)::bigint AS token_in,
+                SUM(token_out)::bigint AS token_out,
+                SUM(costo_usd)::float AS costo_usd,
+                MAX(giorno) AS ultimo_giorno
+         FROM consumi_ia WHERE giorno > CURRENT_DATE - $1::int
+         GROUP BY restaurant_id
+       )
+       SELECT r.id, r.name, r.slug, r.is_demo, r.subscription_status,
+              COALESCE(i.domande, 0) AS domande, COALESCE(i.senza_ia, 0) AS senza_ia, COALESCE(i.limite, 0) AS limite,
+              COALESCE(ia.chiamate_ia, 0) AS chiamate_ia, COALESCE(ia.token_in, 0) AS token_in,
+              COALESCE(ia.token_out, 0) AS token_out, COALESCE(ia.costo_usd, 0) AS costo_usd
+       FROM restaurants r
+       LEFT JOIN intenti i ON i.restaurant_id = r.id
+       LEFT JOIN ia ON ia.restaurant_id = r.id
+       WHERE i.restaurant_id IS NOT NULL OR ia.restaurant_id IS NOT NULL
+       ORDER BY COALESCE(ia.costo_usd, 0) DESC, COALESCE(ia.chiamate_ia, 0) DESC, COALESCE(i.domande, 0) DESC`,
+      [giorni]
+    );
+    const fornitori = await db.query(
+      `SELECT fornitore, SUM(chiamate)::int AS chiamate, SUM(token_in + token_out)::bigint AS token, SUM(costo_usd)::float AS costo_usd
+       FROM consumi_ia WHERE giorno > CURRENT_DATE - $1::int
+       GROUP BY fornitore ORDER BY chiamate DESC`,
+      [giorni]
+    );
+    res.json({ giorni, ristoranti: ristoranti.rows, fornitori: fornitori.rows });
+  } catch (err) {
+    console.error('Consumi error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/admin/stats — KPI globali
 router.get('/stats', async (_req, res) => {
   try {

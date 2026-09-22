@@ -5,6 +5,7 @@ import { rispostaDiretta } from './risposte-dirette';
 import { costruisciMenuPerPrompt, avvisoMenuParziale } from './menu-contesto';
 import { registraIntento } from './conta-intenti';
 import { catenaFornitori, clientePer } from './fornitori-ia';
+import { registraConsumo, superatoLimite, messaggioLimite } from './consumi-ia';
 
 // `saved_preferences` e `previous_dishes` arrivano dal body pubblico di
 // POST /api/chat/session, quindi sono testo scelto dal cliente: non vanno mai
@@ -380,6 +381,14 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
     console.error('risposta diretta non riuscita, passo al modello:', err);
   }
 
+  // Limite giornaliero di domande all'IA per questo ristorante: oltre, si
+  // resta sulle risposte pronte (qui sopra) e per il resto si rimanda al
+  // personale. Il giorno dopo si riparte.
+  if (await superatoLimite(restaurantId)) {
+    registraIntento(restaurantId, 'limite', language);
+    return { message: messaggioLimite(language), suggestions: [] };
+  }
+
   // Meteo del posto giusto: senza coordinate si salta del tutto,
   // meglio niente meteo che il meteo di un'altra citta'.
   const lat = ctx.latitude, lon = ctx.longitude;
@@ -458,7 +467,12 @@ REGOLE FINALI, PIU' IMPORTANTI DI TUTTE:
           if (nascondiRagionamento) parametri.reasoning_format = 'hidden';
           const response = await cliente.chat.completions.create(parametri as any);
           assistantMessage = pulisciRisposta(response.choices[0]?.message?.content ?? '');
-          if (assistantMessage) { modelloUsato = `${fornitore.nome}/${model}`; break catena; }
+          if (assistantMessage) {
+            modelloUsato = `${fornitore.nome}/${model}`;
+            const uso = (response as { usage?: { prompt_tokens?: number; completion_tokens?: number } }).usage;
+            registraConsumo(restaurantId, fornitore.nome, model, uso?.prompt_tokens ?? 0, uso?.completion_tokens ?? 0);
+            break catena;
+          }
         } catch (err) {
           ultimoErrore = err;
         }

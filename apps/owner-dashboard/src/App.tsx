@@ -480,6 +480,121 @@ function ClaimScreen({ slug, token, onDone }: { slug: string; token: string; onD
 // ─── Super Admin Panel ──────────────────────────────────────
 // Indirizzo pubblico del menu cliente: e' il link che si manda al ristoratore.
 const MENU_PUBBLICO = (import.meta as any).env?.VITE_MENU_URL ?? 'https://menu.lingofork.com';
+// ─── Consumi IA (Super Admin) ───────────────────────────────
+interface ConsumoRistorante {
+  id: string; name: string; slug: string; is_demo: boolean; subscription_status: string;
+  domande: number; senza_ia: number; limite: number; chiamate_ia: number;
+  token_in: number | string; token_out: number | string; costo_usd: number;
+}
+interface ConsumoFornitore { fornitore: string; chiamate: number; token: number | string; costo_usd: number; }
+
+function ConsumiIA({ token }: { token: string }) {
+  const [giorni, setGiorni] = useState(30);
+  const [dati, setDati] = useState<{ ristoranti: ConsumoRistorante[]; fornitori: ConsumoFornitore[] } | null>(null);
+  const [errore, setErrore] = useState('');
+
+  useEffect(() => {
+    setErrore('');
+    fetch(`${API}/api/admin/consumi?giorni=${giorni}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(setDati)
+      .catch(() => setErrore('Non riesco a leggere i consumi.'));
+  }, [giorni, token]);
+
+  const n = (v: number | string) => Number(v ?? 0);
+  const dollari = (v: number) => v === 0 ? '$0' : v < 0.01 ? '< $0,01' : `$${v.toFixed(2).replace('.', ',')}`;
+  const migliaia = (v: number) => v.toLocaleString('it-IT');
+  const r = dati?.ristoranti ?? [];
+  const tot = r.reduce((a, x) => ({
+    domande: a.domande + n(x.domande), senza: a.senza + n(x.senza_ia), ia: a.ia + n(x.chiamate_ia),
+    limite: a.limite + n(x.limite), token: a.token + n(x.token_in) + n(x.token_out), costo: a.costo + n(x.costo_usd),
+  }), { domande: 0, senza: 0, ia: 0, limite: 0, token: 0, costo: 0 });
+  const paganti = r.filter(x => !x.is_demo);
+  const costoPaganti = paganti.reduce((a, x) => a + n(x.costo_usd), 0);
+  const cella: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 14, whiteSpace: 'nowrap' };
+  const testa: React.CSSProperties = { ...cella, fontSize: 12, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', background: '#f8fafc', textAlign: 'right' };
+
+  return (
+    <div style={S.content}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <h1 style={S.pageTitle}>💸 Consumi IA</h1>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[1, 7, 30, 90].map(g => (
+            <button key={g} onClick={() => setGiorni(g)} style={{
+              padding: '7px 12px', borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              border: '1px solid ' + (giorni === g ? '#6366f1' : '#e2e8f0'), background: giorni === g ? '#6366f1' : '#fff', color: giorni === g ? '#fff' : '#475569',
+            }}>{g === 1 ? 'Oggi' : `${g} giorni`}</button>
+          ))}
+        </div>
+      </div>
+      {errore && <div style={S.errorBox}>{errore}</div>}
+      {dati && (
+        <>
+          <div style={S.kpiGrid}>
+            <KPI label="Domande dei clienti" value={migliaia(tot.domande)} color="#6366f1" sub="Tutte quelle arrivate alla chat" />
+            <KPI label="Risposte senza IA" value={tot.domande ? `${Math.round(tot.senza / tot.domande * 100)}%` : '—'} color="#22c55e" sub={`${migliaia(tot.senza)} gratis: prezzi, allergeni, vini...`} />
+            <KPI label="Chiamate all'IA" value={migliaia(tot.ia)} color="#f59e0b" sub={`${migliaia(tot.token)} token`} />
+            <KPI label="Costo totale" value={dollari(tot.costo)} color="#ef4444" sub={`di cui clienti ${dollari(costoPaganti)} · demo ${dollari(tot.costo - costoPaganti)}`} />
+            <KPI label="Costo medio per cliente" value={paganti.length ? dollari(costoPaganti / paganti.length) : '—'} color="#0ea5e9" sub={`${paganti.length} clienti con traffico nel periodo`} />
+            <KPI label="Limite raggiunto" value={migliaia(tot.limite)} color="#8b5cf6" sub="Domande rimandate al personale" />
+          </div>
+
+          {dati.fornitori.length > 0 && (
+            <div style={{ ...S.formCard, marginTop: 20 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Chi ha risposto</h2>
+              {dati.fornitori.map(f => (
+                <div key={f.fornitore} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '6px 0', borderBottom: '1px solid #f1f5f9', fontSize: 14 }}>
+                  <span><strong>{f.fornitore}</strong> {n(f.costo_usd) === 0 && <span style={{ color: '#166534', fontSize: 12, fontWeight: 700 }}>GRATIS</span>}</span>
+                  <span style={{ color: '#64748b' }}>{migliaia(n(f.chiamate))} chiamate · {migliaia(n(f.token))} token · <strong style={{ color: '#1e293b' }}>{dollari(n(f.costo_usd))}</strong></span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ ...S.formCard, marginTop: 20, padding: 0, overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ ...testa, textAlign: 'left' }}>Ristorante</th>
+                  <th style={testa}>Domande</th>
+                  <th style={testa}>Senza IA</th>
+                  <th style={testa}>IA</th>
+                  <th style={testa}>Limite</th>
+                  <th style={testa}>Token</th>
+                  <th style={testa}>Costo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.length === 0 && (
+                  <tr><td colSpan={7} style={{ ...cella, textAlign: 'center', color: '#64748b' }}>Nessuna chat nel periodo.</td></tr>
+                )}
+                {r.map(x => (
+                  <tr key={x.id}>
+                    <td style={{ ...cella, whiteSpace: 'normal' }}>
+                      <strong>{x.name}</strong>{' '}
+                      <span style={{ fontSize: 11, fontWeight: 700, color: x.is_demo ? '#92400e' : '#3730a3' }}>{x.is_demo ? 'DEMO' : 'CLIENTE'}</span>
+                    </td>
+                    <td style={{ ...cella, textAlign: 'right' }}>{migliaia(n(x.domande))}</td>
+                    <td style={{ ...cella, textAlign: 'right', color: '#166534' }}>{migliaia(n(x.senza_ia))}</td>
+                    <td style={{ ...cella, textAlign: 'right' }}>{migliaia(n(x.chiamate_ia))}</td>
+                    <td style={{ ...cella, textAlign: 'right', color: n(x.limite) ? '#7c3aed' : '#cbd5e1' }}>{migliaia(n(x.limite))}</td>
+                    <td style={{ ...cella, textAlign: 'right', color: '#64748b' }}>{migliaia(n(x.token_in) + n(x.token_out))}</td>
+                    <td style={{ ...cella, textAlign: 'right', fontWeight: 700 }}>{dollari(n(x.costo_usd))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ color: '#94a3b8', fontSize: 13, marginTop: 12 }}>
+            Il costo usa i prezzi impostati su Railway (&lt;FORNITORE&gt;_PRICE_IN e _PRICE_OUT, dollari per milione di token):
+            un fornitore senza prezzo conta come gratuito. Token e costi si contano da quando è attiva questa pagina.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 const linkDemo = (slug: string) => `${MENU_PUBBLICO}/?restaurant=${slug}`;
 // Link da mandare in DM al titolare: la demo con dentro la chiave, cosi'
 // dal tasto "Attiva" va dritto all'attivazione. Solo per chi lo riceve.
@@ -503,7 +618,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
 
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [restaurants, setRestaurants] = useState<AdminRestaurant[]>([]);
-  const [tab, setTab] = useState<'dashboard' | 'restaurants' | 'new'>('dashboard');
+  const [tab, setTab] = useState<'dashboard' | 'restaurants' | 'consumi' | 'new'>('dashboard');
   const [loading, setLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 860);
   const [navOpen, setNavOpen] = useState(false);
@@ -720,7 +835,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
           </div>
         </div>
         <nav style={S.nav}>
-          {([['dashboard', '📊 Dashboard'], ['restaurants', '🍽️ Ristoranti'], ['new', '➕ Nuovo ristorante']] as const).map(([key, label]) => (
+          {([['dashboard', '📊 Dashboard'], ['restaurants', '🍽️ Ristoranti'], ['consumi', '💸 Consumi IA'], ['new', '➕ Nuovo ristorante']] as const).map(([key, label]) => (
             <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navBtnActive : {}) }} onClick={() => { setTab(key); setNavOpen(false); }}>{label}</button>
           ))}
         </nav>
@@ -788,6 +903,8 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
             ))}
           </div>
         )}
+
+        {tab === 'consumi' && <ConsumiIA token={token} />}
 
         {/* ── NUOVO RISTORANTE ── */}
         {tab === 'new' && (
