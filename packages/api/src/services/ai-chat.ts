@@ -420,7 +420,8 @@ function separaSuggerimenti(testo: string): { visibile: string; suggerimenti: st
   const m = coda.match(/\[[\s\S]*?\]/);
   if (m) { try { const x = JSON.parse(m[0]); if (Array.isArray(x)) suggerimenti = x; } catch { /* storto: pazienza */ } }
   // via anche un separatore "---" lasciato prima dei suggerimenti
-  const visibile = testo.slice(0, i).replace(/\n?\s*-{3,}\s*$/, '').trim();
+  // via anche le righe finali fatte solo di trattini o asterischi ("---", "*")
+  const visibile = testo.slice(0, i).replace(/(\n[ \t]*[-*_]+[ \t]*)+\s*$/, '').trim();
   return { visibile, suggerimenti };
 }
 
