@@ -81,6 +81,10 @@ const MSG_LIMITE: Record<string, string> = {
   zh: '这个问题请咨询服务员。我仍然可以告诉您菜单上菜品的价格、配料、过敏原和搭配。',
   ja: 'このご質問はスタッフにお尋ねください。メニューの料理の価格、材料、アレルゲン、相性の良い飲み物はお答えできます。',
   ko: '이 질문은 직원에게 문의해 주세요. 메뉴 요리의 가격, 재료, 알레르기 정보, 페어링은 계속 알려드릴 수 있어요.',
+  ru: 'С этим вопросом обратитесь к персоналу, вам с радостью помогут. Я по-прежнему могу назвать цены, состав, аллергены и сочетания блюд из меню.',
+  ar: 'لهذا السؤال اسأل طاقم المطعم، سيسعدهم مساعدتك. لا أزال أستطيع إخبارك بأسعار أطباق القائمة ومكوّناتها ومحسساتها والمشروبات المناسبة لها.',
+  id: 'Untuk pertanyaan ini silakan tanya pelayan kami, mereka dengan senang hati membantu. Saya masih bisa menyebutkan harga, bahan, alergen, dan padanan minuman hidangan di menu.',
+  hi: 'इस सवाल के लिए कृपया स्टाफ से पूछें, वे खुशी से मदद करेंगे। मैं अब भी मेन्यू के व्यंजनों के दाम, सामग्री, एलर्जी जानकारी और साथ में क्या पिएं, बता सकता हूं।',
 };
 export function messaggioLimite(lingua: string): string {
   return MSG_LIMITE[lingua] ?? MSG_LIMITE.en;

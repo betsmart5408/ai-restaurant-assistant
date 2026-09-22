@@ -17,7 +17,8 @@
     "seed": "tsx src/db/seed.ts",
     "carica-demo": "tsx src/db/carica-demo.ts",
     "intenti": "tsx src/db/intenti.ts",
-    "genera-risposte": "tsx src/db/genera-risposte.ts"
+    "genera-risposte": "tsx src/db/genera-risposte.ts",
+    "prova-logica": "tsx scripts/prova-logica.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

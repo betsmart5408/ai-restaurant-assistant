@@ -494,6 +494,13 @@ export default function App() {
   // prima che lo stato si aggiorni.
   const [assistenteAttivo, setAssistenteAttivo] = useState(true);
   const assistenteRef = useRef(true);
+  // Chi e' il cliente di questa visita: allergie salvate, quante persone, se
+  // c'era gia' stato. Si fissa all'apertura della sessione e viaggia con ogni
+  // messaggio, perche' il server non lo conserva (e non deve).
+  const profiloRef = useRef<{
+    group_size: number; saved_preferences?: string;
+    returning_customer: boolean; previous_dishes: string[];
+  }>({ group_size: 2, returning_customer: false, previous_dishes: [] });
   const spegniAssistente = () => { assistenteRef.current = false; setAssistenteAttivo(false); setTab('menu'); };
   const [aiName, setAiName] = useState<string>('Marco');
   const [valuta, setValuta] = useState<string>('\u20AC');
@@ -794,6 +801,12 @@ export default function App() {
 
     try {
       const savedPrefs = loadPrefs(params.restaurant);
+      profiloRef.current = {
+        group_size: groupSize,
+        saved_preferences: savedPrefs?.allergies || undefined,
+        returning_customer: isReturning,
+        previous_dishes: isReturning ? (freshHistory?.mentionedDishes ?? []) : [],
+      };
       const [menuRes, sessionRes] = await Promise.all([
         fetch(`${API}/api/menu/${params.restaurant}/dishes/translated?lang=${selectedLang}`),
         !assistenteRef.current ? Promise.resolve(null) : fetch(`${API}/api/chat/session`, {
@@ -868,7 +881,16 @@ export default function App() {
       const res = await fetch(`${API}/api/chat/${sessionId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg, language: lang, ...(azione ? { azione } : {}) }),
+        // Le preferenze salvate sul telefono viaggiano con ogni messaggio:
+        // prima le mandavamo solo all'apertura della sessione e il server non
+        // le conservava, quindi le allergie scritte dal cliente non
+        // arrivavano mai all'assistente.
+        body: JSON.stringify({
+          message: msg,
+          language: lang,
+          ...profiloRef.current,
+          ...(azione ? { azione } : {}),
+        }),
       });
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.message ?? '', timestamp: new Date().toISOString() }]);

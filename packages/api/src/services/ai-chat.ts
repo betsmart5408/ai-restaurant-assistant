@@ -1,13 +1,12 @@
 import Groq from 'groq-sdk';
 import { db } from '../db/client';
 import { modelliDisponibili } from './groq-model';
-import { rispostaDiretta } from './risposte-dirette';
-import { costruisciMenuPerPrompt, avvisoMenuParziale } from './menu-contesto';
+import { costruisciMenuPerPrompt, avvisoMenuParziale, eBevanda } from './menu-contesto';
 import { registraIntento } from './conta-intenti';
 import { catenaFornitori, clientePer } from './fornitori-ia';
 import { registraConsumo, superatoLimite, messaggioLimite } from './consumi-ia';
 import { riconosciConsiglio, chiaveMemoria, firmaMenu, leggiConsiglio, salvaConsiglio } from './consigli-pronti';
-import { normalizza, suggerimentiPredefiniti } from './risposte-dirette';
+import { rispostaDiretta, normalizza, suggerimentiPredefiniti, sembraVegetariano } from './risposte-dirette';
 
 // Nell'app il **grassetto** diventa un link alla scheda del piatto. L'IA a
 // volte mette in grassetto titoli ("Antipasto") o prezzi: link che non
@@ -45,8 +44,90 @@ const RICHIESTA_CONSIGLIO: Record<string, string> = {
   bambini: 'We are with children: suggest 2 to 4 simple dishes from the menu that suit them. If the menu has no kids section, say so without inventing one.',
 };
 
-// Parole di chi fa la domanda AL cliente: in un pulsante del cliente non ci stanno
-const RIVOLTO_AL_CLIENTE = /\b(vuoi|preferisci|desideri|indicami|hai (allergie|intolleranze)|would you|do you want|do you prefer|what would you|quieres|prefieres|indicame|voulez vous|preferez|mochten sie|mochtest du)\b/;
+/**
+ * La richiesta da mandare al modello per un consiglio pronto.
+ *
+ * Per i vegetariani i piatti li scegliamo NOI, prima: al modello si passa
+ * solo la lista dei piatti che non nominano carne ne' pesce. Lasciato libero
+ * consigliava la "Pizza Cotto e Funghi" (cotto = prosciutto) e la "Caesar
+ * Salad" a chi aveva appena detto di essere vegetariano.
+ */
+function richiestaConsiglio(tipo: string, dishes: MenuDish[]): string {
+  if (tipo !== 'vegetariano') return RICHIESTA_CONSIGLIO[tipo];
+  const ammessi = dishes.filter(d => !eBevanda(d.category) && sembraVegetariano(d));
+  if (ammessi.length < 2) return RICHIESTA_CONSIGLIO.vegetariano;
+  const nomi = ammessi.slice(0, 40).map(d => d.name).join('; ');
+  return `I am vegetarian. Choose 3 to 6 dishes ONLY from this list, writing their names EXACTLY as given and in **bold**: ${nomi}. ` +
+    `Never add a dish that is not in that list. One short line each on why it is good. ` +
+    `End with one line saying to confirm the ingredients with the waiter.`;
+}
+
+// Parole di chi fa la domanda AL cliente: in un pulsante del cliente non ci stanno.
+// Erano solo latine, quindi in russo, cinese, giapponese, coreano, arabo e
+// hindi passavano pulsanti come "Есть ли аллергии?" o "アレルギーはありますか".
+const RIVOLTO_AL_CLIENTE = /\b(vuoi|preferisci|desideri|indicami|ti va|posso consigliarti|che allergia hai|qual e la tua allergia|hai (allergie|intolleranze)|would you|do you want|do you prefer|what would you|can i help|do you have any allerg|tell me your|quieres|prefieres|indicame|que deseas|te ayudo|tienes alergia|voulez vous|souhaitez vous|preferez|dites moi|mochten sie|mochtest du|wunschen sie|haben sie allerg|deseja|prefere|diga me)\b/;
+// Le stesse frasi fuori dall'alfabeto latino: \b non le vedrebbe mai.
+const RIVOLTO_AL_CLIENTE_NON_LATINO = [
+  'хотите', 'желаете', 'предпочитаете', 'у вас аллерг', 'есть ли аллерг',
+  '您想', '您要', '您有', '你想', '你要', '你有', '请告诉我',
+  'いかがですか', 'ご希望', 'はありますか', 'ましょうか',
+  '시겠', '해 드릴까요', '드릴까요', '있으세요', '어떠세요',
+  'هل تريد', 'هل لديك', 'ماذا تفضل',
+  'क्या आप', 'चाहेंगे', 'बताइए',
+].map(s => normalizza(s));
+// Un pulsante non manda mai il cliente da un'altra parte: e' successo
+// ("Cerco un altro ristorante" dopo "posso portare il cane?").
+const MANDA_VIA = /altro ristorante|another restaurant|other restaurant|otro restaurante|autre restaurant|anderes restaurant|outro restaurante|другой ресторан|別の(店|レストラン)|다른 (식당|레스토랑)|另一家|مطعم آخر/i;
+
+// Scritture che non devono mescolarsi in un pulsante: un bottone russo con
+// dentro dei caratteri cinesi ("Более详细描述") e' arrivato davvero al cliente.
+const SCRITTURE: Record<string, RegExp> = {
+  zh: /[一-鿿]/, ja: /[぀-ゟ゠-ヿ]/, ko: /[가-힯]/,
+  ru: /[Ѐ-ӿ]/, ar: /[؀-ۿ]/, hi: /[ऀ-ॿ]/,
+};
+// Cinese e giapponese condividono gli ideogrammi: non si escludono a vicenda.
+const SCRITTURE_PARENTI: Record<string, string[]> = { ja: ['zh'], zh: ['ja'] };
+// L'alfabeto che un pulsante in quella lingua DEVE contenere. Il giapponese
+// si scrive con kana e ideogrammi insieme, quindi valgono entrambi.
+const SCRITTURA_PROPRIA: Record<string, RegExp> = {
+  ...SCRITTURE,
+  ja: /[぀-ゟ゠-ヿ一-鿿]/,
+};
+function scritturaEstranea(testo: string, lingua: string): boolean {
+  for (const [nome, re] of Object.entries(SCRITTURE)) {
+    if (nome === lingua || SCRITTURE_PARENTI[lingua]?.includes(nome)) continue;
+    if (re.test(testo)) return true;
+  }
+  // E se la lingua ha un suo alfabeto, il pulsante deve contenerlo: un
+  // cliente hindi si e' ritrovato i pulsanti in italiano ("Lo voglio
+  // ordinare!"), che di scritture estranee non ne hanno nessuna.
+  const sua = SCRITTURA_PROPRIA[lingua];
+  return sua ? !sua.test(testo) : false;
+}
+
+/**
+ * I pulsanti che vede il cliente. Vanno ripuliti qui: il modello ci mette il
+ * grassetto (che nel pulsante si vede come "**"), a volte scrive una domanda
+ * rivolta al cliente invece di una frase che il cliente direbbe, e ogni tanto
+ * sbaglia lingua. Se non ne resta nessuno si usano quelli standard, che sono
+ * sempre giusti.
+ */
+export function pulisciSuggerimenti(grezzi: unknown, lingua: string): string[] {
+  const puliti = (Array.isArray(grezzi) ? grezzi : [])
+    .filter((s): s is string => typeof s === 'string')
+    .map(s => s.replace(/[*_`]/g, '').replace(/^\s*[-•·\d.]+\s*/, '').replace(/\s+/g, ' ').trim())
+    .filter(s => {
+      if (!s || s.length > 60) return false;
+      const n = normalizza(s);
+      if (!n) return false;
+      if (RIVOLTO_AL_CLIENTE.test(n)) return false;
+      if (RIVOLTO_AL_CLIENTE_NON_LATINO.some(p => n.includes(p))) return false;
+      if (MANDA_VIA.test(s)) return false;
+      if (scritturaEstranea(s, lingua)) return false;
+      return true;
+    });
+  return [...new Set(puliti)].slice(0, 3);
+}
 
 // `saved_preferences` e `previous_dishes` arrivano dal body pubblico di
 // POST /api/chat/session, quindi sono testo scelto dal cliente: non vanno mai
@@ -336,7 +417,7 @@ ALLERGIE — REGOLA DI SICUREZZA, NON NEGOZIABILE:
 - Quando descrivi un piatto usa SOLO gli ingredienti scritti nel suo nome o nella sua descrizione. Mai aggiungere ingredienti, passaggi di ricetta ("soffritto di cipolla, carota e sedano") o affermazioni come "fatto in casa", "freschissimo", "a km zero", "forno a legna" se il ristorante non le ha scritte.
 - Puoi riportare SOLO gli allergeni scritti nel campo "allergeni" del menu qui sopra, dicendo che sono le informazioni registrate dal ristorante.
 - Quando qualcuno dichiara un'allergia: ringrazia e digli SEMPRE di comunicarla al cameriere prima di ordinare, perche' la conferma la da' la cucina.
-- Frase da usare: "Prima di ordinare dillo al cameriere: la conferma la da' sempre la cucina."
+- Concetto da dire SEMPRE, con parole tue e NELLA LINGUA DEL CLIENTE: prima di ordinare dillo al cameriere, la conferma la da' sempre la cucina. Non copiare questa riga in italiano: un cliente coreano si e' visto arrivare la frase italiana dentro la risposta.
 - NON INVENTARE MAI INFORMAZIONI SUL LOCALE: wifi, pagamenti e carte, orari, prenotazioni, parcheggio, animali, bagni, piatti fuori menu. Se non sono scritte in queste istruzioni non le sai: di' che non hai questa informazione e di chiedere al personale.
 - L'APP HA SOLO: il menu, questa chat e il pulsante "salva piatto". NON esistono pulsanti per chiamare il cameriere, ordinare o pagare: non nominarli mai. Non nominare nemmeno oggetti sul tavolo (campanelli, cartellini, QR per pagare): non sai se ci sono. Per il cameriere di' solo di chiamarlo con un cenno quando passa.
 - NON PROMETTERE MAI AZIONI: non puoi avvisare il personale, chiamare il cameriere, prenotare, ordinare o mandare messaggi a nessuno. Esisti solo in questa chat. Mai frasi come "avviso io", "faccio verificare", "lo segnalo", "chiamo il cameriere": di' invece al cliente di chiederlo lui al personale.${quantiConAllergeni === 0
@@ -346,6 +427,7 @@ ALLERGIE — REGOLA DI SICUREZZA, NON NEGOZIABILE:
 
 FORMATTAZIONE (obbligatoria):
 - Scrivi SEMPRE i nomi di piatti e vini in **grassetto** (es: **Caesar Salad**, **Sauvignon IGT**). Mai tra virgolette.
+- I nomi dei piatti si copiano dal menu LETTERA PER LETTERA, nell'alfabeto in cui sono scritti li'. Non tradurli, non traslitterarli e non mescolare alfabeti: "**पिज़्ज़ा मारgherita**" non esiste nel menu e il cliente non puo' aprirne la scheda. Il resto della frase resta nella lingua del cliente.
 - Il grassetto e' SOLO per i nomi esatti di piatti e bevande del menu: MAI per titoli o portate ("Antipasto", "Primo"), prezzi, totali o altre parole.
 - Questo permette al cliente di cliccare il nome per vedere i dettagli del piatto direttamente nell'app.
 
@@ -526,7 +608,7 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
 
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
     ...(perTutti ? [] : conversationHistory.slice(-6)),
-    { role: 'user', content: tipoConsiglio ? `${RICHIESTA_CONSIGLIO[tipoConsiglio]} Answer in ${NOME_INGLESE[language] ?? language}.` : userMessage },
+    { role: 'user', content: tipoConsiglio ? `${richiestaConsiglio(tipoConsiglio, dishes)} Answer in ${NOME_INGLESE[language] ?? language}.` : userMessage },
   ];
 
   // Il modello si sceglie al volo: i nomi fissi vengono ritirati e l'assistente
@@ -623,13 +705,10 @@ REGOLE FINALI, PIU' IMPORTANTI DI TUTTE:
   registraIntento(restaurantId, 'modello', language);
 
   const separati = separaSuggerimenti(assistantMessage);
-  let suggestions: string[] = separati.suggerimenti;
-  // Rete di sicurezza: un suggerimento scritto come domanda AL cliente
-  // ("Cosa vuoi provare?") diventerebbe un pulsante senza senso. Si scarta,
-  // e se non ne resta nessuno si usano quelli standard.
-  suggestions = (Array.isArray(suggestions) ? suggestions : [])
-    .filter(s => typeof s === 'string' && s.trim() && s.length <= 60 && !RIVOLTO_AL_CLIENTE.test(normalizza(s)))
-    .slice(0, 3);
+  // Rete di sicurezza sui pulsanti: via il grassetto, via le domande rivolte
+  // al cliente, via chi manda altrove, via chi sbaglia scrittura. Se non ne
+  // resta nessuno si usano quelli standard, che sono sempre giusti.
+  let suggestions = pulisciSuggerimenti(separati.suggerimenti, language);
   if (suggestions.length === 0) suggestions = suggerimentiPredefiniti(language);
 
   const visibleMessage = soloVociDelMenuInGrassetto(

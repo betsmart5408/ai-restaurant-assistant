@@ -103,27 +103,146 @@ function elencoAllergeni(allergens: unknown, lang: string): string[] {
     .map(a => traduciAllergene(a, lang));
 }
 
+/** La voce della tabella a cui corrisponde un termine scritto comunque. */
+function chiaveAllergene(termine: string): string | null {
+  const pulito = normalizza(termine);
+  if (!pulito) return null;
+  if (ALLERGENI[pulito]) return pulito;
+  return SINONIMI_ALLERGENI[pulito] ?? null;
+}
+
+// Come il CLIENTE nomina un allergene, in tutte le lingue. Si costruisce una
+// volta sola dalla tabella qui sopra (che le ha gia' tutte) piu' i modi di
+// dire che non sono il nome dell'allergene: "celiaco" e' glutine, "marisco"
+// e' crostacei, "frutti di mare" e' molluschi.
+const MODI_DI_DIRLO: Array<{ voce: string; termine: string }> = (() => {
+  const fuori: Record<string, string[]> = {
+    glutine: ['celiac', 'celiaco', 'celiaca', 'coeliac', 'coeliaque', 'zoliakie', 'frumento', 'wheat', 'grano', 'trigo', 'ble', 'weizen'],
+    lattosio: ['lactose intolerant', 'intollerante al lattosio', 'intolerante a la lactosa'],
+    latte: ['latticini', 'dairy', 'formaggi', 'cheese', 'milchprodukte'],
+    crostacei: ['marisco', 'mariscos', 'shellfish', 'gamberi', 'gambas', 'prawns', 'shrimp', 'langosta', 'meeresfruchte'],
+    molluschi: ['frutti di mare', 'seafood', 'cozze', 'vongole', 'calamari', 'polpo'],
+    'frutta a guscio': ['nut', 'nuts', 'noci', 'noce', 'nocciole', 'mandorle', 'almonds', 'hazelnut', 'walnut', 'nueces', 'nusse'],
+    arachidi: ['peanut', 'peanuts', 'cacahuete', 'cacahuetes'],
+    uova: ['egg', 'eggs', 'huevo', 'huevos', 'oeuf', 'ei', 'eier'],
+    pesce: ['fish', 'pescado', 'poisson', 'fisch', 'peixe'],
+    soia: ['soy', 'soya', 'soja'],
+  };
+  const fuori2: Array<{ voce: string; termine: string }> = [];
+  for (const [voce, termini] of Object.entries(fuori)) {
+    for (const t of termini) fuori2.push({ voce, termine: normalizza(t) });
+  }
+  for (const [voce, traduzioni] of Object.entries(ALLERGENI)) {
+    for (const t of Object.values(traduzioni)) fuori2.push({ voce, termine: normalizza(t) });
+  }
+  for (const [scritto, voce] of Object.entries(SINONIMI_ALLERGENI)) {
+    fuori2.push({ voce, termine: normalizza(scritto) });
+  }
+  // I termini piu' lunghi per primi: "frutta a guscio" prima di "frutta"
+  return fuori2.filter(x => x.termine.length >= 2).sort((a, b) => b.termine.length - a.termine.length);
+})();
+
+/**
+ * Gli allergeni che il cliente ha NOMINATO nel messaggio, gia' normalizzato.
+ * "I have a nut allergy" -> ['frutta a guscio'], "sin gluten" -> ['glutine'].
+ * Si chiama solo dentro il ramo degli allergeni, quindi una parola come
+ * "latte" non puo' scattare su una frase che di allergie non parla.
+ */
+export function allergeniCitati(msg: string): string[] {
+  const con = ' ' + msg + ' ';
+  const trovati: string[] = [];
+  for (const { voce, termine } of MODI_DI_DIRLO) {
+    if (trovati.includes(voce)) continue;
+    // Le parole corte vanno cercate intere: "nut" dentro "donut" non vale.
+    const c = termine.length >= 4 || SCRITTURA_SENZA_SPAZI.test(termine)
+      ? msg.includes(termine)
+      : con.includes(' ' + termine + ' ');
+    if (c) trovati.push(voce);
+  }
+  return trovati;
+}
+
+// Carne e pesce come compaiono nei nomi e nelle descrizioni dei menu. Serve
+// per non proporre a un vegetariano la "Pizza Cotto e Funghi" (cotto =
+// prosciutto): e' successo davvero, e il modello da solo non lo evita.
+const CARNE_O_PESCE = [
+  'carne', 'manzo', 'vitello', 'maiale', 'suino', 'agnello', 'pollo', 'tacchino', 'anatra', 'coniglio',
+  'prosciutto', 'cotto', 'crudo', 'speck', 'salame', 'salumi', 'salsiccia', 'guanciale', 'pancetta',
+  'bacon', 'lardo', 'mortadella', 'bresaola', 'nduja', 'ragu', 'bolognese', 'carbonara', 'amatriciana',
+  'ossobuco', 'tagliata', 'entrecot', 'filetto', 'controfiletto', 'costata', 'hamburger', 'polpette',
+  'pesce', 'tonno', 'salmone', 'acciughe', 'alici', 'baccala', 'branzino', 'orata', 'merluzzo',
+  'gamberi', 'gamberetti', 'scampi', 'calamari', 'seppie', 'polpo', 'cozze', 'vongole', 'frutti di mare',
+  'marinara',
+  'meat', 'beef', 'veal', 'pork', 'lamb', 'chicken', 'turkey', 'duck', 'ham', 'sausage', 'steak',
+  'anchovy', 'anchovies', 'tuna', 'salmon', 'prawn', 'prawns', 'shrimp', 'squid', 'octopus', 'clams', 'mussels',
+  'seafood', 'fish', 'bottarga',
+  // Lo spagnolo pesa: moltissimi menu hanno il nome in italiano e la
+  // descrizione in spagnolo, ed e' li' che si nasconde la carne. Il
+  // "Tagliere Bologna" era "tabla de mortadela": scritto con una L sola,
+  // non lo prendeva nessuna parola italiana, ed e' finito in un elenco
+  // vegetariano.
+  'carne', 'carnes', 'pollo', 'cerdo', 'jamon', 'ternera', 'cordero', 'atun', 'gambas', 'marisco', 'mariscos',
+  'pulpo', 'chorizo', 'mortadela', 'embutido', 'embutidos', 'fiambre', 'fiambres', 'charcuteria', 'charcuterie',
+  'affettati', 'salumeria', 'lomo', 'solomillo', 'panceta', 'beicon', 'cecina', 'sobrasada', 'porchetta',
+  'coppa', 'capocollo', 'wurstel', 'pastrami', 'pescado', 'salmon', 'bacalao', 'merluza', 'boquerones',
+  'anchoa', 'anchoas', 'mejillones', 'almejas', 'langostinos', 'calamares', 'sepia', 'sardinas', 'trucha',
+  // Un tagliere e' quasi sempre di salumi: nel dubbio si esclude, come da regola.
+  'tagliere', 'tabla', 'taglieri',
+  'viande', 'boeuf', 'porc', 'poulet', 'jambon', 'canard', 'poisson', 'thon', 'saumon', 'crevettes',
+  'fleisch', 'rind', 'schwein', 'huhn', 'hahnchen', 'schinken', 'wurst', 'lachs', 'thunfisch', 'garnelen',
+  'frango', 'carne', 'presunto', 'peixe', 'atum', 'camarao',
+];
+
+/**
+ * Il piatto NON nomina carne ne' pesce, quindi puo' essere proposto a un
+ * vegetariano. Si guarda solo quello che ha scritto il ristorante: la regola
+ * e' la stessa degli allergeni, non si deduce niente che non sia scritto.
+ * Nel dubbio si esclude: meglio un elenco corto che un prosciutto.
+ */
+export function sembraVegetariano(p: { name: string; description?: string | null }): boolean {
+  // Parola intera, non pezzo di parola: "porcini" contiene "porc" (maiale in
+  // francese) e faceva sparire il risotto ai funghi dall'elenco vegetariano.
+  const testo = ' ' + normalizza(`${p.name} ${p.description || ''}`) + ' ';
+  return !CARNE_O_PESCE.some(w => testo.includes(' ' + w + ' '));
+}
+
 /**
  * Minuscolo, via gli accenti, via la punteggiatura, spazi normalizzati.
  * Serve perche' "Tagliatelle al ragù," e "tagliatelle al ragu" sono lo stesso
  * piatto, e il cliente scrive come gli pare.
  *
+ * ATTENZIONE, qui si e' gia' sbagliato una volta: la scomposizione (NFD)
+ * serve SOLO a staccare gli accenti latini, e va disfatta subito dopo (NFC).
+ * Senza il passo di ricomposizione il giapponese perdeva i segni sonori
+ * ("グルテン" diventava "ク ルテン"), il coreano si spezzava in jamo e l'arabo
+ * perdeva la hamza: nessuna parola chiave di quelle lingue veniva piu'
+ * riconosciuta, e con lei spariva la scorciatoia degli allergeni.
+ * Per lo stesso motivo fra i caratteri da tenere ci sono anche i segni
+ * combinanti (\p{M}): sono le vocali dell'hindi e dell'arabo, non punteggiatura.
+ *
  * Esportata perche' la usa anche menu-contesto.ts per pesare i piatti.
  */
 export function normalizza(s: string): string {
   return (s || '')
-    .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/[̀-ͯ]/g, '')   // solo gli accenti latini
+    .normalize('NFC')                  // kana, hangul, devanagari e arabo tornano interi
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+/** Scritture senza spazi fra le parole: si contano i caratteri, non le parole. */
+export const SCRITTURA_SENZA_SPAZI = /[぀-ヿ一-鿿가-힯]/;
 
 /**
  * Quanto e' "corta" una domanda. Le lingue senza spazi (cinese, giapponese)
  * vanno contate a caratteri, altrimenti risulterebbero sempre di una parola.
  */
+/** Quanti piatti al massimo in un elenco: il cliente legge dal telefono. */
+const MAX_PIATTI_ELENCATI = 10;
+
 function troppoLunga(msg: string): boolean {
   if (msg.length > 70) return true;
   const parole = msg.trim().split(/\s+/).length;
@@ -135,36 +254,59 @@ function troppoLunga(msg: string): boolean {
 // scattare per sbaglio una parola italiana, quindi non serve tenerle divise.
 // Sono gia' normalizzate (minuscole, senza accenti) come l'input.
 
-export const PAROLE_ALLERGENI = [
+// SOLO allergie e intolleranze vere. "Vegetariano" stava qui dentro e faceva
+// danni: chi scriveva "sono vegetariano" o "la carbonara e' vegetariana?" si
+// sentiva rispondere "dimmi quale allergia hai", perche' la frase finiva nel
+// ramo degli allergeni. Essere vegetariani e' una scelta, non un'allergia:
+// sta in PAROLE_VEGETARIANO e la risposta la compone chi di dovere.
+export const PAROLE_ALLERGENI = normalizzaElenco([
   // it / es / pt
   'allergen', 'allergi', 'alerg', 'glutine', 'gluten', 'lattosio', 'lactosa', 'lactose',
-  'celiac', 'celiaco', 'intolleran', 'intoleran', 'vegano', 'vegetarian', 'vegetarien',
+  'celiac', 'celiaco', 'intolleran', 'intoleran',
   'arachidi', 'amendoim', 'frutta a guscio', 'frutos secos',
   // en / de / fr
   'allerg', 'coeliac', 'lactose', 'peanut', 'dairy', 'laktose', 'zoliakie',
-  'unvertraglich', 'vegetarisch', 'erdnuss', 'coeliaque', 'arachide',
+  'unvertraglich', 'erdnuss', 'coeliaque', 'arachide',
   // ru
   'аллерг', 'глютен',
-  'лактоз', 'веган',
-  'вегетариан',
+  'лактоз',
   // zh
-  '过敏', '麸质', '乳糖', '素食', '花生',
+  '过敏', '麸质', '乳糖', '花生',
   // ja
   'アレルギ', 'グルテン', '乳糖',
-  'ベジタリアン', 'ビーガン',
   // ar
   'حساسية', 'غلوتين',
-  'نباتي',
   // ko
-  '알레르기', '글루텐', '유당', '채식',
+  '알레르기', '글루텐', '유당',
   // id
   'alergi', 'laktosa',
   // hi
   'एलर्जी', 'ग्लूटेन',
-  'शाकाहारी',
-];
+]);
 
-const PAROLE_ORDINE = [
+/**
+ * Vegetariano e vegano in tutte le lingue. Serve in due posti opposti:
+ * qui, per NON trattare la frase come un'allergia; in consigli-pronti.ts,
+ * per riconoscere la domanda e dare l'elenco dei piatti senza carne.
+ * Prima esistevano solo le forme latine, quindi un cliente russo, cinese,
+ * arabo, giapponese o coreano non veniva riconosciuto in nessuno dei due.
+ */
+export const PAROLE_VEGETARIANO = normalizzaElenco([
+  'vegetarian', 'vegetariano', 'vegetariana', 'vegetariani', 'vegetariane',
+  'vegetarien', 'vegetarienne', 'vegetarisch', 'vegetarier', 'vegetarier',
+  'vegano', 'vegana', 'vegan', 'vegana', 'vegetariska',
+  'вегетариан', 'веган',
+  '素食', '蔬食', '纯素',
+  'ベジタリアン', 'ビーガン', '菜食',
+  'نباتي', 'نباتية',
+  '채식', '비건',
+  'शाकाहारी', 'वीगन',
+]);
+
+/** Vegano (non solo vegetariano): l'elenco dei piatti lo deve comporre l'IA. */
+export const PAROLE_VEGANO = normalizzaElenco(['vegan', 'vegano', 'vegana', 'веган', '纯素', 'ビーガン', '비건', 'वीगन']);
+
+const PAROLE_ORDINE = normalizzaElenco([
   'voglio ordinare', 'vorrei ordinare', 'posso ordinare', 'lo ordino', 'lo prendo',
   'i want to order', 'i would like to order', 'can i order', 'i ll have', 'ill have',
   'ich mochte bestellen', 'bestellen', 'quiero pedir', 'quiero pedirlo', 'puedo pedir',
@@ -175,10 +317,10 @@ const PAROLE_ORDINE = [
   'أريد أن أطلب',
   '주문', 'saya mau pesan', 'pesan',
   'ऑर्डर',
-];
+]);
 
 // "e da bere?" / "che vino ci sta?" — l'abbinamento e' scritto in dish_answers.
-const PAROLE_BEVUTA = [
+const PAROLE_BEVUTA = normalizzaElenco([
   'vino', 'bere', 'abbinament', 'abbino', 'abbina', 'birra', 'cocktail', 'bevanda', 'calice',
   'wine', 'drink', 'pairing', 'pair with', 'beer', 'sommelier',
   'wein', 'trinken', 'getrank', 'bier', 'passt dazu',
@@ -192,25 +334,36 @@ const PAROLE_BEVUTA = [
   '와인', '음료', '맥주', '마실',
   'anggur', 'minum', 'minuman',
   'वाइन', 'पेय', 'शराब',
-];
+]);
 
-const PAROLE_GRAZIE = [
+const PAROLE_GRAZIE = normalizzaElenco([
   'grazie', 'thanks', 'thank you', 'danke', 'gracias', 'merci', 'obrigado', 'obrigada',
   'спасибо', '谢谢',
   'ありがとう', 'شكرا', '감사',
   'terima kasih', 'धन्यवाद',
-];
+]);
 
 /**
  * Parole di allergeni troppo corte per cercarle come pezzo di testo: "nut"
  * dentro "donut" farebbe partire l'intento sbagliato. Queste si cercano come
  * parola intera.
  */
-export const PAROLE_ALLERGENI_INTERE = [
+export const PAROLE_ALLERGENI_INTERE = normalizzaElenco([
   'nut', 'nuts', 'noci', 'noce', 'soia', 'soy', 'uova', 'uovo', 'egg', 'eggs',
   'latte', 'milk', 'pesce', 'fish', 'sesamo', 'sesame', 'sedano', 'celery',
   'senape', 'mustard', 'solfiti', 'sulphites', 'sulfites', 'molluschi', 'crostacei',
-];
+]);
+
+/**
+ * Le liste qui sopra si confrontano con testo gia' passato da normalizza(),
+ * quindi devono passarci anche loro: altrimenti basta una lettera con un
+ * segno (il russo "вайфай" diventa "ваифаи") perche' la parola chiave non
+ * combaci piu' con niente e la scorciatoia sparisca in silenzio.
+ * Esportata perche' la stessa regola vale per gli elenchi di consigli-pronti.
+ */
+export function normalizzaElenco(parole: string[]): string[] {
+  return [...new Set(parole.map(p => normalizza(p)).filter(Boolean))];
+}
 
 function contiene(testo: string, parole: string[]): boolean {
   return parole.some(p => testo.includes(p));
@@ -228,6 +381,10 @@ interface Testi {
   allergeniDi: (piatto: string, elenco: string) => string;
   allergeniNonRegistrati: (piatto: string) => string;
   allergeniQualePiatto: string;
+  /** "Senza glutine avete qualcosa?" — i piatti che non hanno QUELL'allergene registrato. */
+  senzaAllergene: (allergeni: string, piatti: string, altri: number) => string;
+  /** Nessun piatto ha allergeni registrati: non possiamo dire niente. */
+  allergeniNonSappiamo: string;
   abbinamentoDi: (piatto: string, testo: string) => string;
   ordine: string;
   grazie: string;
@@ -239,6 +396,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `Per **${p}** il ristorante ha registrato: ${e}.\nPrima di ordinare dillo al cameriere: la conferma la dà sempre la cucina.`,
     allergeniNonRegistrati: p => `Per **${p}** il ristorante non ha ancora registrato gli allergeni, quindi non posso dirtelo io.\nChiedi al cameriere prima di ordinare: li conferma la cucina.`,
     allergeniQualePiatto: 'Dimmi quale allergia o intolleranza hai e quale piatto ti interessa: ti riporto gli allergeni che il ristorante ha registrato.\nPrima di ordinare dillo anche al cameriere: la conferma la dà sempre la cucina.',
+    senzaAllergene: (a, p, altri) => `Fra i piatti di cui il ristorante ha registrato gli allergeni, questi non hanno ${a} in elenco:\n${p}\n${altri > 0 ? `Per altri ${altri} piatti gli allergeni non sono ancora registrati, quindi non li posso controllare.\n` : ''}Non è una garanzia: dillo al cameriere prima di ordinare, la conferma la dà sempre la cucina.`,
+    allergeniNonSappiamo: 'Questo ristorante non ha ancora registrato gli allergeni dei piatti, quindi non posso dirti quali evitare.\nDillo al cameriere prima di ordinare: la conferma la dà sempre la cucina.',
     abbinamentoDi: (p, t) => `🍷 Con **${p}** ti consiglio: ${t}`,
     ordine: 'Puoi salvare il piatto nell’app per non dimenticarlo: il cameriere viene al tavolo a prendere l’ordine.',
     grazie: 'Figurati! Se ti serve altro sono qui.',
@@ -248,6 +407,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `For **${p}** the restaurant has registered: ${e}.\nPlease tell your waiter before ordering: the kitchen always confirms.`,
     allergeniNonRegistrati: p => `The restaurant hasn’t registered allergens for **${p}** yet, so I can’t tell you myself.\nPlease ask your waiter before ordering — the kitchen confirms.`,
     allergeniQualePiatto: 'Tell me your allergy or intolerance and which dish you’re interested in: I’ll give you the allergens the restaurant has registered.\nPlease also tell your waiter before ordering: the kitchen always confirms.',
+    senzaAllergene: (a, p, altri) => `Among the dishes the restaurant has registered allergens for, these do not list ${a}:\n${p}\n${altri > 0 ? `Allergens are not registered yet for ${altri} other dishes, so I can’t check those.\n` : ''}This is not a guarantee: tell your waiter before ordering, the kitchen always confirms.`,
+    allergeniNonSappiamo: 'This restaurant hasn’t registered allergens for its dishes yet, so I can’t tell you which ones to avoid.\nTell your waiter before ordering: the kitchen always confirms.',
     abbinamentoDi: (p, t) => `🍷 With **${p}** I’d suggest: ${t}`,
     ordine: 'You can save the dish in the app so you don’t forget it: the waiter will come to your table to take the order.',
     grazie: 'Anytime! I’m here if you need anything else.',
@@ -257,6 +418,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `Für **${p}** hat das Restaurant eingetragen: ${e}.\nBitte sagen Sie es vor der Bestellung der Bedienung: die Küche bestätigt es immer.`,
     allergeniNonRegistrati: p => `Für **${p}** sind noch keine Allergene eingetragen, ich kann es Ihnen also nicht sagen.\nFragen Sie bitte vor der Bestellung die Bedienung — die Küche bestätigt.`,
     allergeniQualePiatto: 'Nennen Sie mir Ihre Allergie oder Unverträglichkeit und das Gericht, das Sie interessiert: ich nenne Ihnen die eingetragenen Allergene.\nBitte sagen Sie es vor der Bestellung auch der Bedienung: die Küche bestätigt es immer.',
+    senzaAllergene: (a, p, altri) => `Unter den Gerichten, für die das Restaurant Allergene eingetragen hat, führen diese kein ${a} auf:\n${p}\n${altri > 0 ? `Für ${altri} weitere Gerichte sind noch keine Allergene eingetragen, die kann ich nicht prüfen.\n` : ''}Das ist keine Garantie: sagen Sie es vor der Bestellung der Bedienung, die Küche bestätigt es immer.`,
+    allergeniNonSappiamo: 'Dieses Restaurant hat noch keine Allergene zu den Gerichten eingetragen, deshalb kann ich Ihnen nicht sagen, welche Sie meiden sollten.\nSagen Sie es vor der Bestellung der Bedienung: die Küche bestätigt es immer.',
     abbinamentoDi: (p, t) => `🍷 Zu **${p}** empfehle ich: ${t}`,
     ordine: 'Sie können das Gericht in der App speichern, damit Sie es nicht vergessen: die Bedienung nimmt die Bestellung am Tisch auf.',
     grazie: 'Sehr gerne! Melden Sie sich, wenn Sie noch etwas brauchen.',
@@ -266,6 +429,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `Para **${p}** el restaurante ha registrado: ${e}.\nAntes de pedir díselo al camarero: la cocina siempre lo confirma.`,
     allergeniNonRegistrati: p => `El restaurante aún no ha registrado los alérgenos de **${p}**, así que no puedo decírtelo yo.\nPregúntale al camarero antes de pedir: lo confirma la cocina.`,
     allergeniQualePiatto: 'Dime qué alergia o intolerancia tienes y qué plato te interesa: te digo los alérgenos que el restaurante ha registrado.\nAntes de pedir díselo también al camarero: la cocina siempre lo confirma.',
+    senzaAllergene: (a, p, altri) => `Entre los platos cuyos alérgenos ha registrado el restaurante, estos no incluyen ${a}:\n${p}\n${altri > 0 ? `Para otros ${altri} platos los alérgenos aún no están registrados, así que no los puedo comprobar.\n` : ''}No es una garantía: díselo al camarero antes de pedir, la cocina siempre lo confirma.`,
+    allergeniNonSappiamo: 'Este restaurante todavía no ha registrado los alérgenos de sus platos, así que no puedo decirte cuáles evitar.\nDíselo al camarero antes de pedir: la cocina siempre lo confirma.',
     abbinamentoDi: (p, t) => `🍷 Con **${p}** te recomiendo: ${t}`,
     ordine: 'Puedes guardar el plato en la app para no olvidarlo: el camarero vendrá a la mesa a tomar el pedido.',
     grazie: '¡De nada! Aquí estoy si necesitas algo más.',
@@ -275,6 +440,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `Pour **${p}** le restaurant a enregistré : ${e}.\nAvant de commander, dites-le au serveur : la cuisine confirme toujours.`,
     allergeniNonRegistrati: p => `Le restaurant n’a pas encore enregistré les allergènes de **${p}**, je ne peux donc pas vous le dire.\nDemandez au serveur avant de commander : la cuisine confirme.`,
     allergeniQualePiatto: 'Dites-moi votre allergie ou intolérance et le plat qui vous intéresse : je vous donne les allergènes enregistrés par le restaurant.\nAvant de commander, dites-le aussi au serveur : la cuisine confirme toujours.',
+    senzaAllergene: (a, p, altri) => `Parmi les plats dont le restaurant a enregistré les allergènes, ceux-ci ne mentionnent pas ${a} :\n${p}\n${altri > 0 ? `Pour ${altri} autres plats les allergènes ne sont pas encore enregistrés, je ne peux pas les vérifier.\n` : ''}Ce n’est pas une garantie : dites-le au serveur avant de commander, la cuisine confirme toujours.`,
+    allergeniNonSappiamo: 'Ce restaurant n’a pas encore enregistré les allergènes de ses plats, je ne peux donc pas vous dire lesquels éviter.\nDites-le au serveur avant de commander : la cuisine confirme toujours.',
     abbinamentoDi: (p, t) => `🍷 Avec **${p}** je vous conseille : ${t}`,
     ordine: 'Vous pouvez enregistrer le plat dans l’application pour ne pas l’oublier : le serveur viendra prendre la commande à table.',
     grazie: 'Avec plaisir ! Je reste à votre disposition.',
@@ -284,6 +451,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `Para **${p}** o restaurante registou: ${e}.\nAntes de pedir diga ao empregado: a cozinha confirma sempre.`,
     allergeniNonRegistrati: p => `O restaurante ainda não registou os alergénios de **${p}**, por isso não lhe posso dizer.\nPergunte ao empregado antes de pedir: a cozinha confirma.`,
     allergeniQualePiatto: 'Diga-me a sua alergia ou intolerância e o prato que lhe interessa: digo-lhe os alergénios registados pelo restaurante.\nAntes de pedir diga também ao empregado: a cozinha confirma sempre.',
+    senzaAllergene: (a, p, altri) => `Entre os pratos cujos alergénios o restaurante registou, estes não incluem ${a}:\n${p}\n${altri > 0 ? `Para outros ${altri} pratos os alergénios ainda não estão registados, por isso não os posso verificar.\n` : ''}Não é uma garantia: diga ao empregado antes de pedir, a cozinha confirma sempre.`,
+    allergeniNonSappiamo: 'Este restaurante ainda não registou os alergénios dos pratos, por isso não lhe posso dizer quais evitar.\nDiga ao empregado antes de pedir: a cozinha confirma sempre.',
     abbinamentoDi: (p, t) => `🍷 Com **${p}** recomendo: ${t}`,
     ordine: 'Pode guardar o prato na app para não se esquecer: o empregado vem à mesa tirar o pedido.',
     grazie: 'De nada! Estou aqui se precisar de mais alguma coisa.',
@@ -293,6 +462,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `Для **${p}** ресторан указал: ${e}.\nПеред заказом скажите об этом официанту: окончательно подтверждает кухня.`,
     allergeniNonRegistrati: p => `Для **${p}** аллергены ещё не указаны, поэтому я не могу сказать.\nСпросите официанта перед заказом: подтверждает кухня.`,
     allergeniQualePiatto: 'Скажите, какая у вас аллергия или непереносимость и какое блюдо вас интересует: я назову аллергены, указанные рестораном.\nПеред заказом скажите об этом и официанту: окончательно подтверждает кухня.',
+    senzaAllergene: (a, p, altri) => `Среди блюд, для которых ресторан указал аллергены, эти не содержат в списке ${a}:\n${p}\n${altri > 0 ? `Ещё для ${altri} блюд аллергены пока не указаны, поэтому проверить их я не могу.\n` : ''}Это не гарантия: скажите официанту перед заказом, окончательно подтверждает кухня.`,
+    allergeniNonSappiamo: 'Этот ресторан ещё не указал аллергены блюд, поэтому я не могу сказать, чего избегать.\nСкажите официанту перед заказом: окончательно подтверждает кухня.',
     abbinamentoDi: (p, t) => `🍷 К блюду **${p}** советую: ${t}`,
     ordine: 'Сохраните блюдо в приложении, чтобы не забыть: официант подойдёт к столику и примет заказ.',
     grazie: 'Пожалуйста! Обращайтесь, если что-то нужно.',
@@ -302,6 +473,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `关于**${p}**，餐厅登记的过敏原：${e}。\n点菜前请告知服务员，最终由厨房确认。`,
     allergeniNonRegistrati: p => `餐厅尚未登记**${p}**的过敏原，所以我无法告知。\n点菜前请询问服务员，由厨房确认。`,
     allergeniQualePiatto: '请告诉我您的过敏或不耐受情况，以及您想了解的菜品，我会告知餐厅登记的过敏原。\n点菜前也请告知服务员，最终由厨房确认。',
+    senzaAllergene: (a, p, altri) => `在餐厅已登记过敏原的菜品中，以下菜品的登记信息里没有${a}：\n${p}\n${altri > 0 ? `另有 ${altri} 道菜尚未登记过敏原，我无法为您核对。\n` : ''}这并非保证：点菜前请告知服务员，最终由厨房确认。`,
+    allergeniNonSappiamo: '本餐厅尚未登记菜品的过敏原，因此我无法告诉您应避开哪些。\n点菜前请告知服务员：最终由厨房确认。',
     abbinamentoDi: (p, t) => `🍷 搭配**${p}**，推荐：${t}`,
     ordine: '您可以在应用里保存这道菜以免忘记：服务员会到桌前为您点菜。',
     grazie: '不客气！需要其他帮助随时告诉我。',
@@ -311,6 +484,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `**${p}**について、レストランが登録しているアレルギー物質：${e}。\nご注文前にスタッフにお伝えください。最終確認は厨房が行います。`,
     allergeniNonRegistrati: p => `**${p}**のアレルギー情報はまだ登録されていないため、お答えできません。\nご注文前にスタッフにお尋ねください。厨房が確認します。`,
     allergeniQualePiatto: 'アレルギーや苦手な食材と、気になる料理を教えてください。登録されているアレルギー物質をお伝えします。\nご注文前にスタッフにもお伝えください。最終確認は厨房が行います。',
+    senzaAllergene: (a, p, altri) => `レストランがアレルギー物質を登録している料理のうち、${a}が登録されていないものはこちらです：\n${p}\n${altri > 0 ? `ほかに${altri}品はアレルギー情報が未登録のため、確認できません。\n` : ''}保証ではありません。ご注文前にスタッフにお伝えください。最終確認は厨房が行います。`,
+    allergeniNonSappiamo: 'このレストランはまだ料理のアレルギー物質を登録していないため、避けるべきものをお伝えできません。\nご注文前にスタッフにお伝えください。最終確認は厨房が行います。',
     abbinamentoDi: (p, t) => `🍷 **${p}**には、こちらがおすすめです：${t}`,
     ordine: '忘れないようアプリに保存できます。ご注文はスタッフがテーブルで承ります。',
     grazie: 'どういたしまして！他にもあればお声がけください。',
@@ -320,6 +495,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `لـ **${p}** سجّل المطعم: ${e}.\nقبل الطلب أخبر النادل: المطبخ هو من يؤكّد دائماً.`,
     allergeniNonRegistrati: p => `لم يسجّل المطعم بعد محسسات **${p}**، لذلك لا يمكنني إخبارك.\nاسأل النادل قبل الطلب: المطبخ يؤكّد.`,
     allergeniQualePiatto: 'أخبرني بحساسيتك أو عدم تحمّلك وبالطبق الذي يهمّك، وسأذكر لك المحسسات التي سجّلها المطعم.\nقبل الطلب أخبر النادل أيضاً: المطبخ هو من يؤكّد دائماً.',
+    senzaAllergene: (a, p, altri) => `من بين الأطباق التي سجّل المطعم محسساتها، هذه لا تتضمّن ${a}:\n${p}\n${altri > 0 ? `وهناك ${altri} أطباق أخرى لم تُسجَّل محسساتها بعد، فلا يمكنني التحقّق منها.\n` : ''}هذا ليس ضماناً: أخبر النادل قبل الطلب، فالمطبخ هو من يؤكّد دائماً.`,
+    allergeniNonSappiamo: 'لم يسجّل هذا المطعم بعد محسسات أطباقه، لذلك لا يمكنني إخبارك بما يجب تجنّبه.\nأخبر النادل قبل الطلب: المطبخ هو من يؤكّد دائماً.',
     abbinamentoDi: (p, t) => `🍷 مع **${p}** أنصحك: ${t}`,
     ordine: 'يمكنك حفظ الطبق في التطبيق حتى لا تنساه: النادل سيأتي إلى الطاولة لأخذ الطلب.',
     grazie: 'عفوًا! أنا هنا إذا احتجت شيئًا آخر.',
@@ -329,6 +506,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `**${p}**에 대해 식당이 등록한 알레르기 유발 물질: ${e}.\n주문 전에 직원에게 꼭 말씀해 주세요. 최종 확인은 주방에서 합니다.`,
     allergeniNonRegistrati: p => `**${p}**의 알레르기 정보가 아직 등록되지 않아 알려드릴 수 없어요.\n주문 전에 직원에게 문의해 주세요. 주방이 확인합니다.`,
     allergeniQualePiatto: '알레르기나 못 드시는 음식, 그리고 궁금한 요리를 알려 주세요. 식당이 등록한 알레르기 정보를 알려드릴게요.\n주문 전에 직원에게도 꼭 말씀해 주세요. 최종 확인은 주방에서 합니다.',
+    senzaAllergene: (a, p, altri) => `식당이 알레르기 정보를 등록한 요리 중에서 ${a}이(가) 등록되지 않은 것은 다음과 같아요:\n${p}\n${altri > 0 ? `다른 ${altri}개 요리는 알레르기 정보가 아직 등록되지 않아 확인해 드릴 수 없어요.\n` : ''}보장은 아니에요. 주문 전에 직원에게 꼭 말씀해 주세요. 최종 확인은 주방에서 합니다.`,
+    allergeniNonSappiamo: '이 식당은 아직 요리의 알레르기 정보를 등록하지 않아서 무엇을 피해야 하는지 알려드릴 수 없어요.\n주문 전에 직원에게 말씀해 주세요. 최종 확인은 주방에서 합니다.',
     abbinamentoDi: (p, t) => `🍷 **${p}**에는 이것을 추천해요: ${t}`,
     ordine: '잊지 않도록 앱에 저장해 두세요. 주문은 직원이 테이블에서 받습니다.',
     grazie: '천만에요! 필요하신 게 있으면 말씀해 주세요.',
@@ -338,6 +517,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `Untuk **${p}** restoran mencatat: ${e}.\nSebelum memesan, beri tahu pelayan: dapur selalu mengonfirmasi.`,
     allergeniNonRegistrati: p => `Restoran belum mencatat alergen untuk **${p}**, jadi saya tidak bisa memberitahukannya.\nTanyakan kepada pelayan sebelum memesan — dapur yang mengonfirmasi.`,
     allergeniQualePiatto: 'Beri tahu saya alergi atau intoleransi Anda dan hidangan yang Anda minati: saya sebutkan alergen yang dicatat restoran.\nSebelum memesan, beri tahu juga pelayan: dapur selalu mengonfirmasi.',
+    senzaAllergene: (a, p, altri) => `Di antara hidangan yang alergennya sudah dicatat restoran, berikut yang tidak mencantumkan ${a}:\n${p}\n${altri > 0 ? `Untuk ${altri} hidangan lain alergennya belum dicatat, jadi tidak bisa saya periksa.\n` : ''}Ini bukan jaminan: beri tahu pelayan sebelum memesan, dapur selalu mengonfirmasi.`,
+    allergeniNonSappiamo: 'Restoran ini belum mencatat alergen hidangannya, jadi saya tidak bisa memberi tahu mana yang harus dihindari.\nBeri tahu pelayan sebelum memesan: dapur selalu mengonfirmasi.',
     abbinamentoDi: (p, t) => `🍷 Dengan **${p}** saya sarankan: ${t}`,
     ordine: 'Anda bisa menyimpan hidangan di aplikasi agar tidak lupa: pelayan akan datang ke meja untuk mencatat pesanan.',
     grazie: 'Sama-sama! Saya di sini kalau ada yang lain.',
@@ -347,6 +528,8 @@ const T: Record<string, Testi> = {
     allergeniDi: (p, e) => `**${p}** के लिए रेस्टोरेंट ने दर्ज किया है: ${e}।\nऑर्डर करने से पहले वेटर को ज़रूर बताएं: पुष्टि हमेशा रसोई करती है।`,
     allergeniNonRegistrati: p => `**${p}** की एलर्जी जानकारी अबतक दर्ज नहीं है, इसलिए मैं नहीं बता सकता।\nऑर्डर से पहले वेटर से पूछें: रसोई पुष्टि करती है।`,
     allergeniQualePiatto: 'अपनी एलर्जी या असहनशीलता और जिस व्यंजन में रुचि है, बताइए: मैं रेस्टोरेंट द्वारा दर्ज एलर्जी जानकारी बता दूंगा।\nऑर्डर करने से पहले वेटर को भी ज़रूर बताएं: पुष्टि हमेशा रसोई करती है।',
+    senzaAllergene: (a, p, altri) => `जिन व्यंजनों की एलर्जी जानकारी रेस्टोरेंट ने दर्ज की है, उनमें से इनमें ${a} दर्ज नहीं है:\n${p}\n${altri > 0 ? `अन्य ${altri} व्यंजनों की एलर्जी जानकारी अभी दर्ज नहीं है, इसलिए उन्हें मैं जांच नहीं सकता।\n` : ''}यह गारंटी नहीं है: ऑर्डर से पहले वेटर को बताएं, पुष्टि हमेशा रसोई करती है।`,
+    allergeniNonSappiamo: 'इस रेस्टोरेंट ने अभी तक व्यंजनों की एलर्जी जानकारी दर्ज नहीं की है, इसलिए मैं नहीं बता सकता कि किनसे बचें।\nऑर्डर से पहले वेटर को बताएं: पुष्टि हमेशा रसोई करती है।',
     abbinamentoDi: (p, t) => `🍷 **${p}** के साथ मेरा सुझाव: ${t}`,
     ordine: 'आप व्यंजन को ऐप में सहेज सकते हैं: वेटर टेबल पर ऑर्डर लेने आएगा।',
     grazie: 'खुशी हुई! कुछ और चाहिए तो बताइए।',
@@ -611,19 +794,51 @@ export async function rispostaDiretta(p: {
   //    di sicurezza, sempre identica, mai generata.
   // "soy" e' la soia in inglese ma "sono" in spagnolo ("soy vegetariano")
   const allergeniInteri = p.language === 'es' ? PAROLE_ALLERGENI_INTERE.filter(w => w !== 'soy') : PAROLE_ALLERGENI_INTERE;
-  if (contiene(msg, PAROLE_ALLERGENI) || contieneParolaIntera(msg, allergeniInteri)) {
+  // Vegetariano e vegano NON sono allergie: se il cliente parla solo di
+  // quello, qui non si risponde ("la carbonara e' vegetariana?" riceveva
+  // l'elenco degli allergeni, che del guanciale non dice niente).
+  const parlaDiVegetariano = contiene(msg, PAROLE_VEGETARIANO);
+  const parlaDiAllergie = contiene(msg, PAROLE_ALLERGENI) || contieneParolaIntera(msg, allergeniInteri);
+  if (parlaDiAllergie && !parlaDiVegetariano) {
     const piatto = piattoCitato(msg, piatti);
-    if (!piatto) {
-      return { message: t.allergeniQualePiatto, suggestions: t.suggerimenti, intento: 'allergeni' };
+    if (piatto) {
+      const elenco = elencoAllergeni(piatto.allergens, p.language);
+      return {
+        message: elenco.length > 0
+          ? t.allergeniDi(piatto.nomeMostrato, elenco.join(', '))
+          : t.allergeniNonRegistrati(piatto.nomeMostrato),
+        suggestions: t.suggerimenti,
+        intento: 'allergeni',
+      };
     }
-    const elenco = elencoAllergeni(piatto.allergens, p.language);
-    return {
-      message: elenco.length > 0
-        ? t.allergeniDi(piatto.nomeMostrato, elenco.join(', '))
-        : t.allergeniNonRegistrati(piatto.nomeMostrato),
-      suggestions: t.suggerimenti,
-      intento: 'allergeni',
-    };
+
+    // Nessun piatto nominato, ma il cliente ha detto DI COSA e' allergico
+    // ("ho un'allergia alle noci", "avete piatti senza glutine?"): la
+    // risposta ce l'abbiamo, ed e' il motivo per cui il ristoratore ha
+    // compilato gli allergeni. Prima si rispondeva "dimmi quale allergia
+    // hai" a chi l'aveva appena detta.
+    const citati = allergeniCitati(msg);
+    if (citati.length > 0 && citati.length <= 3) {
+      // Solo i piatti per cui il ristorante ha scritto QUALCOSA: un elenco
+      // vuoto puo' voler dire "nessun allergene" o "non compilato", e su
+      // questo non si tira a indovinare.
+      const conDati = piatti.filter(d => Array.isArray(d.allergens) && d.allergens.filter(Boolean).length > 0);
+      if (conDati.length === 0) {
+        return { message: t.allergeniNonSappiamo, suggestions: t.suggerimenti, intento: 'allergeni' };
+      }
+      const liberi = conDati.filter(d =>
+        !d.allergens.some(a => { const k = chiaveAllergene(a); return k !== null && citati.includes(k); }));
+      if (liberi.length > 0) {
+        const nomi = liberi.slice(0, MAX_PIATTI_ELENCATI).map(d => `• **${d.nomeMostrato}**`).join('\n');
+        const comeSiChiamano = citati.map(c => traduciAllergene(c, p.language)).join(', ');
+        return {
+          message: t.senzaAllergene(comeSiChiamano, nomi, piatti.length - conDati.length),
+          suggestions: t.suggerimenti,
+          intento: 'allergeni',
+        };
+      }
+    }
+    return { message: t.allergeniQualePiatto, suggestions: t.suggerimenti, intento: 'allergeni' };
   }
 
   // 3. COSA CI BEVO — l'abbinamento e' scritto prima in dish_answers.

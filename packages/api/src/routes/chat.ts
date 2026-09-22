@@ -92,7 +92,7 @@ router.post('/session', async (req, res) => {
       es: `¡Bienvenido de nuevo! 😊 ¡Qué alegría verte en ${restaurantName}!\nSoy ${nomeAI}. ¿Qué te apetece hoy?`,
       fr: `Bon retour! 😊 Ravi de vous revoir chez ${restaurantName}!\nJe suis ${nomeAI}. Qu'est-ce qui vous fait envie aujourd'hui?`,
       pt: `Bem-vindo de volta! 😊 Que bom vê-lo em ${restaurantName}!\nSou ${nomeAI}. O que lhe apetece hoje?`,
-      ru: `С возвращением! 😊 Рады снова видеть вас в ${restaurantName}!\nЯ Марко. Что вам сегодня угодно?`,
+      ru: `С возвращением! 😊 Рады снова видеть вас в ${restaurantName}!\nЯ ${nomeAI}. Что вам сегодня угодно?`,
       zh: `欢迎回来！😊 很高兴再次在${restaurantName}见到您！\n我是${nomeAI}。今天想吃什么？`,
       ja: `おかえりなさい！😊 ${restaurantName}でまたお会いできて嬉しいです！\n私は${nomeAI}です。今日は何がお好みですか？`,
       ar: `أهلاً بعودتك! 😊 يسعدنا رؤيتك مجدداً في ${restaurantName}!\nأنا ${nomeAI}. ماذا تريد اليوم؟`,
@@ -106,7 +106,7 @@ router.post('/session', async (req, res) => {
       es: `¡Hola! 👋 Soy ${nomeAI}, tu asistente virtual en ${restaurantName}.\nEstoy aquí para ayudarte a descubrir los mejores platos. ¿Tienes alguna alergia o intolerancia?`,
       fr: `Bonjour! 👋 Je suis ${nomeAI}, votre assistant virtuel chez ${restaurantName}.\nJe suis là pour vous aider à découvrir les meilleurs plats. Avez-vous des allergies ou intolérances?`,
       pt: `Olá! 👋 Sou ${nomeAI}, o seu assistente virtual em ${restaurantName}.\nEstou aqui para ajudá-lo a descobrir os melhores pratos. Tem alguma alergia ou intolerância?`,
-      ru: `Привет! 👋 Я Марко, ваш виртуальный ассистент в ${restaurantName}.\nЯ здесь, чтобы помочь вам открыть лучшие блюда. Есть ли у вас аллергии?`,
+      ru: `Привет! 👋 Я ${nomeAI}, ваш виртуальный ассистент в ${restaurantName}.\nЯ здесь, чтобы помочь вам открыть лучшие блюда. Есть ли у вас аллергии?`,
       zh: `你好！👋 我是${nomeAI}，${restaurantName}的虚拟助手。\n我在这里帮您发现最好的菜肴。您有任何过敏或不耐受症状吗？`,
       ja: `こんにちは！👋 私は${nomeAI}、${restaurantName}のバーチャルアシスタントです。\n最高の料理を見つけるお手伝いをします。アレルギーや食物不耐症はありますか？`,
       ar: `مرحباً! 👋 أنا ${nomeAI}، مساعدك الافتراضي في ${restaurantName}.\nأنا هنا لمساعدتك في اكتشاف أفضل الأطباق. هل لديك أي حساسية؟`,
@@ -131,19 +131,6 @@ router.post('/session', async (req, res) => {
       hi: ['आप क्या सुझाएंगे?', 'मुझे एलर्जी है', 'टेस्टिंग मेन्यू'],
     };
     const suggestions = defaultSuggestions[language] ?? defaultSuggestions['it'];
-
-    const alreadyOrderedLabels: Record<string, string> = {
-      it: 'Al tavolo è già stato scelto',
-      en: 'Others at the table have already chosen',
-      de: 'Am Tisch wurde bereits gewählt',
-      es: 'En la mesa ya han elegido',
-      fr: 'À la table, on a déjà choisi',
-      pt: 'Na mesa já escolheram',
-      ru: 'За столом уже выбрали',
-      zh: '桌上已经选择了',
-      ja: 'テーブルではすでに選ばれています',
-      ar: 'تم الاختيار بالفعل على الطاولة',
-    };
 
     if (existingSessionId) {
       const sessionId = existingSessionId;
@@ -185,7 +172,20 @@ router.post('/session', async (req, res) => {
 router.post('/:sessionId/message', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { message, language } = req.body;
+    const { message, language, group_size, saved_preferences, returning_customer, previous_dishes } = req.body;
+    // Quello che il cliente ha salvato nella sua app: allergie dichiarate,
+    // quante persone, se c'e' gia' stato, cosa aveva preso. L'app lo mandava
+    // solo all'apertura della sessione e qui non arrivava mai, quindi il
+    // modello non ha mai visto le allergie salvate dal cliente. Ora viaggia
+    // con ogni messaggio: il telefono le ha gia', al server non serve
+    // ricordarle. I valori restano dati del cliente, non istruzioni:
+    // ci pensa sanitizeCustomerText dentro il prompt.
+    const gruppo = Number.isFinite(Number(group_size)) && Number(group_size) > 0
+      ? Math.min(Math.trunc(Number(group_size)), 50) : undefined;
+    const preferenze = typeof saved_preferences === 'string' && saved_preferences.trim()
+      ? saved_preferences.slice(0, 300) : undefined;
+    const piattiPrecedenti = Array.isArray(previous_dishes)
+      ? previous_dishes.filter((d: unknown) => typeof d === 'string' && d.trim()).slice(0, 5) : [];
     // Messaggio partito da un nostro pulsante: si sa gia' cosa rispondere
     const azione = req.body?.azione && typeof req.body.azione === 'object'
       ? { tipo: String(req.body.azione.tipo ?? ''), dish_id: req.body.azione.dish_id ? String(req.body.azione.dish_id) : undefined }
@@ -263,6 +263,10 @@ router.post('/:sessionId/message', async (req, res) => {
         language: language || s.language,
         conversationHistory: history,
         existingOrders,
+        groupSize: gruppo,
+        savedPreferences: preferenze,
+        returningCustomer: returning_customer === true,
+        previousDishes: piattiPrecedenti,
         azione,
       },
       message,
@@ -316,11 +320,12 @@ router.post('/:sessionId/message', async (req, res) => {
       hi: "क्षमा करें, अभी मैं जवाब नहीं दे पा रहा हूं। मेन्यू यहां बगल में देखा जा सकता है।",
     };
     const lingua = String(req.body?.language || 'it');
+    // Il dettaglio tecnico resta nei log del server: al tavolo c'e' un
+    // cliente, e il messaggio del fornitore IA non e' affare suo.
     res.json({
       message: scuse[lingua] ?? scuse['it'],
       order_data: null,
       suggestions: [],
-      errore_tecnico: err instanceof Error ? err.message : 'errore sconosciuto',
     });
   }
 });

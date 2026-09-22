@@ -21,6 +21,12 @@ const argomenti = process.argv.slice(2);
 const slug = argomenti.find(a => !a.startsWith('--'));
 const iLingue = argomenti.indexOf('--lingue');
 const lingue = (iLingue >= 0 ? argomenti[iLingue + 1] : 'it,en').split(',').map(s => s.trim()).filter(Boolean);
+// Pausa fra una domanda e l'altra. Serve contro una chiave IA con un limite
+// basso di token al minuto: senza, meta' delle risposte torna 429 e sembra
+// che l'assistente sia rotto quando invece e' solo il piano gratuito.
+const iPausa = argomenti.indexOf('--pausa');
+const PAUSA_MS = iPausa >= 0 ? Number(argomenti[iPausa + 1]) || 0 : 0;
+const aspetta = ms => new Promise(r => setTimeout(r, ms));
 if (!slug) {
   console.error('Uso: node packages/api/scripts/verifica-assistente.mjs <slug> [--lingue it,en]');
   process.exit(1);
@@ -84,6 +90,49 @@ const CONVERSAZIONI = {
     ['글루텐 프리 메뉴 있어요?'],
     ['카드 결제 되나요?'],
   ],
+  de: [
+    ['Was empfehlen Sie?', 'Welcher Wein passt dazu?'],
+    ['Ich bin Vegetarier'],
+    ['Haben Sie glutenfreie Gerichte?'],
+    ['Kann ich mit Karte zahlen?'],
+    ['Können Sie die Bedienung rufen?'],
+  ],
+  fr: [
+    ['Que me conseillez-vous ?', 'Quel vin avec ça ?'],
+    ['Je suis végétarien'],
+    ['Avez-vous des plats sans gluten ?'],
+    ['Avez-vous le wifi ?'],
+  ],
+  pt: [
+    ['O que me recomenda?', 'Que vinho combina?'],
+    ['Sou vegetariano'],
+    ['Têm pratos sem glúten?'],
+    ['Posso pagar com cartão?'],
+  ],
+  ru: [
+    ['Что вы рекомендуете?', 'Какое вино подойдёт?'],
+    ['Я вегетарианец'],
+    ['Есть блюда без глютена?'],
+    ['Можно оплатить картой?'],
+  ],
+  ar: [
+    ['بماذا تنصحني؟', 'ما النبيذ المناسب؟'],
+    ['أنا نباتي'],
+    ['هل لديكم أطباق خالية من الغلوتين؟'],
+    ['هل يوجد واي فاي؟'],
+  ],
+  id: [
+    ['Apa rekomendasinya?', 'Wine apa yang cocok?'],
+    ['Saya vegetarian'],
+    ['Ada menu bebas gluten?'],
+    ['Bisa bayar pakai kartu?'],
+  ],
+  hi: [
+    ['आप क्या सुझाएंगे?', 'कौन सी वाइन अच्छी रहेगी?'],
+    ['मैं शाकाहारी हूं'],
+    ['क्या ग्लूटेन-फ्री व्यंजन हैं?'],
+    ['क्या कार्ड से भुगतान कर सकते हैं?'],
+  ],
 };
 
 const PROMESSE = /\b(avviso io|avviser[oò]|lo segnalo|faccio verificare|chiamo (io )?il cameriere|informo (io )?il personale|comunico (io )?al personale|i['’]ll (let|tell|inform|notify|call)|i will (let|tell|inform|notify|call)|i['’]ve (told|notified|informed))/i;
@@ -94,7 +143,10 @@ const DOMANDA_LOCALE = /wifi|wi-fi|carta|card|pagare|pay|parcheggio|parking|pren
 const AFFERMA = /^(s[iìí]|yes|certo|certamente|claro|of course|sure|可以|是的|はい|네)\b|accettiamo|we accept|password|[eè] disponibile|is available|abbiamo il wifi|we have (free )?wi/i;
 
 // La risposta deve essere nella lingua del cliente
-const SCRITTURA = { zh: /[\u4e00-\u9fff]/, ja: /[\u3040-\u30ff\u4e00-\u9fff]/, ko: /[\uac00-\ud7af]/ };
+const SCRITTURA = {
+  zh: /[\u4e00-\u9fff]/, ja: /[\u3040-\u30ff\u4e00-\u9fff]/, ko: /[\uac00-\ud7af]/,
+  ru: /[\u0400-\u04ff]/, ar: /[\u0600-\u06ff]/, hi: /[\u0900-\u097f]/,
+};
 const PAROLE_ITALIANE = /\b(il|della|delle|piatto|piatti|consiglio|questo|anche|sono|nostro|nostra)\b/gi;
 function linguaSbagliata(lang, testo) {
   if (SCRITTURA[lang]) return !SCRITTURA[lang].test(testo);
@@ -157,6 +209,7 @@ async function main() {
       if (!sid) { console.log(`[${lang}] ✗ sessione non creata: ${JSON.stringify(sess.dati).slice(0, 120)}`); errori++; continue; }
 
       for (const domanda of messaggi) {
+        if (PAUSA_MS > 0) await aspetta(PAUSA_MS);
         const t0 = Date.now();
         const r = await json(`${API}/api/chat/${sid}/message`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
