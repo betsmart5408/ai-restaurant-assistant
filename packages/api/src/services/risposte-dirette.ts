@@ -517,12 +517,16 @@ function piattoCitato(msg: string, piatti: PiattoRisolto[]): PiattoRisolto | nul
 function piattoDalContesto(ultimaRisposta: string, piatti: PiattoRisolto[]): PiattoRisolto | null {
   if (!ultimaRisposta) return null;
   const nomi = [...ultimaRisposta.matchAll(/\*\*(.+?)\*\*/g)].map(m => normalizza(m[1]));
-  // Dall'ultimo nominato al primo: e' quello di cui si stava parlando.
-  for (const n of nomi.reverse()) {
+  // Si guardano solo i piatti da mangiare (i vini citati non contano). Se la
+  // risposta ne nomina piu' d'uno non si indovina: "che vino ci abbino?"
+  // dopo un consiglio con risotto E tagliatella lo decide l'IA, che legge
+  // la conversazione. Prima si prendeva l'ultimo e spesso era quello sbagliato.
+  const citati = new Set<PiattoRisolto>();
+  for (const n of nomi) {
     const p = piatti.find(x => x.chiavi.includes(n));
-    if (p) return p;
+    if (p && !categoriaVini(p.category) && !/bevand|drink|beverage|cocktail|birr|beer|soft/i.test(p.category || '')) citati.add(p);
   }
-  return null;
+  return citati.size === 1 ? [...citati][0] : null;
 }
 
 function schedaPiatto(p: PiattoRisolto, valuta: string, lang: string, t: Testi, vini: string[][] = []): string {

@@ -9,6 +9,17 @@ import { registraConsumo, superatoLimite, messaggioLimite } from './consumi-ia';
 import { riconosciConsiglio, chiaveMemoria, firmaMenu, leggiConsiglio, salvaConsiglio } from './consigli-pronti';
 import { normalizza, suggerimentiPredefiniti } from './risposte-dirette';
 
+// Per i consigli pronti l'IA non riceve la frase del cliente ("sono
+// vegetariano") ma una richiesta precisa: la risposta la leggeranno tutti,
+// deve essere completa. Prima "sono vegetariano" riceveva "ho diverse
+// opzioni per te" senza nemmeno un piatto.
+const RICHIESTA_CONSIGLIO: Record<string, string> = {
+  consiglio: 'Consigliami 2 o 3 piatti del menu, scritti con il loro nome esatto, spiegando in una riga perche\' meritano, e un vino della carta da abbinare.',
+  degustazione2: 'Componi un menu degustazione per 2 persone con piatti del menu (antipasto, primo, secondo, dessert) e un vino della carta, con il prezzo stimato a persona.',
+  vegetariano: 'Sono vegetariano: elenca da 3 a 6 piatti del menu senza carne ne\' pesce, basandoti solo su nome e descrizione, e aggiungi una riga che dice di confermare gli ingredienti con il cameriere.',
+  bambini: 'Siamo con dei bambini: suggerisci da 2 a 4 piatti semplici del menu adatti a loro. Se il menu non ha una sezione per bambini dillo, senza inventarla.',
+};
+
 // Parole di chi fa la domanda AL cliente: in un pulsante del cliente non ci stanno
 const RIVOLTO_AL_CLIENTE = /\b(vuoi|preferisci|desideri|indicami|hai (allergie|intolleranze)|would you|do you want|do you prefer|what would you|quieres|prefieres|indicame|voulez vous|preferez|mochten sie|mochtest du)\b/;
 
@@ -301,6 +312,7 @@ ALLERGIE — REGOLA DI SICUREZZA, NON NEGOZIABILE:
 - Quando qualcuno dichiara un'allergia: ringrazia e digli SEMPRE di comunicarla al cameriere prima di ordinare, perche' la conferma la da' la cucina.
 - Frase da usare: "Prima di ordinare dillo al cameriere: la conferma la da' sempre la cucina."
 - NON INVENTARE MAI INFORMAZIONI SUL LOCALE: wifi, pagamenti e carte, orari, prenotazioni, parcheggio, animali, bagni, piatti fuori menu. Se non sono scritte in queste istruzioni non le sai: di' che non hai questa informazione e di chiedere al personale.
+- L'APP HA SOLO: il menu, questa chat e il pulsante "salva piatto". NON esistono pulsanti per chiamare il cameriere, ordinare o pagare: non nominarli mai.
 - NON PROMETTERE MAI AZIONI: non puoi avvisare il personale, chiamare il cameriere, prenotare, ordinare o mandare messaggi a nessuno. Esisti solo in questa chat. Mai frasi come "avviso io", "faccio verificare", "lo segnalo", "chiamo il cameriere": di' invece al cliente di chiederlo lui al personale.${quantiConAllergeni === 0
   ? '\n- Questo ristorante NON ha ancora registrato gli allergeni dei piatti: dillo con chiarezza e rimanda al personale, senza fare ipotesi.'
   : ''}
@@ -458,7 +470,7 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
 
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
     ...(perTutti ? [] : conversationHistory.slice(-6)),
-    { role: 'user', content: userMessage },
+    { role: 'user', content: tipoConsiglio ? RICHIESTA_CONSIGLIO[tipoConsiglio] : userMessage },
   ];
 
   // Il modello si sceglie al volo: i nomi fissi vengono ritirati e l'assistente
@@ -491,6 +503,17 @@ REGOLE FINALI, PIU' IMPORTANTI DI TUTTE:
   // Si scorre la catena: la chiave del ristorante per prima (e' la sua quota
   // gratuita), poi i fornitori della piattaforma. Quando uno ha finito la
   // quota giornaliera risponde 429 e si passa semplicemente al successivo.
+  // Se TUTTI i fornitori sono al limite si riprova una volta sola, dopo i
+  // secondi che chiede il fornitore (massimo 8): meglio una risposta un po'
+  // lenta che "non riesco a rispondere".
+  for (let giro = 0; giro < 2 && !assistantMessage; giro++) {
+  if (giro === 1) {
+    const e = ultimoErrore as { status?: number; headers?: Record<string, string>; message?: string } | null;
+    const limite = e?.status === 429 || /rate limit|429|too many/i.test(String(e?.message ?? ''));
+    if (!limite) break;
+    const dopo = Number(e?.headers?.['retry-after']) * 1000;
+    await new Promise(r => setTimeout(r, Math.min(Number.isFinite(dopo) && dopo > 0 ? dopo : 3000, 8000)));
+  }
   catena: for (const fornitore of catena) {
     const cliente = clientePer(fornitore);
     const modelli = fornitore.modelli.length > 0
@@ -526,6 +549,7 @@ REGOLE FINALI, PIU' IMPORTANTI DI TUTTE:
         }
       }
     }
+  }
   }
   if (!assistantMessage) {
     throw new Error(ultimoErrore instanceof Error ? ultimoErrore.message : 'L\'assistente non ha risposto');

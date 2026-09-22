@@ -124,9 +124,12 @@ async function main() {
         const sugg = Array.isArray(r.dati?.suggestions) ? r.dati.suggestions : [];
         const problemi = [];
         if (!testo.trim()) problemi.push('VUOTA');
+        if (/can.t answer right now|non riesco a rispondere|no puedo responder/i.test(testo)) problemi.push('ERRORE IA (nessun fornitore ha risposto)');
         const promessa = testo.match(PROMESSE);
         if (promessa) problemi.push(`PROMESSA "${promessa[0]}"`);
         if (TECNICO.test(testo)) problemi.push('TECNICO');
+        if (/pulsante (dedicato|per chiamare)|button to (call|order)|call button/i.test(testo)) problemi.push('INVENTATO: pulsante che non esiste');
+        if (/vegetari/i.test(domanda) && [...testo.matchAll(/\*\*[^*]+\*\*/g)].length < 2) problemi.push('INCOMPLETA: nessun piatto vegetariano elencato');
         if (DOMANDA_LOCALE.test(domanda) && AFFERMA.test(testo.trim())) problemi.push('INVENTATO SUL LOCALE');
         for (const m of testo.matchAll(/\*\*([^*]{2,80})\*\*/g)) {
           if (!esisteNelMenu(m[1], nomi)) problemi.push(`INVENTATO "${m[1]}"`);
