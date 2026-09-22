@@ -12,6 +12,7 @@ import { db } from '../src/db/client';
 import {
   rispostaDiretta, normalizza, svuotaCacheTraduzioni,
   abbinamentoValido, viniInCarta, categoriaVini, suggerimentiPredefiniti, sembraVegetariano,
+  nominaAllergene, nonGiudicabilePer, piattiSenzaAllergeni, parolaAllergene,
   type PiattoBase,
 } from '../src/services/risposte-dirette';
 import { riconosciConsiglio, chiaveMemoria, firmaMenu } from '../src/services/consigli-pronti';
@@ -240,16 +241,86 @@ async function main() {
     ok(!senzaGlutine!.message.includes(d.name), `glutine: "${d.name}" NON compare`, senzaGlutine?.message);
   }
   ok(senzaGlutine!.message.includes('Risotto ai funghi'), 'glutine: il risotto compare', senzaGlutine?.message);
-  // Nessun allergene registrato in tutto il menu: non si inventa niente
+  // Nessun allergene registrato (il caso di TUTTI i ristoranti oggi): si
+  // legge il testo scritto dal ristoratore, e si consiglia solo il leggibile.
+  const MENU_NUDO = MENU.map(d => ({ ...d, allergens: [] }));
   svuotaCacheTraduzioni();
   const nudo = await rispostaDiretta({
-    restaurantId: 'r2', dishes: MENU.map(d => ({ ...d, allergens: [] })),
+    restaurantId: 'r2', dishes: MENU_NUDO,
     language: 'it', currency: 'EUR', messaggio: "Ho un'allergia al glutine",
   });
-  ok(!!nudo && /non ha ancora registrato/i.test(nudo.message) && !nudo.message.includes('**'),
-    'menu senza allergeni -> non elenca niente', nudo?.message);
+  ok(!!nudo && nudo.message.includes('**'), 'senza allergeni registrati -> consiglia dal testo', nudo?.message?.slice(0, 80));
+  ok(!!nudo && /non .* una garanzia/i.test(nudo.message), 'la risposta dice che non e\' una garanzia', nudo?.message);
+  ok(!!nudo && /cameriere/i.test(nudo.message) && /cucina/i.test(nudo.message), 'rimanda sempre al cameriere e alla cucina', nudo?.message);
+  ok(!!nudo && !/senza glutine|gluten free/i.test(nudo.message), 'non dice MAI "senza glutine"', nudo?.message);
+  for (const d of MENU.filter(x => x.allergens.includes('glutine'))) {
+    ok(!nudo!.message.includes(d.name), `glutine dal testo: "${d.name}" non consigliato`, nudo?.message);
+  }
+  ok(!nudo!.message.includes('Acqua naturale'), 'niente bevande fra i consigli', nudo?.message);
 
-  sezione('12. Vegetariano: scelta, non allergia');
+  sezione('12. Il testo del piatto tradisce l\'allergene');
+  const spie: Array<[string, string, string, string]> = [
+    ['Caesar Salad', 'Lechuga romana con pollo, bacon, picatostes y parmesano', 'glutine', 'picatostes = pane'],
+    ['Pistacchino', 'Paccheri con pesto de pistacho y crema de burrata', 'glutine', 'paccheri = pasta'],
+    ['Steak Sandwich', 'Served on sourdough with beetroot and fried onion', 'glutine', 'sourdough'],
+    ['Nasi Lemak', 'Coconut rice w/ ikan billis, sambal, achar and cucumber', 'pesce', 'ikan billis = acciughe'],
+    ['Nasi Lemak', 'Coconut rice w/ ikan billis, sambal, achar and cucumber', 'crostacei', 'sambal = pasta di gamberetti'],
+    ['Chicken Satay', 'Grilled chicken skewers with satay sauce', 'arachidi', 'satay = arachidi'],
+    ['Butter Chicken', 'Chicken cooked in ghee with tomato and spices', 'latte', 'ghee = burro'],
+    ['Garlic Naan', 'Freshly baked naan with garlic and coriander', 'glutine', 'naan'],
+    ['Prawn Tempura', 'Lightly battered prawns with tempura flakes', 'crostacei', 'prawns'],
+    ['Hummus Plate', 'Chickpea hummus with tahini and olive oil', 'sesamo', 'tahini'],
+    ['Miso Soup', 'Traditional miso broth with tofu and seaweed', 'soia', 'miso e tofu'],
+    ['Pad Thai', 'Rice noodles with fish sauce, egg and peanuts', 'pesce', 'fish sauce'],
+  ];
+  for (const [nome, descr, allergene, perche] of spie) {
+    ok(nominaAllergene(`${nome} ${descr}`, allergene), `"${nome}" -> ${allergene} (${perche})`);
+  }
+  // E al contrario: un piatto che davvero non lo nomina non deve scattare
+  ok(!nominaAllergene('Insalata di stagione Verdure fresche di stagione', 'glutine'), 'insalata semplice: nessun falso allarme sul glutine');
+  ok(!nominaAllergene('Pollo alla griglia Filete de pollo a la plancha con ensalada', 'crostacei'), 'pollo grigliato: nessun falso allarme sui crostacei');
+
+  // La frase deve citare la parola del menu, non il nome dell'allergene
+  ok(parolaAllergene('Caesar Salad Lechuga con pollo, bacon, picatostes y salsa cesar', 'glutine') === 'picatostes',
+    'si cita "picatostes", non "glutine"', String(parolaAllergene('Caesar Salad picatostes', 'glutine')));
+  ok(parolaAllergene('Murgh Makhani cooked in ghee with tomato', 'latte') === 'ghee', 'si cita "ghee"');
+  ok(parolaAllergene('Butter Chicken with tomato', 'latte') === 'butter', 'si cita la parola che compare davvero nel menu');
+
+  sezione('13. Piatti su cui non ci si sbilancia');
+  // Casi veri trovati provando sul menu di Gusto Alcazabilla
+  ok(nonGiudicabilePer('Risotto Profumo di Mare Arroz con tomate cherry, almejas, mejillones, calamar', 'crostacei'),
+    "risotto di mare -> non consigliato a chi e' allergico ai crostacei");
+  ok(nominaAllergene('Calzone Napoletano Ricota, salami napolitano, salsa de tomate', 'glutine'),
+    "il calzone e' pasta di pizza -> glutine");
+  ok(nonGiudicabilePer('Pan di Stelle Postre en capas de crema y cacao con galleta', 'frutta a guscio'),
+    "un dolce -> non consigliato a chi e' allergico alla frutta a guscio");
+  ok(nonGiudicabilePer('Calamari fritti croccanti', 'glutine'), 'fritto -> non giudicabile per il glutine (olio condiviso)');
+  ok(nonGiudicabilePer('Paella de marisco mixta', 'crostacei'), 'paella -> non giudicabile per i crostacei');
+  ok(nonGiudicabilePer('Minestrone brodo di verdure', 'sedano'), 'brodo -> non giudicabile per il sedano');
+  ok(nonGiudicabilePer('Mixed salad with house dressing', 'senape'), 'dressing della casa -> non giudicabile per la senape');
+  {
+    const soloNome = [{ name: 'Piatto misterioso', description: '', price: 9, category: 'primi' }];
+    const r = piattiSenzaAllergeni(soloNome, ['glutine']);
+    ok(r.consigliati.length === 0 && r.nonLeggibili === 1, 'piatto senza descrizione -> mai consigliato');
+  }
+  {
+    const fritto = [{ name: 'Calamari fritti', description: 'Calamari fritti croccanti serviti con limone', price: 12, category: 'antipasti' }];
+    ok(piattiSenzaAllergeni(fritto, ['glutine']).consigliati.length === 0, 'fritto -> mai consigliato a un celiaco');
+  }
+
+  sezione('14. La risposta all\'allergia, in tutte le lingue');
+  for (const lang of ['it', 'en', 'de', 'es', 'fr', 'pt', 'ru', 'zh', 'ja', 'ar', 'ko', 'id', 'hi']) {
+    svuotaCacheTraduzioni();
+    const r = await rispostaDiretta({
+      restaurantId: 'r3', dishes: MENU_NUDO, language: lang, currency: 'EUR',
+      messaggio: lang === 'it' ? "Sono allergico ai crostacei" : 'I am allergic to crustaceans',
+    });
+    ok(r?.intento === 'allergeni', `[${lang}] risponde`, `ricevuto: ${r?.intento}`);
+    ok(!!r && r.message.trim().length > 40, `[${lang}] risposta non vuota`);
+    ok(!!r && !r.message.includes('${'), `[${lang}] nessun segnaposto rotto nel testo`, r?.message);
+  }
+
+  sezione('15. Vegetariano: scelta, non allergia');
   const vegetariani: Array<[string, string]> = [
     ['it', 'Sono vegetariano'], ['en', 'I am vegetarian'], ['de', 'Ich bin Vegetarier'],
     ['es', 'Soy vegetariano'], ['fr', 'Je suis végétarien'], ['pt', 'Sou vegetariano'],
@@ -270,7 +341,7 @@ async function main() {
   ok(riconosciConsiglio('Sono vegano', NOMI) === null, 'vegano -> sempre IA');
   ok(riconosciConsiglio('我是纯素食', NOMI) === null, '[zh] vegano -> sempre IA');
 
-  sezione('13. Piatti che un vegetariano non deve vedere');
+  sezione('16. Piatti che un vegetariano non deve vedere');
   for (const nome of ['Carbonara', 'Tagliatelle al ragù', 'Polpo alla griglia', 'Tagliata di manzo', 'Tagliere di salumi']) {
     const d = MENU.find(x => x.name === nome)!;
     ok(!sembraVegetariano(d), `"${nome}" escluso`, `${d.name} — ${d.description}`);
@@ -291,7 +362,7 @@ async function main() {
     'Gnocchi Quattro Formaggi ammessi');
   ok(sembraVegetariano({ name: 'Risotto ai porcini', description: 'Funghi porcini freschi' }), 'porcini non e\' maiale');
 
-  sezione('14. Pulizia dei pulsanti');
+  sezione('17. Pulizia dei pulsanti');
   ok(JSON.stringify(pulisciSuggerimenti(['Try the **Risotto Profumo di Mare**'], 'en')) === JSON.stringify(['Try the Risotto Profumo di Mare']),
     'via il grassetto dai pulsanti', JSON.stringify(pulisciSuggerimenti(['Try the **Risotto**'], 'en')));
   const scartati: Array<[string, string]> = [
@@ -330,7 +401,7 @@ async function main() {
   ok(pulisciSuggerimenti(['a', 'a', 'b'], 'it').length === 2, 'niente pulsanti doppi');
   ok(pulisciSuggerimenti(null, 'it').length === 0, 'suggerimenti assenti -> elenco vuoto');
 
-  sezione('15. Messaggi limite');
+  sezione('18. Messaggi limite');
   ok((await chiedi('', 'it')) === null, 'messaggio vuoto -> null');
   ok((await chiedi('   ', 'it')) === null, 'solo spazi -> null');
   ok((await chiedi('?'.repeat(200), 'it')) === null, 'messaggio lunghissimo -> null');
