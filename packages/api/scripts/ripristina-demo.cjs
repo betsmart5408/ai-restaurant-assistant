@@ -36,6 +36,8 @@ if (!slugs.length) {
       }
 
       const utenti = await c.query('DELETE FROM users WHERE restaurant_id = $1 RETURNING email', [rest.id]);
+      // Avvisi di fine prova della prova finta: il vero titolare deve riceverli tutti
+      await c.query('DELETE FROM avvisi_prova WHERE restaurant_id = $1', [rest.id]);
       const token = crypto.randomBytes(18).toString('base64url');
       await c.query(
         `UPDATE restaurants SET
