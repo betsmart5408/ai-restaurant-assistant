@@ -249,7 +249,8 @@ async function main() {
     restaurantId: 'r2', dishes: MENU_NUDO,
     language: 'it', currency: 'EUR', messaggio: "Ho un'allergia al glutine",
   });
-  ok(!!nudo && /cameriere/i.test(nudo.message) && /cucina/i.test(nudo.message), 'rimanda sempre al cameriere e alla cucina', nudo?.message);
+  ok(!!nudo && /cameriere/i.test(nudo.message), 'rimanda sempre al cameriere', nudo?.message);
+  ok(!!nudo && /per sicurezza/i.test(nudo.message), 'lo dice come "per sicurezza"', nudo?.message);
   ok(!!nudo && !/senza glutine|gluten free/i.test(nudo.message), 'non dice MAI "senza glutine"', nudo?.message);
 
   const sceltaGlutine = piattiSenzaAllergeni(MENU_NUDO, ['glutine']);
