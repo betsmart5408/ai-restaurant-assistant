@@ -1260,9 +1260,14 @@ export async function rispostaDiretta(p: {
       // Si cita la PAROLA scritta dal ristoratore ("picatostes"), non il nome
       // dell'allergene: "ha scritto glutine" sarebbe falso, quella parola nel
       // menu non c'e'. Il cliente deve poter rileggere e verificare da solo.
-      const testoPiatto = `${piatto.name} ${piatto.descrizioneMostrata || piatto.description || ''}`;
+      // Si guarda SOLO la descrizione, non il nome: la frase dice "nella
+      // descrizione ha scritto X", e con il nome dentro usciva "nella
+      // descrizione di **Carbonara** ha scritto carbonara". Se nella
+      // descrizione non c'e' niente si scende alla risposta neutra, che
+      // rimanda comunque al cameriere.
+      const descrizionePiatto = piatto.descrizioneMostrata || piatto.description || '';
       const parole = allergeniCitati(msg)
-        .map(a => parolaAllergene(testoPiatto, a))
+        .map(a => parolaAllergene(descrizionePiatto, a))
         .filter((w): w is string => w !== null);
       if (parole.length > 0) {
         return {

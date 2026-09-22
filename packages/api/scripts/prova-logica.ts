@@ -295,6 +295,33 @@ async function main() {
   ok(chiaveMemoria('la carbonara e senza uova', NOMI) === null, 'stessa domanda ma con "senza" -> mai ricordata');
   ok(chiaveMemoria('ho un allergia al pesce', NOMI) === null, 'domanda con allergia -> mai ricordata');
 
+  sezione('11z. Il rimando al personale c\'e\' SEMPRE, in ogni lingua');
+  // La regola non negoziabile: qualunque risposta che tocchi le allergie deve
+  // mandare al cameriere o alla cucina. Qui si controlla ogni ramo in ogni
+  // lingua, perche' basta una traduzione dimenticata per perderlo.
+  const PERSONALE: Record<string, RegExp> = {
+    it: /cameriere|cucina/i, en: /waiter|kitchen|staff/i, de: /Bedienung|Küche|Personal/i,
+    es: /camarero|cocina/i, fr: /serveur|cuisine/i, pt: /empregado|cozinha/i,
+    ru: /официант|кухн/i, zh: /服务员|厨房/, ja: /スタッフ|厨房/,
+    ar: /النادل|المطبخ/, ko: /직원|주방/, id: /pelayan|dapur/i,
+    hi: /वेटर|रसोई/,
+  };
+  const RAMI: Array<[string, string, PiattoBase[]]> = [
+    ['consiglia i piatti', 'I am allergic to crustaceans', MENU_NUDO],
+    ['avvisa sul piatto', 'is the Bruschetta gluten free?', MENU_NUDO],
+    ['allergeni registrati', 'Does the Carbonara have allergens?', MENU],
+    ['non registrati', 'Does the Tagliata have allergens?', MENU],
+    ['chiede quale piatto', 'I have an allergy', MENU_NUDO],
+  ];
+  for (const lang of ['it', 'en', 'de', 'es', 'fr', 'pt', 'ru', 'zh', 'ja', 'ar', 'ko', 'id', 'hi']) {
+    for (const [ramo, msg, menu] of RAMI) {
+      svuotaCacheTraduzioni();
+      const r = await rispostaDiretta({ restaurantId: `p-${lang}`, dishes: menu, language: lang, currency: 'EUR', messaggio: msg });
+      ok(r?.intento === 'allergeni', `[${lang}] ${ramo}: risponde`, `ricevuto: ${r?.intento ?? 'null'}`);
+      if (r) ok(PERSONALE[lang].test(r.message), `[${lang}] ${ramo}: manda al personale`, r.message.replace(/\n/g, ' / ').slice(0, 110));
+    }
+  }
+
   sezione('11b. Una carta dei vini non e\' cibo');
   // Categorie vere di China Doll: nessuna contiene la parola "wine"
   const CARTA_VINI = [
@@ -380,6 +407,19 @@ async function main() {
   ok(parolaAllergene('Caesar Salad Lechuga con pollo, bacon, picatostes y salsa cesar', 'glutine') === 'picatostes',
     'si cita "picatostes", non "glutine"', String(parolaAllergene('Caesar Salad picatostes', 'glutine')));
   ok(parolaAllergene('Murgh Makhani cooked in ghee with tomato', 'latte') === 'ghee', 'si cita "ghee"');
+  {
+    // "nella descrizione ha scritto carbonara" era il nome del piatto, non un ingrediente
+    const r = await rispostaDiretta({ restaurantId: 'rz', dishes: MENU_NUDO, language: 'it', currency: 'EUR',
+      messaggio: 'La carbonara e senza glutine?' });
+    ok(!!r && !/ha scritto carbonara/i.test(r.message), 'non cita il nome del piatto come ingrediente', r?.message);
+    ok(!!r && /cameriere|cucina/i.test(r.message), 'e rimanda comunque al personale', r?.message);
+  }
+  {
+    const conCrostini = [{ id: 'x', name: 'Caesar Salad', description: 'Lattuga romana con pollo, bacon e crostini', price: 14, category: 'antipasti', allergens: [] }];
+    const r = await rispostaDiretta({ restaurantId: 'rz2', dishes: conCrostini, language: 'it', currency: 'EUR',
+      messaggio: 'Il Caesar Salad e senza glutine?' });
+    ok(!!r && /crostini/i.test(r.message), 'ma cita la parola vera della descrizione', r?.message);
+  }
   ok(parolaAllergene('Butter Chicken with tomato', 'latte') === 'butter', 'si cita la parola che compare davvero nel menu');
 
   sezione('13. Piatti su cui non ci si sbilancia');
