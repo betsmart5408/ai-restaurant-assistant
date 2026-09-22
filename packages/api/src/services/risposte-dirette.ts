@@ -228,6 +228,7 @@ interface Testi {
   allergeniDi: (piatto: string, elenco: string) => string;
   allergeniNonRegistrati: (piatto: string) => string;
   allergeniQualePiatto: string;
+  abbinamentoDi: (piatto: string, testo: string) => string;
   ordine: string;
   grazie: string;
   suggerimenti: string[];
@@ -235,105 +236,118 @@ interface Testi {
 
 const T: Record<string, Testi> = {
   it: {
-    allergeniDi: (p, e) => `Per **${p}** il ristorante ha registrato: ${e}.\nPer la tua sicurezza faccio verificare al personale: gli allergeni li conferma la cucina.`,
+    allergeniDi: (p, e) => `Per **${p}** il ristorante ha registrato: ${e}.\nPrima di ordinare dillo al cameriere: la conferma la dà sempre la cucina.`,
     allergeniNonRegistrati: p => `Per **${p}** il ristorante non ha ancora registrato gli allergeni, quindi non posso dirtelo io.\nChiedi al cameriere prima di ordinare: li conferma la cucina.`,
-    allergeniQualePiatto: 'Dimmi quale piatto ti interessa e ti riporto gli allergeni che il ristorante ha registrato.\nIn ogni caso la conferma la da sempre la cucina: avviso io il personale.',
+    allergeniQualePiatto: 'Dimmi quale allergia o intolleranza hai e quale piatto ti interessa: ti riporto gli allergeni che il ristorante ha registrato.\nPrima di ordinare dillo anche al cameriere: la conferma la dà sempre la cucina.',
+    abbinamentoDi: (p, t) => `🍷 Con **${p}** ti consiglio: ${t}`,
     ordine: 'Puoi salvare il piatto nell’app per non dimenticarlo: il cameriere viene al tavolo a prendere l’ordine.',
     grazie: 'Figurati! Se ti serve altro sono qui.',
     suggerimenti: ['Cosa mi consigli?', 'Che vino ci abbino?', 'Menu degustazione per 2'],
   },
   en: {
-    allergeniDi: (p, e) => `For **${p}** the restaurant has registered: ${e}.\nFor your safety I’ll let the staff know: allergens are confirmed by the kitchen.`,
+    allergeniDi: (p, e) => `For **${p}** the restaurant has registered: ${e}.\nPlease tell your waiter before ordering: the kitchen always confirms.`,
     allergeniNonRegistrati: p => `The restaurant hasn’t registered allergens for **${p}** yet, so I can’t tell you myself.\nPlease ask your waiter before ordering — the kitchen confirms.`,
-    allergeniQualePiatto: 'Tell me which dish you mean and I’ll give you the allergens the restaurant has registered.\nEither way the kitchen always confirms — I’ll let the staff know.',
+    allergeniQualePiatto: 'Tell me your allergy or intolerance and which dish you’re interested in: I’ll give you the allergens the restaurant has registered.\nPlease also tell your waiter before ordering: the kitchen always confirms.',
+    abbinamentoDi: (p, t) => `🍷 With **${p}** I’d suggest: ${t}`,
     ordine: 'You can save the dish in the app so you don’t forget it: the waiter will come to your table to take the order.',
     grazie: 'Anytime! I’m here if you need anything else.',
     suggerimenti: ['What do you recommend?', 'What wine pairs with this?', 'Tasting menu for 2'],
   },
   de: {
-    allergeniDi: (p, e) => `Für **${p}** hat das Restaurant eingetragen: ${e}.\nZu Ihrer Sicherheit informiere ich das Personal: Allergene bestätigt die Küche.`,
+    allergeniDi: (p, e) => `Für **${p}** hat das Restaurant eingetragen: ${e}.\nBitte sagen Sie es vor der Bestellung der Bedienung: die Küche bestätigt es immer.`,
     allergeniNonRegistrati: p => `Für **${p}** sind noch keine Allergene eingetragen, ich kann es Ihnen also nicht sagen.\nFragen Sie bitte vor der Bestellung die Bedienung — die Küche bestätigt.`,
-    allergeniQualePiatto: 'Sagen Sie mir, welches Gericht Sie meinen, dann nenne ich die eingetragenen Allergene.\nBestätigt wird es in jedem Fall von der Küche — ich sage dem Personal Bescheid.',
+    allergeniQualePiatto: 'Nennen Sie mir Ihre Allergie oder Unverträglichkeit und das Gericht, das Sie interessiert: ich nenne Ihnen die eingetragenen Allergene.\nBitte sagen Sie es vor der Bestellung auch der Bedienung: die Küche bestätigt es immer.',
+    abbinamentoDi: (p, t) => `🍷 Zu **${p}** empfehle ich: ${t}`,
     ordine: 'Sie können das Gericht in der App speichern, damit Sie es nicht vergessen: die Bedienung nimmt die Bestellung am Tisch auf.',
     grazie: 'Sehr gerne! Melden Sie sich, wenn Sie noch etwas brauchen.',
     suggerimenti: ['Was empfehlen Sie?', 'Welcher Wein passt dazu?', 'Degustationsmenü für 2'],
   },
   es: {
-    allergeniDi: (p, e) => `Para **${p}** el restaurante ha registrado: ${e}.\nPor tu seguridad aviso al personal: los alérgenos los confirma la cocina.`,
+    allergeniDi: (p, e) => `Para **${p}** el restaurante ha registrado: ${e}.\nAntes de pedir díselo al camarero: la cocina siempre lo confirma.`,
     allergeniNonRegistrati: p => `El restaurante aún no ha registrado los alérgenos de **${p}**, así que no puedo decírtelo yo.\nPregúntale al camarero antes de pedir: lo confirma la cocina.`,
-    allergeniQualePiatto: 'Díme qué plato te interesa y te digo los alérgenos que el restaurante ha registrado.\nEn cualquier caso lo confirma siempre la cocina: yo aviso al personal.',
+    allergeniQualePiatto: 'Dime qué alergia o intolerancia tienes y qué plato te interesa: te digo los alérgenos que el restaurante ha registrado.\nAntes de pedir díselo también al camarero: la cocina siempre lo confirma.',
+    abbinamentoDi: (p, t) => `🍷 Con **${p}** te recomiendo: ${t}`,
     ordine: 'Puedes guardar el plato en la app para no olvidarlo: el camarero vendrá a la mesa a tomar el pedido.',
     grazie: '¡De nada! Aquí estoy si necesitas algo más.',
     suggerimenti: ['¿Qué me recomiendas?', '¿Qué vino marida?', 'Menú degustación para 2'],
   },
   fr: {
-    allergeniDi: (p, e) => `Pour **${p}** le restaurant a enregistré : ${e}.\nPour votre sécurité je préviens le personnel : les allergènes sont confirmés par la cuisine.`,
+    allergeniDi: (p, e) => `Pour **${p}** le restaurant a enregistré : ${e}.\nAvant de commander, dites-le au serveur : la cuisine confirme toujours.`,
     allergeniNonRegistrati: p => `Le restaurant n’a pas encore enregistré les allergènes de **${p}**, je ne peux donc pas vous le dire.\nDemandez au serveur avant de commander : la cuisine confirme.`,
-    allergeniQualePiatto: 'Dites-moi quel plat vous intéresse et je vous donne les allergènes enregistrés par le restaurant.\nDans tous les cas la cuisine confirme : je préviens le personnel.',
+    allergeniQualePiatto: 'Dites-moi votre allergie ou intolérance et le plat qui vous intéresse : je vous donne les allergènes enregistrés par le restaurant.\nAvant de commander, dites-le aussi au serveur : la cuisine confirme toujours.',
+    abbinamentoDi: (p, t) => `🍷 Avec **${p}** je vous conseille : ${t}`,
     ordine: 'Vous pouvez enregistrer le plat dans l’application pour ne pas l’oublier : le serveur viendra prendre la commande à table.',
     grazie: 'Avec plaisir ! Je reste à votre disposition.',
     suggerimenti: ['Que me conseillez-vous ?', 'Quel vin avec ça ?', 'Menu dégustation pour 2'],
   },
   pt: {
-    allergeniDi: (p, e) => `Para **${p}** o restaurante registou: ${e}.\nPara sua segurança aviso o pessoal: os alergénios são confirmados pela cozinha.`,
+    allergeniDi: (p, e) => `Para **${p}** o restaurante registou: ${e}.\nAntes de pedir diga ao empregado: a cozinha confirma sempre.`,
     allergeniNonRegistrati: p => `O restaurante ainda não registou os alergénios de **${p}**, por isso não lhe posso dizer.\nPergunte ao empregado antes de pedir: a cozinha confirma.`,
-    allergeniQualePiatto: 'Diga-me qual prato lhe interessa e digo-lhe os alergénios registados pelo restaurante.\nDe qualquer forma a cozinha confirma sempre: eu aviso o pessoal.',
+    allergeniQualePiatto: 'Diga-me a sua alergia ou intolerância e o prato que lhe interessa: digo-lhe os alergénios registados pelo restaurante.\nAntes de pedir diga também ao empregado: a cozinha confirma sempre.',
+    abbinamentoDi: (p, t) => `🍷 Com **${p}** recomendo: ${t}`,
     ordine: 'Pode guardar o prato na app para não se esquecer: o empregado vem à mesa tirar o pedido.',
     grazie: 'De nada! Estou aqui se precisar de mais alguma coisa.',
     suggerimenti: ['O que me recomenda?', 'Que vinho combina?', 'Menu de degustação para 2'],
   },
   ru: {
-    allergeniDi: (p, e) => `Для **${p}** ресторан указал: ${e}.\nРади вашей безопасности я предупрежу персонал: аллергены подтверждает кухня.`,
+    allergeniDi: (p, e) => `Для **${p}** ресторан указал: ${e}.\nПеред заказом скажите об этом официанту: окончательно подтверждает кухня.`,
     allergeniNonRegistrati: p => `Для **${p}** аллергены ещё не указаны, поэтому я не могу сказать.\nСпросите официанта перед заказом: подтверждает кухня.`,
-    allergeniQualePiatto: 'Скажите, какое блюдо вас интересует, и я назову указанные аллергены.\nВ любом случае подтверждает кухня: я предупрежу персонал.',
+    allergeniQualePiatto: 'Скажите, какая у вас аллергия или непереносимость и какое блюдо вас интересует: я назову аллергены, указанные рестораном.\nПеред заказом скажите об этом и официанту: окончательно подтверждает кухня.',
+    abbinamentoDi: (p, t) => `🍷 К блюду **${p}** советую: ${t}`,
     ordine: 'Сохраните блюдо в приложении, чтобы не забыть: официант подойдёт к столику и примет заказ.',
     grazie: 'Пожалуйста! Обращайтесь, если что-то нужно.',
     suggerimenti: ['Что посоветуете?', 'Какое вино подойдёт?', 'Дегустация на двоих'],
   },
   zh: {
-    allergeniDi: (p, e) => `关于**${p}**，餐厅登记的过敏原：${e}。\n为了您的安全，我会告知工作人员：过敏原由厨房确认。`,
+    allergeniDi: (p, e) => `关于**${p}**，餐厅登记的过敏原：${e}。\n点菜前请告知服务员，最终由厨房确认。`,
     allergeniNonRegistrati: p => `餐厅尚未登记**${p}**的过敏原，所以我无法告知。\n点菜前请询问服务员，由厨房确认。`,
-    allergeniQualePiatto: '请告诉我是哪道菜，我会告知餐厅登记的过敏原。\n无论如何都由厨房最终确认：我会告知工作人员。',
+    allergeniQualePiatto: '请告诉我您的过敏或不耐受情况，以及您想了解的菜品，我会告知餐厅登记的过敏原。\n点菜前也请告知服务员，最终由厨房确认。',
+    abbinamentoDi: (p, t) => `🍷 搭配**${p}**，推荐：${t}`,
     ordine: '您可以在应用里保存这道菜以免忘记：服务员会到桌前为您点菜。',
     grazie: '不客气！需要其他帮助随时告诉我。',
     suggerimenti: ['有什么推荐？', '配什么酒？', '两人品尝套餐'],
   },
   ja: {
-    allergeniDi: (p, e) => `**${p}**について、レストランが登録しているアレルギー物質：${e}。\n安全のためスタッフにお伝えします。最終確認は厨房が行います。`,
+    allergeniDi: (p, e) => `**${p}**について、レストランが登録しているアレルギー物質：${e}。\nご注文前にスタッフにお伝えください。最終確認は厨房が行います。`,
     allergeniNonRegistrati: p => `**${p}**のアレルギー情報はまだ登録されていないため、お答えできません。\nご注文前にスタッフにお尋ねください。厨房が確認します。`,
-    allergeniQualePiatto: 'どの料理か教えていただければ、登録されているアレルギー物質をお伝えします。\nいずれにしても確認は厨房が行います。',
+    allergeniQualePiatto: 'アレルギーや苦手な食材と、気になる料理を教えてください。登録されているアレルギー物質をお伝えします。\nご注文前にスタッフにもお伝えください。最終確認は厨房が行います。',
+    abbinamentoDi: (p, t) => `🍷 **${p}**には、こちらがおすすめです：${t}`,
     ordine: '忘れないようアプリに保存できます。ご注文はスタッフがテーブルで承ります。',
     grazie: 'どういたしまして！他にもあればお声がけください。',
     suggerimenti: ['おすすめは？', '合うワインは？', '2名様のコース'],
   },
   ar: {
-    allergeniDi: (p, e) => `لـ **${p}** سجّل المطعم: ${e}.\nمن أجل سلامتك سأُبلغ الطاقم: المطبخ هو من يؤكّد المحسسات.`,
+    allergeniDi: (p, e) => `لـ **${p}** سجّل المطعم: ${e}.\nقبل الطلب أخبر النادل: المطبخ هو من يؤكّد دائماً.`,
     allergeniNonRegistrati: p => `لم يسجّل المطعم بعد محسسات **${p}**، لذلك لا يمكنني إخبارك.\nاسأل النادل قبل الطلب: المطبخ يؤكّد.`,
-    allergeniQualePiatto: 'أخبرني بأي طبق تهتم وسأذكر المحسسات المسجّلة.\nعلى أي حال المطبخ هو من يؤكّد.',
+    allergeniQualePiatto: 'أخبرني بحساسيتك أو عدم تحمّلك وبالطبق الذي يهمّك، وسأذكر لك المحسسات التي سجّلها المطعم.\nقبل الطلب أخبر النادل أيضاً: المطبخ هو من يؤكّد دائماً.',
+    abbinamentoDi: (p, t) => `🍷 مع **${p}** أنصحك: ${t}`,
     ordine: 'يمكنك حفظ الطبق في التطبيق حتى لا تنساه: النادل سيأتي إلى الطاولة لأخذ الطلب.',
     grazie: 'عفوًا! أنا هنا إذا احتجت شيئًا آخر.',
     suggerimenti: ['بماذا تنصحني؟', 'ما النبيذ المناسب؟', 'قائمة تذوق لشخصين'],
   },
   ko: {
-    allergeniDi: (p, e) => `**${p}**에 대해 식당이 등록한 알레르기 유발 물질: ${e}.\n안전을 위해 직원에게 알려드릴게요. 최종 확인은 주방에서 합니다.`,
+    allergeniDi: (p, e) => `**${p}**에 대해 식당이 등록한 알레르기 유발 물질: ${e}.\n주문 전에 직원에게 꼭 말씀해 주세요. 최종 확인은 주방에서 합니다.`,
     allergeniNonRegistrati: p => `**${p}**의 알레르기 정보가 아직 등록되지 않아 알려드릴 수 없어요.\n주문 전에 직원에게 문의해 주세요. 주방이 확인합니다.`,
-    allergeniQualePiatto: '어떤 요리인지 말씀해 주시면 등록된 알레르기 정보를 알려드릴게요.\n어느 경우든 최종 확인은 주방이 합니다.',
+    allergeniQualePiatto: '알레르기나 못 드시는 음식, 그리고 궁금한 요리를 알려 주세요. 식당이 등록한 알레르기 정보를 알려드릴게요.\n주문 전에 직원에게도 꼭 말씀해 주세요. 최종 확인은 주방에서 합니다.',
+    abbinamentoDi: (p, t) => `🍷 **${p}**에는 이것을 추천해요: ${t}`,
     ordine: '잊지 않도록 앱에 저장해 두세요. 주문은 직원이 테이블에서 받습니다.',
     grazie: '천만에요! 필요하신 게 있으면 말씀해 주세요.',
     suggerimenti: ['추천해 주세요', '어울리는 와인은?', '2인 테이스팅 코스'],
   },
   id: {
-    allergeniDi: (p, e) => `Untuk **${p}** restoran mencatat: ${e}.\nDemi keamanan Anda saya beri tahu staf: alergen dikonfirmasi oleh dapur.`,
+    allergeniDi: (p, e) => `Untuk **${p}** restoran mencatat: ${e}.\nSebelum memesan, beri tahu pelayan: dapur selalu mengonfirmasi.`,
     allergeniNonRegistrati: p => `Restoran belum mencatat alergen untuk **${p}**, jadi saya tidak bisa memberitahukannya.\nTanyakan kepada pelayan sebelum memesan — dapur yang mengonfirmasi.`,
-    allergeniQualePiatto: 'Beri tahu saya hidangan mana, nanti saya sebutkan alergen yang dicatat restoran.\nBagaimanapun dapur yang mengonfirmasi: saya akan memberi tahu staf.',
+    allergeniQualePiatto: 'Beri tahu saya alergi atau intoleransi Anda dan hidangan yang Anda minati: saya sebutkan alergen yang dicatat restoran.\nSebelum memesan, beri tahu juga pelayan: dapur selalu mengonfirmasi.',
+    abbinamentoDi: (p, t) => `🍷 Dengan **${p}** saya sarankan: ${t}`,
     ordine: 'Anda bisa menyimpan hidangan di aplikasi agar tidak lupa: pelayan akan datang ke meja untuk mencatat pesanan.',
     grazie: 'Sama-sama! Saya di sini kalau ada yang lain.',
     suggerimenti: ['Apa rekomendasinya?', 'Wine apa yang cocok?', 'Menu cicip untuk 2'],
   },
   hi: {
-    allergeniDi: (p, e) => `**${p}** के लिए रेस्टोरेंट ने दर्ज किया है: ${e}।\nआपकी सुरक्षा के लिए मैं स्टाफ को बता दूंगा: पुष्टि रसोई करती है।`,
+    allergeniDi: (p, e) => `**${p}** के लिए रेस्टोरेंट ने दर्ज किया है: ${e}।\nऑर्डर करने से पहले वेटर को ज़रूर बताएं: पुष्टि हमेशा रसोई करती है।`,
     allergeniNonRegistrati: p => `**${p}** की एलर्जी जानकारी अबतक दर्ज नहीं है, इसलिए मैं नहीं बता सकता।\nऑर्डर से पहले वेटर से पूछें: रसोई पुष्टि करती है।`,
-    allergeniQualePiatto: 'बताइए कौन सा व्यंजन चाहिए, मैं दर्ज एलर्जी जानकारी बता दूंगा।\nपुष्टि हमेशा रसोई करती है।',
+    allergeniQualePiatto: 'अपनी एलर्जी या असहनशीलता और जिस व्यंजन में रुचि है, बताइए: मैं रेस्टोरेंट द्वारा दर्ज एलर्जी जानकारी बता दूंगा।\nऑर्डर करने से पहले वेटर को भी ज़रूर बताएं: पुष्टि हमेशा रसोई करती है।',
+    abbinamentoDi: (p, t) => `🍷 **${p}** के साथ मेरा सुझाव: ${t}`,
     ordine: 'आप व्यंजन को ऐप में सहेज सकते हैं: वेटर टेबल पर ऑर्डर लेने आएगा।',
     grazie: 'खुशी हुई! कुछ और चाहिए तो बताइए।',
     suggerimenti: ['आप क्या सुझाएंगे?', 'कौन सी वाइन?', '2 के लिए टेस्टिंग मेन्यू'],
@@ -345,6 +359,11 @@ const T: Record<string, Testi> = {
 export const SUGGERIMENTI_TUTTE_LE_LINGUE = new Map<string, number>(
   Object.values(T).flatMap(t => t.suggerimenti.map((s, i) => [normalizza(s), i] as [string, number])),
 );
+
+/** I suggerimenti standard di una lingua (inglese se la lingua manca). */
+export function suggerimentiPredefiniti(lang: string): string[] {
+  return [...testi(lang).suggerimenti];
+}
 
 function testi(lang: string): Testi {
   return T[lang] ?? T['en'];
@@ -420,6 +439,40 @@ async function piattiNellaLingua(
   return risolti;
 }
 
+// Parole troppo comuni per riconoscere un vino da sole
+const PAROLE_VINO_GENERICHE = new Set([
+  'vino', 'vini', 'wine', 'rosso', 'rossa', 'bianco', 'bianca', 'rosato', 'rose', 'tinto', 'blanco', 'rouge', 'blanc',
+  'doc', 'docg', 'igt', 'igp', 'dop', 'aoc', 'classico', 'superiore', 'riserva', 'reserva', 'della', 'delle', 'dei', 'del',
+  'veneto', 'trentino', 'toscana', 'sicilia', 'puglia', 'langhe', 'blush', 'brut', 'extra', 'dry', 'sweet', 'house', 'casa',
+]);
+
+/** La categoria e' di vini (i vini hanno per abbinamento un cibo, non un vino). */
+export function categoriaVini(categoria: string): boolean {
+  return /vin|wine|wein/i.test(categoria || '');
+}
+
+/** I vini in carta, ognuno ridotto alle parole che lo distinguono. */
+export function viniInCarta(piatti: Array<{ name: string; category: string }>): string[][] {
+  return piatti
+    .filter(p => categoriaVini(p.category))
+    .map(p => normalizza(p.name).split(' ').filter(w => w.length >= 4 && !PAROLE_VINO_GENERICHE.has(w)))
+    .filter(parole => parole.length > 0);
+}
+
+/**
+ * Un abbinamento scritto prima si usa solo se nomina un vino che il ristorante
+ * ha davvero. Senza carta dei vini va bene uno stile ("un bianco fresco").
+ * Con la carta, "come un Greco di Tufo" quando il Greco non c'e' e' un errore
+ * che il cameriere deve smentire al tavolo: meglio lasciar rispondere l'IA,
+ * che ha la carta davanti.
+ */
+export function abbinamentoValido(testo: string, vini: string[][]): boolean {
+  if (!testo) return false;
+  if (vini.length === 0) return true;
+  const t = ' ' + normalizza(testo) + ' ';
+  return vini.some(parole => parole.some(w => t.includes(' ' + w + ' ')));
+}
+
 /** Il messaggio E' il nome di un piatto (il cliente ha toccato il nome in grassetto). */
 function piattoEsatto(msg: string, piatti: PiattoRisolto[]): PiattoRisolto | null {
   return piatti.find(p => p.chiavi.includes(msg)) ?? null;
@@ -472,13 +525,16 @@ function piattoDalContesto(ultimaRisposta: string, piatti: PiattoRisolto[]): Pia
   return null;
 }
 
-function schedaPiatto(p: PiattoRisolto, valuta: string, lang: string, t: Testi): string {
+function schedaPiatto(p: PiattoRisolto, valuta: string, lang: string, t: Testi, vini: string[][] = []): string {
   const righe = [`**${p.nomeMostrato}** · ${valuta}${Number(p.price).toFixed(2)}`];
   // Il racconto scritto prima batte la descrizione del menu: e' piu' ricco ed
   // e' stato riletto dal ristoratore. Se non c'e' si usa la descrizione.
   if (p.racconto) righe.push(p.racconto);
   else if (p.descrizioneMostrata) righe.push(p.descrizioneMostrata);
-  if (p.abbinamento) righe.push(p.abbinamento);
+  // Per un vino l'abbinamento e' un cibo: il controllo sulla carta non vale
+  if (p.abbinamento && (categoriaVini(p.category) || abbinamentoValido(p.abbinamento, vini))) {
+    righe.push((categoriaVini(p.category) ? '🍽️ ' : '🍷 ') + p.abbinamento);
+  }
   const elenco = elencoAllergeni(p.allergens, lang);
   if (elenco.length > 0) {
     // Solo la prima riga: nella scheda l'elenco e' un'informazione, non una
@@ -513,7 +569,7 @@ export async function rispostaDiretta(p: {
     const piatto = piatti0.find(d => d.id === p.azione!.dish_id);
     if (piatto && (piatto.racconto || piatto.descrizioneMostrata)) {
       return {
-        message: schedaPiatto(piatto, simboloValuta(p.currency), p.language, testi(p.language)),
+        message: schedaPiatto(piatto, simboloValuta(p.currency), p.language, testi(p.language), viniInCarta(p.dishes)),
         suggestions: testi(p.language).suggerimenti,
         intento: 'piatto',
       };
@@ -540,7 +596,7 @@ export async function rispostaDiretta(p: {
   const esatto = piattoEsatto(msg, piatti);
   if (esatto) {
     return {
-      message: schedaPiatto(esatto, valuta, p.language, t),
+      message: schedaPiatto(esatto, valuta, p.language, t, viniInCarta(p.dishes)),
       suggestions: t.suggerimenti,
       intento: 'piatto',
     };
@@ -571,9 +627,9 @@ export async function rispostaDiretta(p: {
   //    meglio una risposta viva che una riga vuota.
   if (contiene(msg, PAROLE_BEVUTA)) {
     const piatto = piattoCitato(msg, piatti) ?? piattoDalContesto(p.ultimaRisposta || '', piatti);
-    if (piatto?.abbinamento) {
+    if (piatto && abbinamentoValido(piatto.abbinamento, viniInCarta(p.dishes))) {
       return {
-        message: `**${piatto.nomeMostrato}** — ${piatto.abbinamento}`,
+        message: t.abbinamentoDi(piatto.nomeMostrato, piatto.abbinamento),
         suggestions: t.suggerimenti,
         intento: 'abbinamento',
       };

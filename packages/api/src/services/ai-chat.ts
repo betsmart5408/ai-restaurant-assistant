@@ -7,7 +7,10 @@ import { registraIntento } from './conta-intenti';
 import { catenaFornitori, clientePer } from './fornitori-ia';
 import { registraConsumo, superatoLimite, messaggioLimite } from './consumi-ia';
 import { riconosciConsiglio, chiaveMemoria, firmaMenu, leggiConsiglio, salvaConsiglio } from './consigli-pronti';
-import { normalizza } from './risposte-dirette';
+import { normalizza, suggerimentiPredefiniti } from './risposte-dirette';
+
+// Parole di chi fa la domanda AL cliente: in un pulsante del cliente non ci stanno
+const RIVOLTO_AL_CLIENTE = /(vuoi|preferisci|desideri|indicami|dimmi|dammi|hai (allergie|intolleranze)|would you|do you want|do you prefer|tell me|let me know|quieres|prefieres|dime|indicame|voulez vous|preferez|dites moi|mochten sie|mochtest du|sagen sie mir)/;
 
 // `saved_preferences` e `previous_dishes` arrivano dal body pubblico di
 // POST /api/chat/session, quindi sono testo scelto dal cliente: non vanno mai
@@ -191,7 +194,9 @@ function getSuggestionsInstruction(language: string): string {
 Alla fine di OGNI risposta aggiungi su riga separata:
 SUGGESTIONS_JSON:["opzione1","opzione2","opzione3"]
 Max 3 opzioni brevi (max 5 parole), nella lingua della risposta.
-Esempio: ${examples[language] ?? examples['it']}`;
+Sono i PULSANTI che tocca il CLIENTE: scrivili come li direbbe lui, in prima persona, come prossima domanda sensata.
+VIETATO scriverli come domande tue al cliente (es. SBAGLIATO: "Cosa vuoi provare?", "Indicami il nome", "Preferisci un vino?").
+Esempio giusto: ${examples[language] ?? examples['it']}`;
 }
 
 // ── System prompt ─────────────────────────────────────────────────────────────
@@ -293,8 +298,9 @@ ALLERGIE — REGOLA DI SICUREZZA, NON NEGOZIABILE:
   Non lo sai: non sei in cucina, non conosci le ricette esatte ne' le contaminazioni.
 - Non dedurre gli ingredienti dal nome o dalla descrizione del piatto. Una descrizione non e' una scheda allergeni.
 - Puoi riportare SOLO gli allergeni scritti nel campo "allergeni" del menu qui sopra, dicendo che sono le informazioni registrate dal ristorante.
-- Quando qualcuno dichiara un'allergia: ringrazia, di' che avvisi il personale, e indirizzalo SEMPRE al cameriere per la conferma prima di ordinare.
-- Frase da usare: "Per la tua sicurezza faccio verificare al personale: gli allergeni li conferma la cucina."${quantiConAllergeni === 0
+- Quando qualcuno dichiara un'allergia: ringrazia e digli SEMPRE di comunicarla al cameriere prima di ordinare, perche' la conferma la da' la cucina.
+- Frase da usare: "Prima di ordinare dillo al cameriere: la conferma la da' sempre la cucina."
+- NON PROMETTERE MAI AZIONI: non puoi avvisare il personale, chiamare il cameriere, prenotare, ordinare o mandare messaggi a nessuno. Esisti solo in questa chat. Mai frasi come "avviso io", "faccio verificare", "lo segnalo", "chiamo il cameriere": di' invece al cliente di chiederlo lui al personale.${quantiConAllergeni === 0
   ? '\n- Questo ristorante NON ha ancora registrato gli allergeni dei piatti: dillo con chiarezza e rimanda al personale, senza fare ipotesi.'
   : ''}
 
@@ -305,6 +311,8 @@ FORMATTAZIONE (obbligatoria):
 
 PIATTI E BEVANDE:
 - Piatto → ingredienti, sapori, tecnica + suggerisci ordine o abbinamento vino/cocktail.
+- VINI E BEVANDE: consiglia SOLO quelli scritti nel menu qui sopra, con il loro nome esatto in **grassetto**. MAI nominare un vino, una cantina o una denominazione che non e' nel menu, nemmeno come esempio ("come un Greco di Tufo" e' VIETATO se il Greco di Tufo non e' in carta). Se il menu non ha vini, suggerisci solo uno stile (es. "un bianco fresco").
+- Sii coerente: se in questa conversazione hai gia' consigliato un vino per un piatto, non cambiarlo senza motivo.
 - Bevanda → profilo aromatico, come si serve, abbinamenti cibo.
 - Max 1 upselling per messaggio, mai aggressivo. Non riproporre ciò che è già stato ordinato/rifiutato.
 
@@ -530,6 +538,13 @@ REGOLE FINALI, PIU' IMPORTANTI DI TUTTE:
   if (suggestionsMatch) {
     try { suggestions = JSON.parse(suggestionsMatch[1]); } catch { suggestions = []; }
   }
+  // Rete di sicurezza: un suggerimento scritto come domanda AL cliente
+  // ("Cosa vuoi provare?") diventerebbe un pulsante senza senso. Si scarta,
+  // e se non ne resta nessuno si usano quelli standard.
+  suggestions = (Array.isArray(suggestions) ? suggestions : [])
+    .filter(s => typeof s === 'string' && s.trim() && s.length <= 60 && !RIVOLTO_AL_CLIENTE.test(normalizza(s)))
+    .slice(0, 3);
+  if (suggestions.length === 0) suggestions = suggerimentiPredefiniti(language);
 
   const visibleMessage = assistantMessage
     .replace(/SUGGESTIONS_JSON:\s*\[[\s\S]+?\]\s*$/m, '')

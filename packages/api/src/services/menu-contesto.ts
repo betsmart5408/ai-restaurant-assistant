@@ -127,6 +127,11 @@ function seleziona(piatti: PiattoMenu[], messaggio: string, quanti: number): Pia
   return piatti.filter(p => scelti.has(p));
 }
 
+/** Vini e bevande: servono agli abbinamenti, quindi nel prompt ci vanno sempre tutti. */
+export function eBevanda(categoria: string): boolean {
+  return /vin|wine|wein|bevand|drink|beverage|cocktail|birr|beer|bier|cerveza|spirit|liquor|amaro|bebida/i.test(categoria || '');
+}
+
 export function costruisciMenuPerPrompt(
   piatti: PiattoMenu[],
   messaggioCliente: string = '',
@@ -135,8 +140,19 @@ export function costruisciMenuPerPrompt(
   if (totali <= SOGLIA_SELEZIONE) {
     return { testo: scriviCompatto(piatti), parziale: false, inclusi: totali, totali };
   }
-  const scelti = seleziona(piatti, messaggioCliente, QUANTI_SE_PARZIALE);
-  return { testo: scriviCompatto(scelti), parziale: true, inclusi: scelti.length, totali };
+  // Menu enorme: dettagli (prezzo, allergeni) solo per i piatti attinenti
+  // alla domanda, MA le bevande tutte e i NOMI di tutti gli altri piatti.
+  // Senza i nomi il modello diceva "non lo trovo" per un piatto che c'era
+  // ("pasta al ragu" era la "Bolognese", esclusa dalla selezione).
+  const bevande = piatti.filter(p => eBevanda(p.category));
+  const cibo = piatti.filter(p => !eBevanda(p.category));
+  const sceltiCibo = new Set(seleziona(cibo, messaggioCliente, Math.max(QUANTI_SE_PARZIALE - bevande.length, 30)));
+  const conDettagli = piatti.filter(p => sceltiCibo.has(p) || eBevanda(p.category));
+  const altri = cibo.filter(p => !sceltiCibo.has(p));
+  const soloNomi = altri.length
+    ? `\nAltri piatti del menu (solo il nome; esistono tutti): ${altri.map(p => p.name).join('; ')}`
+    : '';
+  return { testo: scriviCompatto(conDettagli) + soloNomi, parziale: true, inclusi: conDettagli.length, totali };
 }
 
 /**
@@ -145,7 +161,7 @@ export function costruisciMenuPerPrompt(
  */
 export function avvisoMenuParziale(m: MenuPerPrompt): string {
   if (!m.parziale) return '';
-  return `\nATTENZIONE: qui sopra ci sono ${m.inclusi} piatti dei ${m.totali} del menu, scelti per la domanda in corso.` +
-    `\n- Se il cliente chiede un piatto che non vedi elencato, NON dire che non esiste e NON dire che non e' in menu.` +
-    `\n- Rispondi che controlli volentieri e chiedigli di dirti il nome, oppure invitalo a scorrere il menu completo qui accanto nell'app.`;
+  return `\nATTENZIONE: il menu ha ${m.totali} voci. Di ${m.inclusi} vedi prezzo e allergeni; degli altri piatti vedi solo il nome, nella riga "Altri piatti".` +
+    `\n- Quando il cliente chiede un piatto con parole sue (es. "pasta al ragu"), cercalo tra TUTTI i nomi, anche nella riga "Altri piatti" (es. "Bolognese").` +
+    `\n- Se proprio non lo trovi, NON dire che non esiste: invitalo a scorrere il menu completo qui accanto nell'app.`;
 }

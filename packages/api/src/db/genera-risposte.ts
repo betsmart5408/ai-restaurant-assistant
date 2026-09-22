@@ -29,6 +29,7 @@ import { Pool } from 'pg';
 import { LANG_NAMES } from '../services/translate';
 import { catenaFornitori, clientePer } from '../services/fornitori-ia';
 import { modelliDisponibili } from '../services/groq-model';
+import { viniInCarta, abbinamentoValido, categoriaVini } from '../services/risposte-dirette';
 
 caricaEnv({ path: join(__dirname, '../../../../.env') });
 caricaEnv();
@@ -74,6 +75,10 @@ function estraiJson(raw: string): any[] | null {
   } catch { return null; }
 }
 
+// La carta dei vini del ristorante che si sta lavorando: il prompt la usa per
+// far scegliere un vino che il ristorante ha davvero.
+let cartaVini: string[] = [];
+
 function costruisciPrompt(piatti: Piatto[], lang: string): string {
   const payload = piatti.map((p, i) => ({
     i, name: p.name, description: p.description || '', category: p.category || '',
@@ -84,8 +89,13 @@ function costruisciPrompt(piatti: Piatto[], lang: string): string {
     `\n` +
     `"racconto": the dish described warmly for a guest reading it at the table.\n` +
     `  2 or 3 short sentences. Flavour, texture, how it is made, why it is worth ordering.\n` +
-    `"abbinamento": what to drink with it. One or two sentences, a wine style or a\n` +
-    `  non-alcoholic option, and why it works.\n` +
+    (cartaVini.length > 0
+      ? `"abbinamento": for a FOOD dish, one or two sentences naming ONE wine from this restaurant's\n` +
+        `  wine list, written with its EXACT name, and why it works. The wine list: ${cartaVini.join('; ')}.\n` +
+        `  Never name a wine, grape, producer or appellation that is not on this list.\n` +
+        `  For a WINE or other drink: one or two sentences on which dishes it goes with.\n`
+      : `"abbinamento": what to drink with it. One or two sentences, a wine style or a\n` +
+        `  non-alcoholic option, and why it works.\n`) +
     `\n` +
     `Rules, all mandatory:\n` +
     `- Write in ${LANG_NAMES[lang] || lang}. Nothing else.\n` +
@@ -93,8 +103,10 @@ function costruisciPrompt(piatti: Piatto[], lang: string): string {
     `  know what is inside, describe the style of the dish, not its contents.\n` +
     `- NEVER mention allergens, gluten, lactose, "suitable for", or any dietary safety\n` +
     `  claim. Not even to say something is free of them. That is handled elsewhere.\n` +
-    `- Name a wine STYLE or grape, never a specific producer or a bottle the restaurant\n` +
-    `  may not have.\n` +
+    (cartaVini.length > 0
+      ? `- Wines: ONLY from the wine list above, exact name. Nothing else, not even as an example.\n`
+      : `- Name a wine STYLE or grape, never a specific producer or a bottle the restaurant\n` +
+        `  may not have.\n`) +
     `- No prices. No emoji. No bold, no markdown.\n` +
     `- Exactly ${payload.length} elements.\n\n` +
     `Input:\n${JSON.stringify(payload)}`;
@@ -243,6 +255,8 @@ async function main() {
       [r.id],
     );
     const piatti = { rows: tutti.rows.filter(p => (p.description || '').trim() !== '') };
+    cartaVini = tutti.rows.filter(p => categoriaVini(p.category || '')).map(p => p.name);
+    const viniCarta = viniInCarta(tutti.rows.map(p => ({ name: p.name, category: p.category || '' })));
     const senzaDescrizione = tutti.rows.length - piatti.rows.length;
     if (piatti.rows.length === 0) {
       console.log(`\n${r.name}  - saltato: nessuno dei ${tutti.rows.length} piatti ha una descrizione`);
@@ -284,6 +298,11 @@ async function main() {
             const testo = typeof el[kind] === 'string' ? el[kind].trim() : '';
             if (!testo) continue;
             if (VIETATE.test(testo)) { scartate++; continue; }
+            // Un abbinamento che non nomina un vino in carta non si salva: meglio
+            // lasciar rispondere l'IA dal vivo che consigliare un vino che non c'e'
+            if (kind === 'abbinamento' && !categoriaVini(blocco[k].category || '') && !abbinamentoValido(testo, viniCarta)) {
+              scartate++; continue;
+            }
             await db.query(
               `INSERT INTO dish_answers (dish_id, lang, kind, text, source)
                VALUES ($1, $2, $3, $4, 'auto')
