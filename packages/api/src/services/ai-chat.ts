@@ -468,7 +468,11 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
 REGOLE FINALI, PIU' IMPORTANTI DI TUTTE:
 - Scrivi SOLO il messaggio destinato al cliente. Niente ragionamenti, niente spiegazioni su come hai deciso, niente tag come <think>.
 - Scrivi in ${nomiLingua[language] ?? language}, sempre, anche se le istruzioni qui sopra sono in un'altra lingua.
-- Il cliente e' seduto al tavolo e legge dal telefono: poche righe, calde e concrete.`;
+- Il cliente e' seduto al tavolo e legge dal telefono: poche righe, calde e concrete.`
+    // La risposta verra' riusata per altri clienti, anche a meta' conversazione:
+    // niente saluti, niente domande iniziali, niente riferimenti all'ora.
+    + (perTutti ? `
+- Questa risposta la leggeranno anche altri clienti, a qualsiasi punto della conversazione: rispondi DIRETTAMENTE alla domanda. Niente saluti o benvenuto, niente domande su allergie o preferenze, niente riferimenti all'ora del giorno o al meteo.` : '');
 
   let assistantMessage = '';
   let modelloUsato = '';
