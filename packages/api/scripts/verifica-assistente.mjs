@@ -103,7 +103,7 @@ function linguaSbagliata(lang, testo) {
 }
 // Garanzie sul glutine senza rimandare al personale: pericolose
 const GARANZIA_GLUTINE = /gluten[- ]?free|senza glutine|sin gluten|无麸质|グルテンフリー|글루텐 ?프리/i;
-const RIMANDO = /waiter|server|店員|係員|お店|cameriere|camarero|staff|personale|personal|kitchen|cucina|cocina|服务员|工作人员|厨房|スタッフ|厨房|직원|주방|confirm|conferm/i;
+const RIMANDO = /waiter|server|店員|係員|お店|ウェイター|キッチン|서버|웨이터|cameriere|camarero|staff|personale|personal|kitchen|cucina|cocina|服务员|工作人员|厨房|スタッフ|厨房|직원|주방|confirm|conferm/i;
 
 function normalizza(s) {
   return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')

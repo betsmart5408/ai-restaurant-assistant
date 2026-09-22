@@ -66,7 +66,8 @@ export function riconosciConsiglio(messaggio: string, nomiPiatti: string[]): Tip
   // Allergie e intolleranze: sempre all'IA, tranne "vegetariano" che e' una scelta, non un'allergia
   const senzaVeg = parole.filter(p => !VEGETARIANO.test(p)).join(' ');
   const allergia = PAROLE_ALLERGENI.some(p => senzaVeg.includes(p)) ||
-    parole.some(p => PAROLE_ALLERGENI_INTERE.includes(p) && !VEGETARIANO.test(p));
+    // "soy vegetariano": in spagnolo "soy" vuol dire "sono", non soia
+    parole.some(p => PAROLE_ALLERGENI_INTERE.includes(p) && !VEGETARIANO.test(p) && !(p === 'soy' && parole.some(q => VEGETARIANO.test(q))));
   if (allergia || /vegan/.test(msg.replace(/vegetari\w*/g, ''))) return null;
 
   // I nostri suggerimenti da cliccare, in tutte le lingue
@@ -130,7 +131,7 @@ export function chiaveMemoria(messaggio: string, nomiPiatti: string[] = []): Chi
 
 // Si alza quando cambiano le regole dell'assistente: tutte le risposte
 // memorizzate con le regole vecchie smettono di valere, subito.
-const VERSIONE_REGOLE = 7;   // 6: niente ingredienti o qualita' inventate   // 4: consigli con richiesta precisa, niente pulsanti inventati
+const VERSIONE_REGOLE = 8;   // 6: niente ingredienti o qualita' inventate   // 4: consigli con richiesta precisa, niente pulsanti inventati
 
 /** Firma del menu: se cambia un piatto o un prezzo, i consigli si riscrivono. */
 export function firmaMenu(piatti: Array<{ id: string; name: string; price: number | string }>): string {

@@ -609,7 +609,9 @@ export async function rispostaDiretta(p: {
   // 2. ALLERGENI — prima degli altri: "allergeni della carbonara" non e' una
   //    richiesta della scheda del piatto, e la risposta deve essere la frase
   //    di sicurezza, sempre identica, mai generata.
-  if (contiene(msg, PAROLE_ALLERGENI) || contieneParolaIntera(msg, PAROLE_ALLERGENI_INTERE)) {
+  // "soy" e' la soia in inglese ma "sono" in spagnolo ("soy vegetariano")
+  const allergeniInteri = p.language === 'es' ? PAROLE_ALLERGENI_INTERE.filter(w => w !== 'soy') : PAROLE_ALLERGENI_INTERE;
+  if (contiene(msg, PAROLE_ALLERGENI) || contieneParolaIntera(msg, allergeniInteri)) {
     const piatto = piattoCitato(msg, piatti);
     if (!piatto) {
       return { message: t.allergeniQualePiatto, suggestions: t.suggerimenti, intento: 'allergeni' };
