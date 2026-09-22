@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { db } from '../db/client';
 import { requireAuth, requireSuperAdmin, signToken } from '../middleware/auth';
+import { SQL_IN_PAUSA } from '../services/prova';
 
 const router = Router();
 
@@ -63,6 +64,7 @@ router.get('/restaurants', async (_req, res) => {
              u.email as owner_email,
              r.is_demo,
              CASE WHEN r.is_demo THEN r.demo_claim_token END AS demo_claim_token,
+             ${SQL_IN_PAUSA} AS in_pausa,
              COUNT(DISTINCT d.id) as dish_count,
              COUNT(DISTINCT d.id) FILTER (WHERE COALESCE(TRIM(d.description), '') <> '') as dishes_with_description,
              COUNT(DISTINCT cs.id) FILTER (WHERE cs.created_at >= NOW() - INTERVAL '30 days') as sessions_30d
@@ -94,7 +96,8 @@ router.get('/stats', async (_req, res) => {
       SELECT
         (SELECT COUNT(*) FROM restaurants WHERE is_demo IS NOT TRUE) as total_restaurants,
         (SELECT COUNT(*) FROM restaurants WHERE is_demo IS NOT TRUE AND subscription_status = 'active') as active_subscriptions,
-        (SELECT COUNT(*) FROM restaurants WHERE is_demo IS NOT TRUE AND subscription_status = 'trialing') as trialing,
+        (SELECT COUNT(*) FROM restaurants WHERE is_demo IS NOT TRUE AND subscription_status = 'trialing' AND (trial_ends_at IS NULL OR trial_ends_at > NOW())) as trialing,
+        (SELECT COUNT(*) FROM restaurants WHERE is_demo IS NOT TRUE AND subscription_status = 'trialing' AND trial_ends_at <= NOW()) as prova_scaduta,
         (SELECT COUNT(*) FROM restaurants WHERE is_demo = TRUE) as demos,
         (SELECT COUNT(*) FROM restaurants WHERE is_demo IS NOT TRUE AND suspended_at IS NOT NULL) as suspended,
         (SELECT COALESCE(SUM(monthly_price), 0) FROM restaurants WHERE is_demo IS NOT TRUE AND subscription_status = 'active') as mrr,

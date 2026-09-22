@@ -9,11 +9,11 @@ interface AdminRestaurant {
   id: string; name: string; slug: string; owner_email: string; logo_url?: string;
   plan: string; subscription_status: string; trial_ends_at: string; monthly_price: number | string;
   suspended_at: string | null; dish_count: number; sessions_30d: number; created_at: string;
-  is_demo?: boolean; dishes_with_description?: number | string; demo_claim_token?: string | null;
+  is_demo?: boolean; dishes_with_description?: number | string; demo_claim_token?: string | null; in_pausa?: boolean;
 }
 interface AdminStats {
   total_restaurants: number; active_subscriptions: number; trialing: number;
-  suspended: number; mrr: string; sessions_30d: number; new_30d: number; demos?: number | string;
+  suspended: number; mrr: string; sessions_30d: number; new_30d: number; demos?: number | string; prova_scaduta?: number | string;
 }
 interface Restaurant { id: string; name: string; slug: string; logo_url?: string; currency?: string; }
 
@@ -517,6 +517,7 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
   const [newForm, setNewForm] = useState({ restaurant_name: '', owner_email: '', owner_password: '', monthly_price: '30' });
   const [newMsg, setNewMsg] = useState('');
   const [search, setSearch] = useState('');
+  const [filtro, setFiltro] = useState<'tutti' | 'paganti' | 'prova' | 'scaduti' | 'clienti' | 'demo' | 'sospesi'>('tutti');
 
   async function load() {
     setLoading(true);
@@ -579,73 +580,47 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
   const statusColor = (s: string) => s === 'active' ? '#22c55e' : s === 'trialing' ? '#f59e0b' : s === 'past_due' ? '#f97316' : '#ef4444';
   const statusLabel = (s: string) => s === 'active' ? '✅ Attivo' : s === 'trialing' ? '🟡 Trial' : s === 'past_due' ? '🟠 In ritardo' : s === 'suspended' ? '🔴 Sospeso' : s === 'cancelled' ? '❌ Cancellato' : s;
 
-  const sidebarStyle: React.CSSProperties = isMobile
-    ? { ...S.sidebar, background: '#0f172a', position: 'fixed', top: 0, bottom: 0, left: 0, zIndex: 60, width: 250,
-        transform: navOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform .25s ease', boxShadow: navOpen ? '0 0 40px #0007' : 'none' }
-    : { ...S.sidebar, background: '#0f172a' };
+  // Stato di un cliente in parole: quanto manca alla fine della prova, se
+  // e' scaduta senza pagare, se il menu e' in pausa.
+  const giorno = (d: string) => new Date(d).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+  function statoCliente(r: AdminRestaurant): { titolo: string; dettaglio: string; colore: string; avviso?: boolean } {
+    const prezzo = `A$${Number(r.monthly_price ?? 30).toFixed(0)}/mese`;
+    if (r.suspended_at) return { titolo: '🔴 Sospeso', dettaglio: `dal ${giorno(r.suspended_at)}`, colore: '#ef4444' };
+    if (r.subscription_status === 'active') return { titolo: '✅ Paga', dettaglio: prezzo, colore: '#22c55e' };
+    if (r.subscription_status === 'past_due') return { titolo: '🟠 Pagamento non riuscito', dettaglio: 'Stripe sta riprovando', colore: '#f97316', avviso: true };
+    if (r.subscription_status === 'cancelled') return { titolo: '❌ Ha disdetto', dettaglio: r.in_pausa ? 'menu in pausa' : '', colore: '#ef4444', avviso: true };
+    if (r.subscription_status === 'trialing' && r.trial_ends_at) {
+      const giorni = Math.ceil((new Date(r.trial_ends_at).getTime() - Date.now()) / 86400000);
+      if (giorni > 0) return {
+        titolo: '🟡 In prova',
+        dettaglio: `${giorni === 1 ? 'scade domani' : `scade tra ${giorni} giorni`} (${giorno(r.trial_ends_at)})`,
+        colore: '#f59e0b', avviso: giorni <= 2,
+      };
+      return {
+        titolo: r.in_pausa ? '⏸️ Menu in pausa' : '🔴 Prova scaduta',
+        dettaglio: `scaduta il ${giorno(r.trial_ends_at)} · non ha pagato`,
+        colore: '#ef4444', avviso: true,
+      };
+    }
+    return { titolo: statusLabel(r.subscription_status), dettaglio: prezzo, colore: statusColor(r.subscription_status) };
+  }
+  const provaScaduta = (r: AdminRestaurant) =>
+    !r.is_demo && r.subscription_status === 'trialing' && !!r.trial_ends_at && new Date(r.trial_ends_at).getTime() <= Date.now();
+  const FILTRI = {
+    tutti:    { etichetta: 'Tutti', vale: (_r: AdminRestaurant) => true },
+    paganti:  { etichetta: '✅ Paganti', vale: (r: AdminRestaurant) => !r.is_demo && r.subscription_status === 'active' },
+    prova:    { etichetta: '🟡 In prova', vale: (r: AdminRestaurant) => !r.is_demo && r.subscription_status === 'trialing' && !provaScaduta(r) },
+    scaduti:  { etichetta: '🔴 Prova scaduta', vale: provaScaduta },
+    clienti:  { etichetta: '🏪 Tutti i clienti', vale: (r: AdminRestaurant) => !r.is_demo },
+    demo:     { etichetta: '🎭 Demo', vale: (r: AdminRestaurant) => !!r.is_demo },
+    sospesi:  { etichetta: '⛔ Sospesi', vale: (r: AdminRestaurant) => !r.is_demo && !!r.suspended_at },
+  } as const;
+  type Filtro = keyof typeof FILTRI;
+  const apriElenco = (f: Filtro) => { setFiltro(f); setTab('restaurants'); };
+  const perScadenza = (a: AdminRestaurant, b: AdminRestaurant) =>
+    new Date(a.trial_ends_at || 0).getTime() - new Date(b.trial_ends_at || 0).getTime();
 
-  return (
-    <div style={S.root}>
-      {isMobile && (
-        <div style={S.mobileBar}>
-          <button style={S.hamburger} onClick={() => setNavOpen(true)} aria-label="Menu">☰</button>
-          <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>Super Admin</span>
-        </div>
-      )}
-      {isMobile && navOpen && <div style={S.navBackdrop} onClick={() => setNavOpen(false)} />}
-
-      <aside style={sidebarStyle}>
-        <div style={{ ...S.sidebarHeader, marginBottom: 28 }}>
-          <div style={{ fontSize: 28 }}>🛡️</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#f8fafc' }}>Super Admin</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>Piattaforma</div>
-          </div>
-        </div>
-        <nav style={S.nav}>
-          {([['dashboard', '📊 Dashboard'], ['restaurants', '🍽️ Ristoranti'], ['new', '➕ Nuovo ristorante']] as const).map(([key, label]) => (
-            <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navBtnActive : {}) }} onClick={() => { setTab(key); setNavOpen(false); }}>{label}</button>
-          ))}
-        </nav>
-        <button style={S.logoutBtn} onClick={onLogout}>← Esci</button>
-      </aside>
-
-      <main style={{ ...S.main, ...(isMobile ? { paddingTop: 52 } : {}) }}>
-        {loading && <div style={S.loader}>Caricamento...</div>}
-
-        {/* ── DASHBOARD ── */}
-        {tab === 'dashboard' && stats && (
-          <div style={S.content}>
-            <h1 style={S.pageTitle}>📊 Panoramica Piattaforma</h1>
-            <div style={S.kpiGrid}>
-              <KPI label="Ristoranti totali" value={String(stats.total_restaurants)} color="#6366f1" />
-              <KPI label="Abbonamenti attivi" value={String(stats.active_subscriptions)} color="#22c55e" />
-              <KPI label="In trial" value={String(stats.trialing)} color="#f59e0b" />
-              <KPI label="Demo in attivazione" value={String(stats.demos ?? 0)} color="#0ea5e9" sub="Non ancora attivate dal ristoratore" />
-              <KPI label="Sospesi" value={String(stats.suspended)} color="#ef4444" />
-              <KPI label="MRR" value={`A$${parseFloat(stats.mrr || '0').toFixed(0)}`} color="#6366f1" sub="Ricavo mensile ricorrente" />
-              <KPI label="Sessioni (30gg)" value={String(stats.sessions_30d)} color="#0ea5e9" />
-              <KPI label="Nuovi (30gg)" value={String(stats.new_30d)} color="#8b5cf6" />
-            </div>
-          </div>
-        )}
-
-        {/* ── RISTORANTI ── */}
-        {tab === 'restaurants' && (
-          <div style={S.content}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-              <h1 style={S.pageTitle}>🍽️ Tutti i ristoranti</h1>
-              <input style={{ ...S.formInput, width: '100%', maxWidth: 240, margin: 0 }} placeholder="🔍 Cerca..." value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-            {([
-              ['📝 Menu con descrizione', `Almeno un piatto ha la descrizione (es. "Bruschetta — pane tostato con pomodoro"). Ordinati dal menu più completo.`, conDescrizione, '#166534'],
-              ['⚪ Menu senza descrizione', 'Solo nomi dei piatti (e prezzi), nessuna descrizione.', senzaDescrizione, '#64748b'],
-            ] as const).map(([titolo, spiega, lista, colore]) => (
-              <section key={titolo} style={{ marginTop: 8 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 800, color: colore, margin: '18px 0 2px' }}>{titolo} ({lista.length})</h2>
-                <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>{spiega}</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {lista.map(r => (
+  const scheda = (r: AdminRestaurant) => (
                 <div key={r.id} style={{ ...S.formCard, padding: '18px 20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
                     <div style={{ minWidth: 0, flex: '1 1 240px' }}>
@@ -695,7 +670,6 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
                       </div>
                       <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
                         Creato: {new Date(r.created_at).toLocaleDateString('it-IT')}
-                        {!r.is_demo && r.trial_ends_at && ` · Trial fino: ${new Date(r.trial_ends_at).toLocaleDateString('it-IT')}`}
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -706,8 +680,8 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
                           <div style={{ fontWeight: 700, color: '#0ea5e9' }}>⏳ In attivazione</div>
                         ) : (
                           <>
-                            <div style={{ fontWeight: 700, color: statusColor(r.subscription_status) }}>{statusLabel(r.subscription_status)}</div>
-                            <div style={{ fontSize: 13, color: '#64748b' }}>A${Number(r.monthly_price ?? 30).toFixed(0)}/mese</div>
+                            <div style={{ fontWeight: 700, color: statoCliente(r).colore }}>{statoCliente(r).titolo}</div>
+                            <div style={{ fontSize: 13, color: statoCliente(r).avviso ? '#b91c1c' : '#64748b', fontWeight: statoCliente(r).avviso ? 700 : 400 }}>{statoCliente(r).dettaglio}</div>
                           </>
                         )}
                       </div>
@@ -720,7 +694,95 @@ function SuperAdminPanel({ token, onLogout }: { token: string; onLogout: () => v
                     </div>
                   </div>
                 </div>
-              ))}
+  );
+
+  const sidebarStyle: React.CSSProperties = isMobile
+    ? { ...S.sidebar, background: '#0f172a', position: 'fixed', top: 0, bottom: 0, left: 0, zIndex: 60, width: 250,
+        transform: navOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform .25s ease', boxShadow: navOpen ? '0 0 40px #0007' : 'none' }
+    : { ...S.sidebar, background: '#0f172a' };
+
+  return (
+    <div style={S.root}>
+      {isMobile && (
+        <div style={S.mobileBar}>
+          <button style={S.hamburger} onClick={() => setNavOpen(true)} aria-label="Menu">☰</button>
+          <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>Super Admin</span>
+        </div>
+      )}
+      {isMobile && navOpen && <div style={S.navBackdrop} onClick={() => setNavOpen(false)} />}
+
+      <aside style={sidebarStyle}>
+        <div style={{ ...S.sidebarHeader, marginBottom: 28 }}>
+          <div style={{ fontSize: 28 }}>🛡️</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#f8fafc' }}>Super Admin</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>Piattaforma</div>
+          </div>
+        </div>
+        <nav style={S.nav}>
+          {([['dashboard', '📊 Dashboard'], ['restaurants', '🍽️ Ristoranti'], ['new', '➕ Nuovo ristorante']] as const).map(([key, label]) => (
+            <button key={key} style={{ ...S.navBtn, ...(tab === key ? S.navBtnActive : {}) }} onClick={() => { setTab(key); setNavOpen(false); }}>{label}</button>
+          ))}
+        </nav>
+        <button style={S.logoutBtn} onClick={onLogout}>← Esci</button>
+      </aside>
+
+      <main style={{ ...S.main, ...(isMobile ? { paddingTop: 52 } : {}) }}>
+        {loading && <div style={S.loader}>Caricamento...</div>}
+
+        {/* ── DASHBOARD ── */}
+        {tab === 'dashboard' && stats && (
+          <div style={S.content}>
+            <h1 style={S.pageTitle}>📊 Panoramica Piattaforma</h1>
+            <div style={S.kpiGrid}>
+              <KPI label="Clienti" value={String(stats.total_restaurants)} color="#6366f1" sub="Ristoranti attivati (demo escluse)" onClick={() => apriElenco('clienti')} />
+              <KPI label="Abbonamenti attivi" value={String(stats.active_subscriptions)} color="#22c55e" sub="Pagano" onClick={() => apriElenco('paganti')} />
+              <KPI label="In prova" value={String(stats.trialing)} color="#f59e0b" sub="Prova gratuita in corso" onClick={() => apriElenco('prova')} />
+              <KPI label="Prova scaduta" value={String(stats.prova_scaduta ?? 0)} color="#ef4444" sub="Non hanno pagato" onClick={() => apriElenco('scaduti')} />
+              <KPI label="Demo in attivazione" value={String(stats.demos ?? 0)} color="#0ea5e9" sub="Non ancora attivate dal ristoratore" onClick={() => apriElenco('demo')} />
+              <KPI label="Sospesi" value={String(stats.suspended)} color="#ef4444" onClick={() => apriElenco('sospesi')} />
+              <KPI label="MRR" value={`A$${parseFloat(stats.mrr || '0').toFixed(0)}`} color="#6366f1" sub="Ricavo mensile ricorrente" />
+              <KPI label="Sessioni (30gg)" value={String(stats.sessions_30d)} color="#0ea5e9" />
+              <KPI label="Nuovi (30gg)" value={String(stats.new_30d)} color="#8b5cf6" />
+            </div>
+          </div>
+        )}
+
+        {/* ── RISTORANTI ── */}
+        {tab === 'restaurants' && (
+          <div style={S.content}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <h1 style={S.pageTitle}>🍽️ Ristoranti</h1>
+              <input style={{ ...S.formInput, width: '100%', maxWidth: 240, margin: 0 }} placeholder="🔍 Cerca..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '4px 0 8px' }}>
+              {(Object.keys(FILTRI) as Filtro[]).map(k => {
+                const n = filtered.filter(FILTRI[k].vale).length;
+                const on = filtro === k;
+                return (
+                  <button key={k} onClick={() => setFiltro(k)} style={{
+                    padding: '7px 12px', borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    border: '1px solid ' + (on ? '#6366f1' : '#e2e8f0'), background: on ? '#6366f1' : '#fff', color: on ? '#fff' : '#475569',
+                  }}>{FILTRI[k].etichetta} ({n})</button>
+                );
+              })}
+            </div>
+            {filtro !== 'tutti' && (() => {
+              const lista = filtered.filter(FILTRI[filtro].vale);
+              if (filtro === 'prova' || filtro === 'scaduti') lista.sort(perScadenza);
+              return lista.length === 0
+                ? <div style={{ ...S.formCard, color: '#64748b', textAlign: 'center' }}>Nessun ristorante in questo elenco.</div>
+                : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{lista.map(scheda)}</div>;
+            })()}
+            {filtro === 'tutti' && ([
+              ['📝 Menu con descrizione', `Almeno un piatto ha la descrizione (es. "Bruschetta — pane tostato con pomodoro"). Ordinati dal menu più completo.`, conDescrizione, '#166534'],
+              ['⚪ Menu senza descrizione', 'Solo nomi dei piatti (e prezzi), nessuna descrizione.', senzaDescrizione, '#64748b'],
+            ] as const).map(([titolo, spiega, lista, colore]) => (
+              <section key={titolo} style={{ marginTop: 8 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: colore, margin: '18px 0 2px' }}>{titolo} ({lista.length})</h2>
+                <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>{spiega}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {lista.map(scheda)}
                 </div>
               </section>
             ))}
@@ -2024,9 +2086,12 @@ ${data.dettaglio}` : ''));
   );
 }
 
-function KPI({ label, value, color, sub }: { label: string; value: string; color: string; sub?: string }) {
+function KPI({ label, value, color, sub, onClick }: { label: string; value: string; color: string; sub?: string; onClick?: () => void }) {
   return (
-    <div style={{ ...S.kpiCard, borderTopColor: color }}>
+    <div style={{ ...S.kpiCard, borderTopColor: color, ...(onClick ? { cursor: 'pointer' } : {}) }}
+      onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? e => { if (e.key === 'Enter') onClick(); } : undefined}
+      title={onClick ? 'Apri l\'elenco' : undefined}>
       <div style={S.kpiLabel}>{label}</div>
       <div style={{ ...S.kpiValue, color }}>{value}</div>
       {sub && <div style={S.kpiSub}>{sub}</div>}
