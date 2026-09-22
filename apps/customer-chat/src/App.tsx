@@ -853,7 +853,9 @@ export default function App() {
   // sincrono e chiude subito la finestra.
   const sendingRef = useRef(false);
 
-  const sendMessage = useCallback(async (text?: string, keepDish?: boolean) => {
+  // `azione`: quando il messaggio parte da un NOSTRO pulsante ("Chiedi a...",
+  // "Allergie") il server sa gia' cosa rispondere senza chiamare l'IA.
+  const sendMessage = useCallback(async (text?: string, keepDish?: boolean, azione?: { tipo: 'racconta' | 'allergie'; dish_id?: string }) => {
     const msg = text ?? input.trim();
     if (!msg || !sessionId || loading || sendingRef.current) return;
     sendingRef.current = true;
@@ -866,7 +868,7 @@ export default function App() {
       const res = await fetch(`${API}/api/chat/${sessionId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg, language: lang }),
+        body: JSON.stringify({ message: msg, language: lang, ...(azione ? { azione } : {}) }),
       });
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.message ?? '', timestamp: new Date().toISOString() }]);
@@ -928,7 +930,7 @@ export default function App() {
     const drinkP: Record<string, string> = { it: `Parlami di "${dish.name}": com'è, come si serve e con quali piatti si abbina.`, en: `Tell me about "${dish.name}": taste, serving and food pairing.`, de: `Erkläre mir "${dish.name}": Geschmack, Servierung und passende Speisen.`, es: `Cuéntame sobre "${dish.name}": sabor, servicio y maridaje.`, fr: `Parle-moi de "${dish.name}": goût, service et accord mets.`, pt: `Fala-me de "${dish.name}": sabor, serviço e harmonização.`, ru: `Расскажи о "${dish.name}": вкус, подача и сочетание с едой.`, zh: `告诉我"${dish.name}"的口感、上菜方式和搭配食物。`, ja: `"${dish.name}"の味、提供方法、相性の良い料理を教えてください。`, ar: `أخبرني عن "${dish.name}": المذاق والتقديم والأطباق المناسبة.` };
     const dishP: Record<string, string> = { it: `Parlami di "${dish.name}": ingredienti, sapore e cosa consigli da bere.`, en: `Tell me about "${dish.name}": ingredients, flavor and drink pairing.`, de: `Erkläre mir "${dish.name}": Zutaten, Geschmack und Getränkeempfehlung.`, es: `Cuéntame sobre "${dish.name}": ingredientes, sabor y bebida recomendada.`, fr: `Parle-moi de "${dish.name}": ingrédients, saveur et boisson conseillée.`, pt: `Fala-me de "${dish.name}": ingredientes, sabor e bebida.`, ru: `Расскажи о "${dish.name}": ингредиенты, вкус и напиток.`, zh: `告诉我"${dish.name}"的食材、口味和推荐饮品。`, ja: `"${dish.name}"の食材、風味、おすすめ飲み物を教えてください。`, ar: `أخبرني عن "${dish.name}": المكونات والمذاق والمشروب الموصى به.` };
     const prompt = isDrink ? (drinkP[lang] ?? drinkP['it']) : (dishP[lang] ?? dishP['it']);
-    sendMessage(prompt, true);
+    sendMessage(prompt, true, { tipo: 'racconta', dish_id: dish.id });
   }
 
   // ─── Lingua / Loading / Errore ────────────────────────────
@@ -989,7 +991,7 @@ export default function App() {
           <button style={S.homeBtn} onClick={() => {
             setScreen('main');
             setTab('chat');
-            setTimeout(() => sendMessage(t('allergyMsg', lang), true), 100);
+            setTimeout(() => sendMessage(t('allergyMsg', lang), true, { tipo: 'allergie' }), 100);
           }}>
             {t('homeAllergy', lang)}
           </button>

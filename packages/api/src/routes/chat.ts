@@ -193,6 +193,10 @@ router.post('/:sessionId/message', async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { message, language } = req.body;
+    // Messaggio partito da un nostro pulsante: si sa gia' cosa rispondere
+    const azione = req.body?.azione && typeof req.body.azione === 'object'
+      ? { tipo: String(req.body.azione.tipo ?? ''), dish_id: req.body.azione.dish_id ? String(req.body.azione.dish_id) : undefined }
+      : undefined;
 
     if (!message || !String(message).trim()) {
       return res.status(400).json({ error: 'Il messaggio non può essere vuoto' });
@@ -259,6 +263,7 @@ router.post('/:sessionId/message', async (req, res) => {
         language: language || s.language,
         conversationHistory: history,
         existingOrders,
+        azione,
       },
       message,
       s.groq_api_key || undefined

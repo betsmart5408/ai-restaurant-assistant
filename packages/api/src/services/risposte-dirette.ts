@@ -494,7 +494,30 @@ export async function rispostaDiretta(p: {
   messaggio: string;
   /** L'ultima cosa detta dall'assistente: serve a capire "e da bere?". */
   ultimaRisposta?: string;
+  /** Il messaggio viene da un nostro pulsante: non serve indovinare il testo. */
+  azione?: { tipo: string; dish_id?: string };
 }): Promise<RispostaDiretta | null> {
+  // 0. I NOSTRI PULSANTI — il testo lo abbiamo scritto noi, la risposta ce
+  //    l'abbiamo gia'. "Chiedi a ..." nella scheda del piatto chiede
+  //    ingredienti, sapore e cosa bere: e' esattamente la scheda del piatto.
+  //    Se il piatto non ha ne' racconto ne' descrizione la scheda sarebbe
+  //    solo nome e prezzo: allora meglio l'IA.
+  if (p.azione?.tipo === 'racconta' && p.azione.dish_id) {
+    const piatti0 = await piattiNellaLingua(p.restaurantId, p.language, p.dishes);
+    const piatto = piatti0.find(d => d.id === p.azione!.dish_id);
+    if (piatto && (piatto.racconto || piatto.descrizioneMostrata)) {
+      return {
+        message: schedaPiatto(piatto, simboloValuta(p.currency), p.language, testi(p.language)),
+        suggestions: testi(p.language).suggerimenti,
+        intento: 'piatto',
+      };
+    }
+  }
+  if (p.azione?.tipo === 'allergie') {
+    const t0 = testi(p.language);
+    return { message: t0.allergeniQualePiatto, suggestions: t0.suggerimenti, intento: 'allergeni' };
+  }
+
   const grezzo = (p.messaggio || '').trim();
   if (!grezzo || troppoLunga(grezzo)) return null;
 

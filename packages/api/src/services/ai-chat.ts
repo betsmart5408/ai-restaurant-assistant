@@ -52,6 +52,8 @@ interface ChatContext {
   existingOrders?: string;
   returningCustomer?: boolean;
   previousDishes?: string[];
+  /** Il messaggio viene da un nostro pulsante: 'racconta' (con dish_id) o 'allergie'. */
+  azione?: { tipo: string; dish_id?: string };
 }
 
 // ── Cache contesto ristorante (5 min) ─────────────────────────────────────────
@@ -366,6 +368,7 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
     const diretta = await rispostaDiretta({
       restaurantId, dishes, language, currency: ctx.currency,
       messaggio: userMessage,
+      azione: ctx.azione,
       // L'ultima cosa detta dall'assistente: e' li' che sta il piatto a cui
       // si riferisce "e da bere che ci sta?".
       ultimaRisposta: [...conversationHistory].reverse()
