@@ -6,7 +6,7 @@ import { costruisciMenuPerPrompt, avvisoMenuParziale } from './menu-contesto';
 import { registraIntento } from './conta-intenti';
 import { catenaFornitori, clientePer } from './fornitori-ia';
 import { registraConsumo, superatoLimite, messaggioLimite } from './consumi-ia';
-import { riconosciConsiglio, firmaMenu, leggiConsiglio, salvaConsiglio } from './consigli-pronti';
+import { riconosciConsiglio, chiaveMemoria, firmaMenu, leggiConsiglio, salvaConsiglio } from './consigli-pronti';
 import { normalizza } from './risposte-dirette';
 
 // `saved_preferences` e `previous_dishes` arrivano dal body pubblico di
@@ -366,7 +366,9 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
   // "vegetariano", "per bambini"): se un altro cliente l'ha gia' chiesto
   // in questa lingua, la risposta e' pronta e non costa niente.
   const tipoConsiglio = riconosciConsiglio(userMessage, dishes.map((d: { name: string }) => normalizza(d.name)));
-  const firma = tipoConsiglio ? firmaMenu(dishes) : '';
+  // Qualsiasi altra domanda che vale uguale per chiunque: si ricorda la risposta
+  const memoria = tipoConsiglio ? null : chiaveMemoria(userMessage);
+  const firma = tipoConsiglio || memoria ? firmaMenu(dishes) : '';
   if (tipoConsiglio) {
     const pronto = await leggiConsiglio(restaurantId, language, tipoConsiglio, firma);
     if (pronto) {
@@ -399,6 +401,16 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
     console.error('risposta diretta non riuscita, passo al modello:', err);
   }
 
+  // Domanda gia' fatta da un altro cliente (stessa lingua, stesso menu, ultime
+  // 24 ore): la risposta e' pronta. Viene prima del limite: non costa niente.
+  if (memoria) {
+    const ricordata = await leggiConsiglio(restaurantId, language, memoria, firma);
+    if (ricordata) {
+      registraIntento(restaurantId, 'memoria', language);
+      return { message: ricordata.testo, suggestions: ricordata.suggerimenti };
+    }
+  }
+
   // Limite giornaliero di domande all'IA per questo ristorante: oltre, si
   // resta sulle risposte pronte (qui sopra) e per il resto si rimanda al
   // personale. Il giorno dopo si riparte.
@@ -424,7 +436,7 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
 
   // Un consiglio che verra' riusato per tutti si scrive senza niente di
   // personale: niente gruppo, preferenze, ordini o storico del cliente.
-  const perTutti = !!tipoConsiglio;
+  const perTutti = !!tipoConsiglio || !!memoria;
   const systemPrompt = buildSystemPrompt(
     restaurantName, dishes, expiring, highStock, topMargin, popular,
     language, tableNumber, weather,
@@ -521,6 +533,7 @@ REGOLE FINALI, PIU' IMPORTANTI DI TUTTE:
 
   // Primo cliente che fa questa domanda: la risposta diventa quella pronta
   if (tipoConsiglio) salvaConsiglio(restaurantId, language, tipoConsiglio, firma, visibleMessage, suggestions);
+  else if (memoria) salvaConsiglio(restaurantId, language, memoria, firma, visibleMessage, suggestions);
 
   return { message: visibleMessage, suggestions };
 }

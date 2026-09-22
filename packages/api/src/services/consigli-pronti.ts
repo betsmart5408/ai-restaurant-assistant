@@ -88,6 +88,38 @@ export function riconosciConsiglio(messaggio: string, nomiPiatti: string[]): Tip
   return null;
 }
 
+// ── Memoria delle risposte ──────────────────────────────────────────────────
+// Qualsiasi altra domanda che vale uguale per chiunque ("avete il wifi?",
+// "la carbonara e' piccante?") si ricorda con la sua risposta, nella stessa
+// tabella dei consigli, con chiave "q:<domanda normalizzata>".
+export type ChiaveMemoria = `q:${string}`;
+
+// Parole che rimandano a qualcosa detto prima: senza la conversazione la
+// risposta sarebbe sbagliata, quindi niente memoria.
+const RIMANDI = new Set([
+  'questo', 'questa', 'questi', 'queste', 'quello', 'quella', 'quelli', 'quelle', 'esso', 'altro', 'altra', 'invece', 'stesso', 'stessa',
+  'this', 'that', 'it', 'these', 'those', 'them', 'one', 'another', 'instead', 'same', 'else',
+  'este', 'esta', 'esto', 'ese', 'esa', 'eso', 'otro', 'otra',
+  'ce', 'cet', 'cette', 'ca', 'cela', 'autre',
+  'das', 'dies', 'diese', 'dieser', 'dieses', 'es', 'andere', 'anderes',
+  'isto', 'isso', 'outro', 'outra',
+]);
+
+/** La chiave con cui ricordare questa domanda, o null se non si puo' riusare. */
+export function chiaveMemoria(messaggio: string): ChiaveMemoria | null {
+  const msg = normalizza(messaggio);
+  if (!msg) return null;
+  const parole = msg.split(' ');
+  // Le lingue senza spazi (cinese, giapponese) si contano a caratteri
+  const corta = parole.length === 1 ? msg.length < 4 : parole.length < 3;
+  if (corta || parole.length > 12 || msg.length > 90) return null;
+  if (parole.some(p => RIMANDI.has(p))) return null;
+  if (/\d/.test(msg)) return null;                              // persone, eta', quantita'
+  if (PAROLE_ALLERGENI.some(p => msg.includes(p))) return null;  // allergie: sempre l'IA con il contesto
+  if (parole.some(p => PAROLE_ALLERGENI_INTERE.includes(p))) return null;
+  return `q:${msg}`;
+}
+
 /** Firma del menu: se cambia un piatto o un prezzo, i consigli si riscrivono. */
 export function firmaMenu(piatti: Array<{ id: string; name: string; price: number | string }>): string {
   const base = piatti.map(p => `${p.id}:${p.name}:${p.price}`).sort().join('|');
@@ -95,7 +127,7 @@ export function firmaMenu(piatti: Array<{ id: string; name: string; price: numbe
 }
 
 export async function leggiConsiglio(
-  restaurantId: string, lang: string, tipo: TipoConsiglio, firma: string,
+  restaurantId: string, lang: string, tipo: TipoConsiglio | ChiaveMemoria, firma: string,
 ): Promise<{ testo: string; suggerimenti: string[] } | null> {
   try {
     const r = await db.query(
@@ -116,7 +148,7 @@ export async function leggiConsiglio(
 }
 
 export function salvaConsiglio(
-  restaurantId: string, lang: string, tipo: TipoConsiglio, firma: string, testo: string, suggerimenti: string[],
+  restaurantId: string, lang: string, tipo: TipoConsiglio | ChiaveMemoria, firma: string, testo: string, suggerimenti: string[],
 ): void {
   if (!testo.trim()) return;
   void db.query(
