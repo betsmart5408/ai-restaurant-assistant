@@ -458,6 +458,30 @@ export const SCRITTURA_SENZA_SPAZI = /[぀-ヿ一-鿿가-힯]/;
 /** Quanti piatti al massimo in un elenco: il cliente legge dal telefono. */
 const MAX_PIATTI_ELENCATI = 10;
 
+/**
+ * Proporre piatti leggendo il TESTO del menu quando gli allergeni non sono
+ * registrati. SPENTO, e va riacceso solo dopo aver risolto quello che la
+ * prova sui menu veri di Sydney ha tirato fuori:
+ *
+ *  1. le carte dei vini vere non vengono riconosciute come bevande. China
+ *     Doll ha le categorie "BIG & BOLD WHITES", "ROSE", "SAKE BY THE GLASS":
+ *     a un'allergica al sesamo sono stati consigliati un Riesling e un sidro.
+ *  2. manca la misura di quanto l'allergene sia diffuso in QUELLA cucina.
+ *     Da Masala Theory i latticini sono in 26 piatti su 60: dire "questi 8
+ *     non li nominano" e' fuorviante, perche' il ghee nei curry non si
+ *     scrive. Sopra una certa soglia non si deve proporre niente.
+ *  3. servono parole di rischio per le cucine asiatiche e indiane (curry,
+ *     tom yum, larb, masala, satay...), dove l'allergene sta nella cucina
+ *     prima che nel piatto.
+ *
+ * Finche' e' spento resta tutto il resto, che e' sicuro: l'avviso quando il
+ * testo nomina l'allergene, e per il resto "non lo so, chiedi al cameriere".
+ * Riaccenderlo richiede di riprovare su almeno cinque menu di cucine diverse:
+ * questa funzione e' stata sviluppata su un menu solo, ed e' bastato questo
+ * per non accorgersi di niente.
+ */
+const CONSIGLIA_DA_TESTO = false;
+
 function troppoLunga(msg: string): boolean {
   if (msg.length > 70) return true;
   const parole = msg.trim().split(/\s+/).length;
@@ -1119,7 +1143,9 @@ export async function rispostaDiretta(p: {
       //     descrizione. Si consiglia solo cio' che il menu permette davvero
       //     di leggere, e la frase dice chiaro che non e' una garanzia e che
       //     la conferma la da' la cucina.
-      const scelta = piattiSenzaAllergeni(piatti, citati);
+      const scelta = CONSIGLIA_DA_TESTO
+        ? piattiSenzaAllergeni(piatti, citati)
+        : { consigliati: [] as typeof piatti, scartati: 0, nonLeggibili: 0 };
       if (scelta.consigliati.length > 0) {
         const nomi = scelta.consigliati.map(d => `• **${d.nomeMostrato}**`).join('\n');
         return {
@@ -1128,7 +1154,12 @@ export async function rispostaDiretta(p: {
           intento: 'allergeni',
         };
       }
-      return { message: t.nessunoSenza(comeSiChiamano), suggestions: t.suggerimenti, intento: 'allergeni' };
+      // Senza un elenco da proporre si dice la verita': non lo sappiamo.
+      return {
+        message: CONSIGLIA_DA_TESTO ? t.nessunoSenza(comeSiChiamano) : t.allergeniNonSappiamo,
+        suggestions: t.suggerimenti,
+        intento: 'allergeni',
+      };
     }
     return { message: t.allergeniQualePiatto, suggestions: t.suggerimenti, intento: 'allergeni' };
   }

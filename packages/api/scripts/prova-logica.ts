@@ -249,14 +249,21 @@ async function main() {
     restaurantId: 'r2', dishes: MENU_NUDO,
     language: 'it', currency: 'EUR', messaggio: "Ho un'allergia al glutine",
   });
-  ok(!!nudo && nudo.message.includes('**'), 'senza allergeni registrati -> consiglia dal testo', nudo?.message?.slice(0, 80));
-  ok(!!nudo && /non .* una garanzia/i.test(nudo.message), 'la risposta dice che non e\' una garanzia', nudo?.message);
+  // CONSIGLIA_DA_TESTO e' spento: finche' lo e', qui NON si propongono piatti.
+  // La prova sui menu veri di Sydney ha mostrato perche' (vini consigliati
+  // come cibo, latticini nel 43% di un menu indiano). Vedi il commento sulla
+  // costante in risposte-dirette.ts.
+  ok(!!nudo && !nudo.message.includes('**'), 'a funzione spenta non propone piatti', nudo?.message?.slice(0, 90));
   ok(!!nudo && /cameriere/i.test(nudo.message) && /cucina/i.test(nudo.message), 'rimanda sempre al cameriere e alla cucina', nudo?.message);
   ok(!!nudo && !/senza glutine|gluten free/i.test(nudo.message), 'non dice MAI "senza glutine"', nudo?.message);
+
+  // Il motore resta provato, cosi' quando si riaccende si sa gia' che regge.
+  const sceltaGlutine = piattiSenzaAllergeni(MENU_NUDO, ['glutine']);
   for (const d of MENU.filter(x => x.allergens.includes('glutine'))) {
-    ok(!nudo!.message.includes(d.name), `glutine dal testo: "${d.name}" non consigliato`, nudo?.message);
+    ok(!sceltaGlutine.consigliati.some(c => c.name === d.name), `motore: "${d.name}" non finirebbe fra i consigli`);
   }
-  ok(!nudo!.message.includes('Acqua naturale'), 'niente bevande fra i consigli', nudo?.message);
+  ok(!sceltaGlutine.consigliati.some(c => c.name === 'Acqua naturale'), 'motore: niente bevande fra i consigli');
+  ok(sceltaGlutine.consigliati.length > 0, 'motore: qualcosa da proporre lo trova');
 
   sezione('12. Il testo del piatto tradisce l\'allergene');
   const spie: Array<[string, string, string, string]> = [
