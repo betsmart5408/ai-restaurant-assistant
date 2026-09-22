@@ -18,7 +18,8 @@
     "carica-demo": "tsx src/db/carica-demo.ts",
     "intenti": "tsx src/db/intenti.ts",
     "genera-risposte": "tsx src/db/genera-risposte.ts",
-    "prova-logica": "tsx scripts/prova-logica.ts"
+    "prova-logica": "tsx scripts/prova-logica.ts",
+    "prova-allergeni": "tsx scripts/prova-allergeni-menu.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

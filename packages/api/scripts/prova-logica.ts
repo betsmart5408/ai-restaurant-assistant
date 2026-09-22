@@ -249,21 +249,73 @@ async function main() {
     restaurantId: 'r2', dishes: MENU_NUDO,
     language: 'it', currency: 'EUR', messaggio: "Ho un'allergia al glutine",
   });
-  // CONSIGLIA_DA_TESTO e' spento: finche' lo e', qui NON si propongono piatti.
-  // La prova sui menu veri di Sydney ha mostrato perche' (vini consigliati
-  // come cibo, latticini nel 43% di un menu indiano). Vedi il commento sulla
-  // costante in risposte-dirette.ts.
-  ok(!!nudo && !nudo.message.includes('**'), 'a funzione spenta non propone piatti', nudo?.message?.slice(0, 90));
   ok(!!nudo && /cameriere/i.test(nudo.message) && /cucina/i.test(nudo.message), 'rimanda sempre al cameriere e alla cucina', nudo?.message);
   ok(!!nudo && !/senza glutine|gluten free/i.test(nudo.message), 'non dice MAI "senza glutine"', nudo?.message);
 
-  // Il motore resta provato, cosi' quando si riaccende si sa gia' che regge.
   const sceltaGlutine = piattiSenzaAllergeni(MENU_NUDO, ['glutine']);
   for (const d of MENU.filter(x => x.allergens.includes('glutine'))) {
-    ok(!sceltaGlutine.consigliati.some(c => c.name === d.name), `motore: "${d.name}" non finirebbe fra i consigli`);
+    ok(!sceltaGlutine.consigliati.some(c => c.name === d.name), `"${d.name}" non finisce fra i consigli`);
   }
-  ok(!sceltaGlutine.consigliati.some(c => c.name === 'Acqua naturale'), 'motore: niente bevande fra i consigli');
-  ok(sceltaGlutine.consigliati.length > 0, 'motore: qualcosa da proporre lo trova');
+  ok(!sceltaGlutine.consigliati.some(c => c.name === 'Acqua naturale'), 'niente bevande fra i consigli');
+
+  sezione('11b. Una carta dei vini non e\' cibo');
+  // Categorie vere di China Doll: nessuna contiene la parola "wine"
+  const CARTA_VINI = [
+    { name: '24 Mezzo Pinot Grigio', description: 'Fresh and citrusy from the Adelaide Hills', category: 'BIG & BOLD WHITES' },
+    { name: 'NV AMANOTO Junmai Ginjo', description: 'Delicate sake with floral aromas and a clean finish', category: 'SAKE BY THE GLASS / BOTTLE' },
+    { name: "WILLIE SMITH'S Apple Cider", description: 'Organic cider pressed from Tasmanian apples', category: 'CIDER' },
+    { name: '25 Supernatural', description: 'Skin contact white with apricot and spice notes', category: 'ORANGE/SKIN CONTACT' },
+    { name: 'Vickery Riesling', description: 'Lime and mineral notes from Polish Hill River', category: 'ROSE' },
+    { name: 'Insalata di stagione', description: 'Verdure fresche di stagione con olio extravergine', category: 'contorni' },
+  ];
+  {
+    const r = piattiSenzaAllergeni(CARTA_VINI, ['sesamo']);
+    ok(r.consigliati.length === 1 && r.consigliati[0].name === 'Insalata di stagione',
+      'dalla carta dei vini si salva solo il cibo', JSON.stringify(r.consigliati.map(x => x.name)));
+  }
+
+  sezione('11c. La cucina conta piu\' del singolo piatto');
+  const MENU_THAI = [
+    { name: 'Tom Yum Gai', description: 'Hot and sour soup with chicken, lemongrass and kaffir lime leaves', category: 'soups' },
+    { name: 'Som Tum', description: 'Green papaya salad with lime juice, chilli and long beans', category: 'salads' },
+    { name: 'Pad See Ew', description: 'Stir-fried noodles with Chinese broccoli and egg', category: 'noodles' },
+    { name: 'Nam Tok', description: 'Grilled beef salad with mint, chilli powder and lime dressing', category: 'salads' },
+    { name: 'Po Taek', description: 'Clear spicy soup with mixed seafood and Thai herbs', category: 'soups' },
+    { name: 'Massaman Curry', description: 'Slow cooked curry with potato and onion', category: 'curries' },
+    { name: 'Chicken Wing', description: 'Deep fried chicken wings served with sweet chilli sauce', category: 'entrees' },
+    { name: 'Sai Krok Isaan', description: 'Northeastern fermented pork sausage with fresh ginger', category: 'entrees' },
+    { name: 'Larb Gai', description: 'Minced chicken salad with toasted rice and mint', category: 'salads' },
+    { name: 'Green Curry', description: 'Coconut curry with bamboo shoots and Thai basil', category: 'curries' },
+  ];
+  for (const a of ['arachidi', 'frutta a guscio', 'sesamo', 'glutine', 'crostacei']) {
+    ok(piattiSenzaAllergeni(MENU_THAI, [a]).pervasivo,
+      `cucina thai + ${a} -> non propone niente, manda al personale`);
+  }
+  const MENU_INDIANO = [
+    { name: 'Butter Chicken', description: 'Chicken in a rich tomato gravy finished with cream', category: 'mains' },
+    { name: 'Chicken Tikka', description: 'Char grilled chicken marinated in yoghurt and spices', category: 'tandoor' },
+    { name: 'Lamb Rogan Josh', description: 'Slow cooked lamb curry with Kashmiri chilli', category: 'mains' },
+    { name: 'Garlic Naan', description: 'Tandoor baked flatbread brushed with garlic butter', category: 'breads' },
+    { name: 'Saag Paneer', description: 'Spinach cooked with Indian cottage cheese', category: 'mains' },
+    { name: 'Vegetable Biryani', description: 'Basmati rice layered with seasonal vegetables', category: 'rice' },
+    { name: 'Samosa', description: 'Crisp pastry parcels filled with spiced potato and peas', category: 'entrees' },
+    { name: 'Dal Tadka', description: 'Yellow lentils tempered with cumin and curry leaves', category: 'mains' },
+    { name: 'Aloo Tikki', description: 'Potato patties with chaat masala and tamarind', category: 'entrees' },
+    { name: 'Mango Lassi', description: 'Sweet yoghurt drink blended with mango pulp', category: 'drinks' },
+  ];
+  for (const a of ['frutta a guscio', 'latte', 'sesamo']) {
+    ok(piattiSenzaAllergeni(MENU_INDIANO, [a]).pervasivo, `cucina indiana + ${a} -> non propone niente`);
+  }
+  // Su un menu italiano, invece, le arachidi non sono di casa: li' si propone
+  ok(!piattiSenzaAllergeni(MENU_NUDO, ['arachidi']).pervasivo, 'cucina italiana + arachidi -> propone');
+
+  sezione('11d. Quando l\'allergene e\' in mezzo menu non si sceglie');
+  {
+    const meta = Array.from({ length: 20 }, (_, i) => i < 9
+      ? { name: `Pasta ${i}`, description: 'Pasta fresca fatta in casa con pomodoro e basilico', category: 'primi' }
+      : { name: `Secondo ${i}`, description: 'Carne alla griglia con contorno di verdure di stagione', category: 'secondi' });
+    ok(piattiSenzaAllergeni(meta, ['glutine']).pervasivo, 'glutine in 9 piatti su 20 -> non propone niente');
+  }
 
   sezione('12. Il testo del piatto tradisce l\'allergene');
   const spie: Array<[string, string, string, string]> = [

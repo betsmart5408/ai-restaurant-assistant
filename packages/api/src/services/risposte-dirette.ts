@@ -232,6 +232,7 @@ const INGREDIENTI_ALLERGENE: Record<string, string[]> = {
     'noodle', 'udon', 'ramen', 'soba', 'gyoza', 'wonton', 'dumpling', 'spring roll', 'tempura', 'panko',
     'katsu', 'bao', 'naan', 'roti', 'paratha', 'chapati', 'samosa', 'pakora', 'filo', 'baklava', 'borek',
     'soy sauce', 'salsa de soja', 'teriyaki', 'hoisin', 'beer', 'birra', 'cerveza', 'barley', 'orzo perlato',
+    'kibbeh', 'kibbe', 'bulgur', 'burghul', 'freekeh', 'tabbouleh', 'tabouli', 'fattoush', 'manakish',
     // Nomi che SONO un piatto di pasta anche quando la descrizione non la
     // nomina: la "Carbonara" del menu e' "guanciale, uovo, pecorino", e senza
     // queste voci finiva fra i consigli per un celiaco.
@@ -300,6 +301,23 @@ const INGREDIENTI_ALLERGENE: Record<string, string[]> = {
   ],
 };
 
+// Due cucine intere in cui l'allergene sta nel wok o nel sugo prima che nel
+// piatto, e quindi non e' scritto da nessuna parte: gli anacardi nelle gravy
+// indiane, il sesamo e le arachidi in quelle del sud-est asiatico. Su questi
+// piatti non ci si sbilancia mai.
+const CUCINA_ASIATICA = [
+  'asian', 'chinese', 'japanese', 'korean', 'thai', 'vietnamese', 'malaysian', 'indonesian',
+  'wok', 'stir fry', 'stir-fried', 'noodle', 'dumpling', 'dim sim', 'dim sum', 'bao', 'gyoza',
+  'sushi', 'ramen', 'udon', 'pad ', 'tom yum', 'tom kha', 'laksa', 'nasi', 'mee ', 'satay',
+  'dipping', 'spring roll', 'fried rice', 'teriyaki', 'katsu', 'tempura', 'pho ', 'som tum',
+  'rendang', 'gado', 'curry', 'sambal', 'yum ', 'larb', 'laab',
+];
+const CUCINA_INDIANA = [
+  'curry', 'masala', 'tikka', 'korma', 'makhani', 'bhuna', 'biryani', 'tandoor', 'naan',
+  'dal', 'daal', 'chaat', 'samosa', 'pakora', 'saag', 'palak', 'gravy', 'seekh', 'kebab',
+  'paratha', 'kulcha', 'raita', 'chutney', 'bombay', 'punjabi', 'madras', 'vindaloo',
+];
+
 // Parole che NON nominano l'allergene ma rendono il piatto ingiudicabile dal
 // testo: una frittura divide l'olio con le panature, un misto di mare cambia
 // ogni giorno, una salsa "della casa" non si sa cosa contenga. Su questi non
@@ -312,32 +330,139 @@ const RISCHIO_ALLERGENE: Record<string, string[]> = {
     'marinata', 'thickened', 'stir fry', 'stir-fried', 'dusted',
   ],
   crostacei: [
-    'seafood', 'frutti di mare', 'mariscos', 'misto di mare', 'paella', 'laksa', 'tom yum',
+    'fritt', 'fried', 'fries', 'deep fried', 'frittura', 'seafood', 'frutti di mare', 'mariscos', 'misto di mare', 'paella', 'laksa', 'tom yum',
     'bouillabaisse', 'zuppa di pesce', 'sopa de marisco', 'mixed grill', 'fried rice', 'stir fry',
     'stir-fried', 'nasi goreng', 'pad thai', 'curry',
+    'thai', 'asian', 'wok', 'som tum', 'dipping', 'nam jim', 'tom kha', 'mee ', 'satay',
+    ...CUCINA_ASIATICA,
   ],
-  molluschi: ['seafood', 'frutti di mare', 'mariscos', 'paella', 'misto di mare', 'fried rice', 'stir fry'],
-  pesce: ['caesar', 'worcestershire', 'curry', 'stir fry', 'stir-fried', 'nasi goreng', 'pad thai', 'kimchi'],
-  latte: ['fritt', 'fried', 'gratin', 'gratinat', 'creamy', 'cremoso', 'mashed', 'pure di patate', 'sauteed', 'saltato'],
-  lattosio: ['fritt', 'fried', 'gratin', 'gratinat', 'creamy', 'cremoso', 'mashed', 'sauteed'],
+  molluschi: ['fritt', 'fried', 'fries', 'deep fried', 'seafood', 'frutti di mare', 'mariscos', 'paella', 'misto di mare', 'fried rice', 'stir fry'],
+  pesce: ['fritt', 'fried', 'fries', 'deep fried', 'caesar', 'worcestershire', 'curry', 'stir fry', 'stir-fried', 'nasi goreng', 'pad thai', 'kimchi',
+    'thai', 'asian', 'wok', 'som tum', 'dipping', 'nam jim', 'tom yum', 'tom kha', 'laksa', 'mee ', 'satay',
+    ...CUCINA_ASIATICA,
+  ],
+  // Il ghee e la panna nei curry indiani non li scrive nessuno: sotto
+  // latte, su un curry non ci si sbilancia.
+  latte: ['fritt', 'fried', 'gratin', 'gratinat', 'creamy', 'cremoso', 'mashed', 'sauteed', 'saltato',
+    'curry', 'masala', 'korma', 'tikka', 'makhani', 'bhuna', 'biryani', 'naan', 'kulcha', 'paratha',
+    'saag', 'palak', 'gravy', 'tandoor', 'mezze', 'dessert', 'dolce', 'postre'],
+  // Il ghee e la panna nei curry indiani non li scrive nessuno: sotto
+  // lattosio, su un curry non ci si sbilancia.
+  lattosio: ['fritt', 'fried', 'gratin', 'gratinat', 'creamy', 'cremoso', 'mashed', 'sauteed', 'saltato',
+    'curry', 'masala', 'korma', 'tikka', 'makhani', 'bhuna', 'biryani', 'naan', 'kulcha', 'paratha',
+    'saag', 'palak', 'gravy', 'tandoor', 'mezze', 'dessert', 'dolce', 'postre'],
   uova: ['fritt', 'fried', 'batter', 'pasta fresca', 'fresh pasta', 'house made pasta', 'dressing', 'glazed'],
-  soia: ['stir fry', 'stir-fried', 'marinade', 'marinata', 'glaze', 'dressing', 'asian sauce', 'curry'],
-  sesamo: ['dressing', 'stir fry', 'stir-fried', 'asian sauce', 'crusted'],
+  soia: ['stir fry', 'stir-fried', 'marinade', 'marinata', 'glaze', 'dressing', 'asian sauce', 'curry',
+    'asian', 'chinese', 'japanese', 'korean', 'wok', 'noodle', 'dumpling', 'sushi', 'bao', 'ramen',
+    'katsu', 'dipping', 'fried rice',
+    ...CUCINA_ASIATICA,
+  ],
+  sesamo: ['burger', 'bun', 'brioche', 'dressing', 'stir fry', 'stir-fried', 'asian sauce', 'crusted', 'asian', 'chinese',
+    'japanese', 'korean', 'wok', 'noodle', 'dumpling', 'gyoza', 'sushi', 'bao', 'tempura', 'katsu',
+    'bibimbap', 'banchan', 'falafel', 'mezze', 'dipping',
+    ...CUCINA_ASIATICA, ...CUCINA_INDIANA, 'mezze', 'falafel', 'shawarma',
+  ],
   // I dolci sono il posto dove la frutta a guscio si nasconde di piu' senza
   // essere scritta: il "Pan di Stelle" e' "crema e cacao" sul menu e nocciole
   // nel barattolo. Sui dolci, a chi e' allergico alla frutta a guscio, non ci
   // si sbilancia.
   'frutta a guscio': ['dessert', 'postre', 'dolce', 'dolci', 'galleta', 'biscuit', 'biscotto', 'cake',
-    'torta', 'crema', 'gelato', 'semifreddo', 'granola', 'muesli', 'crusted', 'pesto', 'house dessert'],
-  arachidi: ['stir fry', 'stir-fried', 'curry', 'dressing', 'asian sauce'],
+    'torta', 'crema', 'gelato', 'semifreddo', 'granola', 'muesli', 'crusted', 'pesto', 'house dessert',
+    ...CUCINA_ASIATICA, ...CUCINA_INDIANA,
+  ],
+  // In una cucina thai o indonesiana l'arachide e' nel wok prima che nel
+  // piatto: Larb e Tom Yum non la scrivono e la incontrano lo stesso.
+  arachidi: ['stir fry', 'stir-fried', 'curry', 'dressing', 'asian sauce', 'thai', 'wok', 'pad ',
+    'tom yum', 'tom kha', 'larb', 'laab', 'som tum', 'rendang', 'gado', 'nasi', 'mee ', 'laksa',
+    'satay', 'dipping', 'spring roll', 'fried rice', 'noodle', 'massaman', 'panang',
+    ...CUCINA_ASIATICA, ...CUCINA_INDIANA,
+  ],
   sedano: ['brodo', 'broth', 'stock', 'zuppa', 'soup', 'sopa', 'ragu', 'bolognese', 'stew', 'casserole', 'gravy', 'soffritto'],
   senape: ['dressing', 'vinaigrette', 'salsa della casa', 'house sauce', 'glaze', 'marinade', 'pickle'],
   solfiti: ['dried', 'secchi', 'deshidratad', 'pickle', 'sott aceto', 'conserva'],
   lupini: [],
 };
 
-/** Bevande: a chi chiede cosa può mangiare non si consiglia l'acqua. */
-const CATEGORIA_BEVANDA = /vin|wine|wein|bevand|drink|beverage|cocktail|birr|beer|bier|cerveza|spirit|liquor|amaro|bebida|coffee|caffe|tea|juice|soda|water|acqua|agua|mocktail|aperitiv|digestiv|gin|vodka|whisk|rum|bar/i;
+// ── Bevande ─────────────────────────────────────────────────────────────────
+// A chi chiede cosa puo' mangiare non si consiglia l'acqua. Sembra ovvio, ma
+// una carta dei vini vera non dice mai "vino": da China Doll le categorie si
+// chiamano "BIG & BOLD WHITES", "LIGHT & FRESH REDS", "ROSE", "SPARKLING &
+// CHAMPAGNE", "SAKE BY THE GLASS". Nessuna conteneva la parola "wine", e a
+// un'allergica al sesamo sono stati consigliati un Riesling e un sidro.
+const CATEGORIA_BEVANDA = /vin|wine|wein|bevand|drink|beverage|cocktail|birr|beer|bier|cerveza|spirit|liquor|amaro|bebida|coffee|caffe|\btea\b|juice|soda|water|acqua|agua|mocktail|aperitiv|digestiv|gin|vodka|whisk|rum|bar|whites|reds|sparkling|champagne|prosecco|cider|sidro|sake|by the glass|bottle|cellar|vermouth|spritz|sangria|on tap|shots|smoothie|milkshake|infusion|tisan|chai/i;
+
+// Categorie che sono una bevanda solo quando sono TUTTA la categoria: "ROSE"
+// e' il rosato, ma "rose harissa" e' una salsa; "RED" e' il rosso, ma "red
+// curry" e' un piatto. Qui si confronta la categoria intera, non un pezzo.
+const CATEGORIA_BEVANDA_ESATTA = new Set([
+  'red', 'reds', 'white', 'whites', 'rose', 'rosado', 'rosato', 'bubbles', 'bollicine',
+  'sake', 'cider', 'beer', 'wine', 'wines', 'drinks', 'cocktails', 'aperitivi', 'digestivi',
+  'orange skin contact', 'no alcohol', 'soft', 'softs',
+]);
+
+// Un vino si riconosce anche dal nome: l'annata davanti ("24 Mezzo Pinot
+// Grigio") o "NV" per i non millesimati.
+const NOME_DI_VINO = /^(nv|mv|\d{2}|\d{4})\s/i;
+
+function eUnaBevanda(p: { name: string; category: string }): boolean {
+  const cat = (p.category || '').trim();
+  if (CATEGORIA_BEVANDA.test(cat)) return true;
+  if (CATEGORIA_BEVANDA_ESATTA.has(normalizza(cat))) return true;
+  return NOME_DI_VINO.test((p.name || '').trim());
+}
+
+/**
+ * Quanto quell'allergene e' diffuso in QUESTA cucina.
+ *
+ * Il conto per piatto non basta: da Masala Theory i latticini compaiono in 26
+ * piatti su 60, e il ghee nei curry non lo scrive nessuno. Dire "questi otto
+ * non lo nominano" in una cucina cosi' e' fuorviante. Sopra la soglia non si
+ * propone niente e si manda al personale, che e' la verita'.
+ */
+const SOGLIA_PERVASIVO = 0.2;
+
+// ── E quanto quell'allergene e' dentro QUEL MODO DI CUCINARE ────────────────
+//
+// Contare i piatti non basta. Provando sui menu veri, a chi e' allergico alle
+// arachidi venivano proposti "Nam Tok" e "Po Taek" da un thailandese, e a chi
+// e' allergico alla frutta a guscio "Butter Chicken" da un indiano: piatti
+// che l'allergene non lo scrivono e lo incrociano ogni giorno, perche' il
+// wok e la gravy sono gli stessi per tutto il menu.
+//
+// I nomi dei piatti etnici sono infiniti e non si possono elencare. Si
+// riconosce invece la CUCINA, dal menu stesso: se una fetta del menu porta i
+// segni di quel modo di cucinare, per gli allergeni che ci vivono dentro non
+// si propone niente e si manda al personale. E' la stessa cosa che direbbe
+// una persona ragionevole: in un thailandese, quali piatti sono senza
+// arachidi lo sa solo la cucina.
+const SEGNI_DI_CUCINA: Record<string, string[]> = {
+  asiatica: CUCINA_ASIATICA,
+  indiana: CUCINA_INDIANA,
+  mediorientale: ['hummus', 'houmous', 'falafel', 'shawarma', 'kebab', 'tabbouleh', 'tabouli', 'baba ganoush',
+    'mezze', 'halloumi', 'labneh', 'kibbeh', 'fattoush', 'manakish', 'za atar', 'zaatar', 'shish', 'pita',
+    'baklava', 'tahini', 'tahina', 'sumac', 'harissa'],
+};
+const ALLERGENI_NELLA_CUCINA: Record<string, string[]> = {
+  // Il glutine c'e' perche' la salsa di soia e' fatta col grano: in un wok
+  // ci finisce quasi tutto, e un celiaco non lo legge da nessuna parte.
+  asiatica: ['arachidi', 'frutta a guscio', 'sesamo', 'soia', 'pesce', 'crostacei', 'molluschi', 'glutine'],
+  indiana: ['frutta a guscio', 'latte', 'lattosio', 'sesamo', 'senape', 'arachidi'],
+  // Bulgur, pita e kibbeh: il grano e' dappertutto, il sesamo pure (tahini).
+  mediorientale: ['sesamo', 'frutta a guscio', 'latte', 'lattosio', 'glutine'],
+};
+const SOGLIA_CUCINA = 0.15;
+
+/** La cucina di questo menu, riconosciuta dal menu stesso. */
+function cucineDelMenu(piatti: Array<{ name: string; description?: string | null }>): string[] {
+  if (piatti.length < 8) return [];
+  const testi = piatti.map(p => normalizza(`${p.name} ${p.description || ''}`));
+  return Object.entries(SEGNI_DI_CUCINA)
+    .filter(([, segni]) => {
+      const quanti = testi.filter(t => segni.some(w => t.includes(normalizza(w)))).length;
+      return quanti / testi.length > SOGLIA_CUCINA;
+    })
+    .map(([nome]) => nome);
+}
 
 // Pesce, crostacei e molluschi escono dalla stessa cucina e spesso dallo
 // stesso piatto. Un "Risotto Profumo di Mare" che nomina vongole e calamari
@@ -367,8 +492,14 @@ export function nominaAllergene(testoPiatto: string, allergene: string): boolean
 
 /** Il testo non lo nomina, ma nemmeno permette di escluderlo (fritture, misti, salse della casa). */
 export function nonGiudicabilePer(testoPiatto: string, allergene: string): boolean {
-  const t = normalizza(testoPiatto);
-  if ((RISCHIO_ALLERGENE[allergene] ?? []).some(w => t.includes(normalizza(w)))) return true;
+  const t = ' ' + normalizza(testoPiatto) + ' ';
+  // Le parole corte come parola intera: "dal" (lenticchie) dentro "dalla"
+  // farebbe scartare mezzo menu italiano.
+  const dentro = (w: string) => {
+    const n = normalizza(w);
+    return n.length <= 4 ? t.includes(' ' + n + ' ') : t.includes(n);
+  };
+  if ((RISCHIO_ALLERGENE[allergene] ?? []).some(dentro)) return true;
   // Un piatto di mare non si consiglia a nessun allergico al mare.
   return (PARENTI_DI_MARE[allergene] ?? []).some(p => nominaAllergene(testoPiatto, p));
 }
@@ -388,11 +519,29 @@ export function nonGiudicabilePer(testoPiatto: string, allergene: string): boole
  */
 export function piattiSenzaAllergeni<T extends { name: string; description?: string | null; category: string }>(
   piatti: T[], allergeni: string[], quanti = 8,
-): { consigliati: T[]; scartati: number; nonLeggibili: number } {
+): { consigliati: T[]; scartati: number; nonLeggibili: number; pervasivo: boolean } {
+  const cibo = piatti.filter(p => !eUnaBevanda(p));
+
+  // Prima ancora: che cucina e' questa? Se l'allergene e' di casa in quel modo
+  // di cucinare, non si propone niente, qualunque cosa dicano i singoli piatti.
+  const cucine = cucineDelMenu(cibo);
+  if (cucine.some(c => allergeni.some(a => (ALLERGENI_NELLA_CUCINA[c] ?? []).includes(a)))) {
+    return { consigliati: [], scartati: 0, nonLeggibili: 0, pervasivo: true };
+  }
+
+  // Poi: quanto e' diffuso l'allergene in questa cucina. Se lo
+  // nomina piu' di un piatto su cinque, vuol dire che in quella cucina lo si
+  // usa tutti i giorni, e i piatti che non lo nominano lo incrociano lo
+  // stesso. Li' non si propone niente.
+  const leggibili = cibo.filter(p => (p.description || '').trim().length >= 15);
+  const quantiLoNominano = leggibili.filter(p =>
+    allergeni.some(a => nominaAllergene(`${p.name} ${p.description || ''}`, a))).length;
+  const pervasivo = leggibili.length >= 10 && quantiLoNominano / leggibili.length > SOGLIA_PERVASIVO;
+  if (pervasivo) return { consigliati: [], scartati: quantiLoNominano, nonLeggibili: 0, pervasivo: true };
+
   let scartati = 0, nonLeggibili = 0;
   const buoni: T[] = [];
-  for (const p of piatti) {
-    if (CATEGORIA_BEVANDA.test(p.category || '')) continue;
+  for (const p of cibo) {
     const descrizione = (p.description || '').trim();
     if (descrizione.length < 15) { nonLeggibili++; continue; }
     const testo = `${p.name} ${descrizione}`;
@@ -418,7 +567,7 @@ export function piattiSenzaAllergeni<T extends { name: string; description?: str
     if (!aggiunto) break;
     giro++;
   }
-  return { consigliati, scartati, nonLeggibili };
+  return { consigliati, scartati, nonLeggibili, pervasivo: false };
 }
 
 /**
@@ -460,27 +609,24 @@ const MAX_PIATTI_ELENCATI = 10;
 
 /**
  * Proporre piatti leggendo il TESTO del menu quando gli allergeni non sono
- * registrati. SPENTO, e va riacceso solo dopo aver risolto quello che la
- * prova sui menu veri di Sydney ha tirato fuori:
+ * registrati. Acceso, ma solo dopo che la prova su dieci menu veri di cucine
+ * diverse ha smesso di produrre consigli sbagliati. Cosa era uscito:
  *
- *  1. le carte dei vini vere non vengono riconosciute come bevande. China
- *     Doll ha le categorie "BIG & BOLD WHITES", "ROSE", "SAKE BY THE GLASS":
- *     a un'allergica al sesamo sono stati consigliati un Riesling e un sidro.
- *  2. manca la misura di quanto l'allergene sia diffuso in QUELLA cucina.
- *     Da Masala Theory i latticini sono in 26 piatti su 60: dire "questi 8
- *     non li nominano" e' fuorviante, perche' il ghee nei curry non si
- *     scrive. Sopra una certa soglia non si deve proporre niente.
- *  3. servono parole di rischio per le cucine asiatiche e indiane (curry,
- *     tom yum, larb, masala, satay...), dove l'allergene sta nella cucina
- *     prima che nel piatto.
+ *  1. le carte dei vini non venivano riconosciute come bevande (a China Doll
+ *     le categorie si chiamano "BIG & BOLD WHITES" e "SAKE BY THE GLASS"): a
+ *     un'allergica al sesamo sono stati consigliati un Riesling e un sidro;
+ *  2. mancava la misura di quanto l'allergene fosse diffuso in QUEL menu (da
+ *     Masala Theory i latticini sono in 26 piatti su 60);
+ *  3. e soprattutto mancava la cucina: i nomi dei piatti etnici sono infiniti
+ *     e non si possono elencare, ma il wok e la gravy sono gli stessi per
+ *     tutto il menu. In un thailandese quali piatti non hanno arachidi lo sa
+ *     solo la cucina, e adesso e' quello che l'assistente risponde.
  *
- * Finche' e' spento resta tutto il resto, che e' sicuro: l'avviso quando il
- * testo nomina l'allergene, e per il resto "non lo so, chiedi al cameriere".
- * Riaccenderlo richiede di riprovare su almeno cinque menu di cucine diverse:
- * questa funzione e' stata sviluppata su un menu solo, ed e' bastato questo
- * per non accorgersi di niente.
+ * Chi la tocca la riprovi su piu' menu di cucine diverse: questa funzione era
+ * stata scritta su un menu solo, ed e' bastato quello per non vedere niente.
+ * Lo script della prova vive in prova-logica.ts (sezioni 11-14).
  */
-const CONSIGLIA_DA_TESTO = false;
+const CONSIGLIA_DA_TESTO = true;
 
 function troppoLunga(msg: string): boolean {
   if (msg.length > 70) return true;
