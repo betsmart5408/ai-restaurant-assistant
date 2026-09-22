@@ -130,7 +130,7 @@ export function chiaveMemoria(messaggio: string, nomiPiatti: string[] = []): Chi
 
 // Si alza quando cambiano le regole dell'assistente: tutte le risposte
 // memorizzate con le regole vecchie smettono di valere, subito.
-const VERSIONE_REGOLE = 4;   // 4: consigli con richiesta precisa, niente pulsanti inventati
+const VERSIONE_REGOLE = 5;   // 4: consigli con richiesta precisa, niente pulsanti inventati
 
 /** Firma del menu: se cambia un piatto o un prezzo, i consigli si riscrivono. */
 export function firmaMenu(piatti: Array<{ id: string; name: string; price: number | string }>): string {

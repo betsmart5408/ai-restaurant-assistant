@@ -9,6 +9,24 @@ import { registraConsumo, superatoLimite, messaggioLimite } from './consumi-ia';
 import { riconosciConsiglio, chiaveMemoria, firmaMenu, leggiConsiglio, salvaConsiglio } from './consigli-pronti';
 import { normalizza, suggerimentiPredefiniti } from './risposte-dirette';
 
+// Nell'app il **grassetto** diventa un link alla scheda del piatto. L'IA a
+// volte mette in grassetto titoli ("Antipasto") o prezzi: link che non
+// portano da nessuna parte. Le istruzioni non bastano, quindi si pulisce qui:
+// resta in grassetto solo cio' che somiglia a un nome del menu.
+function soloVociDelMenuInGrassetto(testo: string, nomi: string[]): string {
+  const menu = nomi.map(n => normalizza(n)).filter(n => n.length >= 3);
+  return testo.replace(/\*\*([^*\n]{1,80})\*\*/g, (tutto, dentro: string) => {
+    const n = normalizza(dentro);
+    if (!n || /^[\d\s.,€$£%≈~-]+$/.test(dentro.trim())) return dentro;   // prezzi e numeri
+    const trovato = menu.some(m => n === m || (m.length >= 4 && (n.includes(m) || m.includes(n))))
+      || (() => {
+        const parole = n.split(' ').filter(w => w.length >= 5);
+        return parole.length > 0 && menu.some(m => parole.every(w => m.includes(w)));
+      })();
+    return trovato ? tutto : dentro;
+  });
+}
+
 // Per i consigli pronti l'IA non riceve la frase del cliente ("sono
 // vegetariano") ma una richiesta precisa: la risposta la leggeranno tutti,
 // deve essere completa. Prima "sono vegetariano" riceveva "ho diverse
@@ -312,7 +330,7 @@ ALLERGIE — REGOLA DI SICUREZZA, NON NEGOZIABILE:
 - Quando qualcuno dichiara un'allergia: ringrazia e digli SEMPRE di comunicarla al cameriere prima di ordinare, perche' la conferma la da' la cucina.
 - Frase da usare: "Prima di ordinare dillo al cameriere: la conferma la da' sempre la cucina."
 - NON INVENTARE MAI INFORMAZIONI SUL LOCALE: wifi, pagamenti e carte, orari, prenotazioni, parcheggio, animali, bagni, piatti fuori menu. Se non sono scritte in queste istruzioni non le sai: di' che non hai questa informazione e di chiedere al personale.
-- L'APP HA SOLO: il menu, questa chat e il pulsante "salva piatto". NON esistono pulsanti per chiamare il cameriere, ordinare o pagare: non nominarli mai.
+- L'APP HA SOLO: il menu, questa chat e il pulsante "salva piatto". NON esistono pulsanti per chiamare il cameriere, ordinare o pagare: non nominarli mai. Non nominare nemmeno oggetti sul tavolo (campanelli, cartellini, QR per pagare): non sai se ci sono. Per il cameriere di' solo di chiamarlo con un cenno quando passa.
 - NON PROMETTERE MAI AZIONI: non puoi avvisare il personale, chiamare il cameriere, prenotare, ordinare o mandare messaggi a nessuno. Esisti solo in questa chat. Mai frasi come "avviso io", "faccio verificare", "lo segnalo", "chiamo il cameriere": di' invece al cliente di chiederlo lui al personale.${quantiConAllergeni === 0
   ? '\n- Questo ristorante NON ha ancora registrato gli allergeni dei piatti: dillo con chiarezza e rimanda al personale, senza fare ipotesi.'
   : ''}
@@ -572,9 +590,10 @@ REGOLE FINALI, PIU' IMPORTANTI DI TUTTE:
     .slice(0, 3);
   if (suggestions.length === 0) suggestions = suggerimentiPredefiniti(language);
 
-  const visibleMessage = assistantMessage
-    .replace(/SUGGESTIONS_JSON:\s*\[[\s\S]+?\]\s*$/m, '')
-    .trim();
+  const visibleMessage = soloVociDelMenuInGrassetto(
+    assistantMessage.replace(/SUGGESTIONS_JSON:\s*\[[\s\S]+?\]\s*$/m, '').trim(),
+    dishes.map((d: { name: string }) => d.name),
+  );
 
   // Primo cliente che fa questa domanda: la risposta diventa quella pronta
   if (tipoConsiglio) salvaConsiglio(restaurantId, language, tipoConsiglio, firma, visibleMessage, suggestions);

@@ -55,7 +55,7 @@ const CONVERSAZIONI = {
   ],
 };
 
-const PROMESSE = /\b(avviso io|avviser[oò]|lo segnalo|faccio verificare|chiamo (io )?il cameriere|informo (io )?il personale|comunico (io )?al personale|i['’]ll (let|tell|inform|notify|call)|i will (let|tell|inform|notify|call)|let the (staff|waiter) know|i['’]ve (told|notified|informed))/i;
+const PROMESSE = /\b(avviso io|avviser[oò]|lo segnalo|faccio verificare|chiamo (io )?il cameriere|informo (io )?il personale|comunico (io )?al personale|i['’]ll (let|tell|inform|notify|call)|i will (let|tell|inform|notify|call)|i['’]ve (told|notified|informed))/i;
 const TECNICO = /SUGGESTIONS_JSON|<\/?think>|```/;
 const RIVOLTO_AL_CLIENTE = /\b(vuoi|preferisci|desideri|indicami|would you|do you want|do you prefer|what would you)\b/i;
 // Domande sul locale a cui l'assistente NON sa rispondere: se dice di si' se lo e' inventato
@@ -128,7 +128,7 @@ async function main() {
         const promessa = testo.match(PROMESSE);
         if (promessa) problemi.push(`PROMESSA "${promessa[0]}"`);
         if (TECNICO.test(testo)) problemi.push('TECNICO');
-        if (/pulsante (dedicato|per chiamare)|button to (call|order)|call button/i.test(testo)) problemi.push('INVENTATO: pulsante che non esiste');
+        if (/pulsante (dedicato|per chiamare)|button to (call|order)|call button|campanell|bell on the table/i.test(testo)) problemi.push('INVENTATO: oggetto o pulsante che non esiste');
         if (/vegetari/i.test(domanda) && [...testo.matchAll(/\*\*[^*]+\*\*/g)].length < 2) problemi.push('INCOMPLETA: nessun piatto vegetariano elencato');
         if (DOMANDA_LOCALE.test(domanda) && AFFERMA.test(testo.trim())) problemi.push('INVENTATO SUL LOCALE');
         for (const m of testo.matchAll(/\*\*([^*]{2,80})\*\*/g)) {
