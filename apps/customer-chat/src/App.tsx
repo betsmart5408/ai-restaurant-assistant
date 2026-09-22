@@ -497,6 +497,11 @@ export default function App() {
   const [instagramUrl, setInstagramUrl] = useState<string>('');
   const [showIg, setShowIg] = useState(false);
   const [demoWa, setDemoWa] = useState<string>('');   // link WhatsApp: solo nelle demo
+  // Attivazione dalla demo via email: l'API ci da' solo l'email del locale
+  // mascherata (i***@locale.com), il link parte verso quella vera.
+  const [attivaEmail, setAttivaEmail] = useState<string>('');
+  const [attivaAperta, setAttivaAperta] = useState(false);
+  const [attivaStato, setAttivaStato] = useState<'' | 'invio' | 'ok' | 'errore'>('');
 
   // Lingue offerte da QUESTO ristorante. Finche' non arrivano dal server
   // non mostriamo niente, cosi' nessuno sceglie una lingua non tradotta.
@@ -523,6 +528,7 @@ export default function App() {
         if (r.assistente_attivo === false) spegniAssistente();
         if (r.logo_url) setLogoSrc(r.logo_url.startsWith('http') ? r.logo_url : `${API}${r.logo_url}`);
         if (r.instagram_url) setInstagramUrl(r.instagram_url);
+        if (r.attiva_email) setAttivaEmail(String(r.attiva_email));
         if (r.sales_whatsapp) {
           const num = String(r.sales_whatsapp).replace(/[^\d]/g, '');
           // L'hashtag finale (#slug) fa riconoscere al bot di quale ristorante
@@ -596,7 +602,68 @@ export default function App() {
 
   // Tasto "attiva questo menu": compare solo nelle demo (lo decide l'API con
   // sales_whatsapp). Appena la demo viene attivata, l'API non lo manda piu'.
-  const demoCtaBtn = demoWa ? (
+  // Testi della finestra di attivazione: la legge il ristoratore, quindi
+  // italiano se la demo e' aperta in italiano, altrimenti inglese.
+  const inItaliano = lang === 'it';
+  async function mandaLinkAttivazione() {
+    setAttivaStato('invio');
+    try {
+      const res = await fetch(`${API}/api/auth/claim-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: params.restaurant, lang }),
+      });
+      setAttivaStato(res.ok ? 'ok' : 'errore');
+    } catch { setAttivaStato('errore'); }
+  }
+
+  // Tasto "attiva questo menu": solo nelle demo. Con l'email del locale il
+  // link arriva li'; senza, resta il vecchio passaggio da WhatsApp.
+  const demoCtaBtn = attivaEmail ? (
+    <>
+      <button style={{ ...S.demoCta, background: 'var(--brand)', border: 'none', cursor: 'pointer', boxShadow: '0 6px 22px rgba(0,0,0,0.25)' }}
+        onClick={() => { setAttivaAperta(true); if (attivaStato === 'errore') setAttivaStato(''); }}>
+        <span style={{ fontSize: 17 }}>✨</span> {t('demoCta', lang)}
+      </button>
+      {attivaAperta && (
+        <div style={S.modalOverlay} onClick={() => setAttivaAperta(false)}>
+          <div style={{ ...S.modalBox, textAlign: 'center' }} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+            <div style={{ fontSize: 40, marginBottom: 8 }}>{attivaStato === 'ok' ? '📬' : '✨'}</div>
+            {attivaStato === 'ok' ? (
+              <>
+                <h2 style={S.modalTitle}>{inItaliano ? 'Controlla la tua email' : 'Check your email'}</h2>
+                <p style={{ color: 'var(--text-soft)', lineHeight: 1.5, margin: '8px 0 20px' }}>
+                  {inItaliano ? <>Ti abbiamo mandato il link di attivazione a <strong>{attivaEmail}</strong>. Se non lo trovi, guarda nello spam.</>
+                      : <>We sent the activation link to <strong>{attivaEmail}</strong>. If you can't find it, check your spam folder.</>}
+                </p>
+                <button style={S.modalAskBtn} onClick={() => setAttivaAperta(false)}>OK</button>
+              </>
+            ) : (
+              <>
+                <h2 style={S.modalTitle}>{inItaliano ? 'Attiva il tuo menu' : 'Activate your menu'}</h2>
+                <p style={{ color: 'var(--text-soft)', lineHeight: 1.5, margin: '8px 0 20px' }}>
+                  {inItaliano ? <>Per sicurezza mandiamo il link di attivazione solo all'email del ristorante: <strong>{attivaEmail}</strong></>
+                      : <>For security we only send the activation link to the restaurant's email: <strong>{attivaEmail}</strong></>}
+                </p>
+                {attivaStato === 'errore' && (
+                  <p style={{ color: '#ef4444', fontSize: 14, margin: '0 0 12px' }}>
+                    {inItaliano ? 'Invio non riuscito, riprova tra poco.' : "Couldn't send it, please try again shortly."}
+                  </p>
+                )}
+                <button style={S.modalAskBtn} disabled={attivaStato === 'invio'} onClick={mandaLinkAttivazione}>
+                  {attivaStato === 'invio' ? (inItaliano ? 'Invio...' : 'Sending...') : (inItaliano ? 'Mandami il link' : 'Send me the link')}
+                </button>
+                <p style={{ color: 'var(--text-soft)', fontSize: 13, marginTop: 14, lineHeight: 1.5 }}>
+                  {inItaliano ? 'Non è più la tua email? Scrivici a ' : 'Not your email anymore? Write to '}
+                  <a href="mailto:info@lingofork.com" style={{ color: 'var(--brand)' }}>info@lingofork.com</a>
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  ) : demoWa ? (
     <a href={demoWa} target="_blank" rel="noopener noreferrer" style={S.demoCta}>
       <span style={{ fontSize: 17 }}>💬</span> {t('demoCta', lang)}
     </a>

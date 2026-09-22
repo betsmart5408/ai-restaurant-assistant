@@ -381,6 +381,82 @@ router.get('/claim', async (req, res) => {
   }
 });
 
+// POST /api/auth/claim-link { slug, lang } — il tasto "Attiva" dentro la demo.
+// Il link di attivazione e' la chiave del locale: non lo mostriamo mai nella
+// pagina, lo mandiamo solo all'email ufficiale del locale (demo_email).
+// Limiti in memoria: un invio ogni 10 minuti per demo, 5 l'ora per indirizzo IP.
+const ultimoInvioDemo = new Map<string, number>();
+const inviiPerIp = new Map<string, number[]>();
+router.post('/claim-link', async (req, res) => {
+  const slug = String(req.body?.slug ?? '').trim();
+  const lingua: 'it' | 'en' = req.body?.lang === 'it' ? 'it' : 'en';
+  if (!slug) return res.status(400).json({ error: 'Dati mancanti' });
+
+  const adesso = Date.now();
+  const ip = String(req.headers['x-forwarded-for'] ?? req.ip ?? '').split(',')[0].trim();
+  const recenti = (inviiPerIp.get(ip) ?? []).filter(t => adesso - t < 3600_000);
+  if (recenti.length >= 5) return res.status(429).json({ error: 'Troppi tentativi, riprova più tardi' });
+  if (adesso - (ultimoInvioDemo.get(slug) ?? 0) < 10 * 60_000) {
+    // gia' mandato da poco: rispondiamo ok senza rimandarlo
+    return res.json({ ok: true, gia_inviato: true });
+  }
+
+  try {
+    const r = await db.query(
+      `SELECT id, name, slug, demo_email, demo_claim_token FROM restaurants WHERE slug = $1 AND is_demo = TRUE`,
+      [slug]
+    );
+    const rest = r.rows[0];
+    if (!rest || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(rest.demo_email ?? ''))) {
+      return res.status(404).json({ error: 'Demo non trovata' });
+    }
+    let token: string = rest.demo_claim_token;
+    if (!token) {
+      token = crypto.randomBytes(18).toString('base64url');
+      await db.query('UPDATE restaurants SET demo_claim_token = $1 WHERE id = $2', [token, rest.id]);
+    }
+    const link = `${DASHBOARD_URL}/attiva?attiva=${encodeURIComponent(rest.slug)}&token=${token}`;
+    const nome = escapeHtml(rest.name);
+    const giorni = Number(process.env.SALES_TRIAL_DAYS) || 7;
+    const t = lingua === 'it'
+      ? {
+          oggetto: `Attiva il menu digitale di ${rest.name}`,
+          titolo: 'Il tuo menu è pronto',
+          righe: [
+            `Il menu di <strong>${nome}</strong> è già caricato e tradotto in più lingue, con l'assistente che risponde ai tuoi clienti.`,
+            `Clicca il pulsante per attivarlo: scegli una password (o entra con Google) e hai ${giorni} giorni di prova gratuita, senza carta.`,
+          ],
+          pulsante: 'Attiva il tuo menu',
+          nota: 'Hai ricevuto questa email perché qualcuno ha chiesto di attivare la demo del tuo locale su LingoFork. Se non sei stato tu, ignorala.',
+        }
+      : {
+          oggetto: `Activate the digital menu for ${rest.name}`,
+          titolo: 'Your menu is ready',
+          righe: [
+            `The menu for <strong>${nome}</strong> is already uploaded and translated into several languages, with an assistant that answers your guests' questions.`,
+            `Click the button to activate it: choose a password (or sign in with Google) and get a ${giorni}-day free trial, no card required.`,
+          ],
+          pulsante: 'Activate your menu',
+          nota: "You received this email because someone asked to activate your venue's demo on LingoFork. If it wasn't you, just ignore it.",
+        };
+    const ok = await mandaEmail({
+      to: String(rest.demo_email).trim(),
+      subject: t.oggetto,
+      html: emailConPulsante({ titolo: t.titolo, paragrafi: t.righe, pulsante: t.pulsante, link, nota: t.nota }),
+      text: `${t.righe.join('\n\n').replace(/<[^>]+>/g, '')}\n\n${link}`,
+    });
+    if (!ok) return res.status(502).json({ error: 'Invio non riuscito, riprova tra poco' });
+
+    ultimoInvioDemo.set(slug, adesso);
+    inviiPerIp.set(ip, [...recenti, adesso]);
+    console.log(`[attiva] link di attivazione mandato per ${rest.slug}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Claim link error:', err);
+    res.status(500).json({ error: 'Invio non riuscito, riprova tra poco' });
+  }
+});
+
 // POST /api/auth/claim  { slug, token, email, password } oppure { slug, token, google_credential }
 router.post('/claim', async (req, res) => {
   const { slug, token, google_credential } = req.body ?? {};

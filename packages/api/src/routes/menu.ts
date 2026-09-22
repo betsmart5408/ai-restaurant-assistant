@@ -37,6 +37,14 @@ function cacheSet(k: string, data: unknown): void {
   if (cacheMenu.size > 4000) cacheMenu.clear();   // guardia anti-crescita
   cacheMenu.set(k, { data, exp: Date.now() + CACHE_TTL_MS });
 }
+// "info@morenasydney.com.au" -> "i***@morenasydney.com.au"
+function mascheraEmail(email: unknown): string | null {
+  const e = String(email ?? '').trim();
+  const at = e.indexOf('@');
+  if (at < 1) return null;
+  return `${e[0]}***${e.slice(at)}`;
+}
+
 function cacheBust(slug: string): void {
   for (const k of cacheMenu.keys()) {
     if (k === `m:${slug}` || k.startsWith(`t:${slug}:`)) cacheMenu.delete(k);
@@ -68,7 +76,7 @@ router.get('/:restaurantSlug', async (req, res) => {
 
     const restaurant = await db.query(
       `SELECT id, name, languages, currency, logo_url, primary_color, background_color, ai_name, font_family, instagram_url, is_demo, assistente_attivo,
-              ${SQL_IN_PAUSA} AS in_pausa
+              ${SQL_IN_PAUSA} AS in_pausa, demo_email
        FROM restaurants r WHERE slug = $1`,
       [restaurantSlug]
     );
@@ -77,9 +85,14 @@ router.get('/:restaurantSlug', async (req, res) => {
       return res.status(404).json({ error: 'Restaurant not found' });
     }
 
+    // L'email del locale non esce mai in chiaro: nella demo si vede solo
+    // mascherata, per dire al ristoratore dove arrivera' il link di attivazione.
+    const { demo_email: emailDemo, ...datiRistorante } = restaurant.rows[0];
+    const attivaEmail = datiRistorante.is_demo ? mascheraEmail(emailDemo) : null;
+
     // Prova finita e non pagata: niente piatti, la pagina mostra "in pausa"
-    if (restaurant.rows[0].in_pausa) {
-      const { id: _id, ...pubblico } = restaurant.rows[0];
+    if (datiRistorante.in_pausa) {
+      const { id: _id, ...pubblico } = datiRistorante;
       return res.json({ restaurant: { ...pubblico, sales_whatsapp: null }, menu: {} });
     }
 
@@ -108,7 +121,7 @@ router.get('/:restaurantSlug', async (req, res) => {
     }
 
     const payload = {
-      restaurant: { ...restaurant.rows[0], sales_whatsapp: salesWhatsapp },
+      restaurant: { ...datiRistorante, sales_whatsapp: salesWhatsapp, attiva_email: attivaEmail },
       menu: menuByCategory,
     };
     cacheSet(`m:${restaurantSlug}`, payload);
