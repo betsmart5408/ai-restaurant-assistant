@@ -6,6 +6,8 @@ import { costruisciMenuPerPrompt, avvisoMenuParziale } from './menu-contesto';
 import { registraIntento } from './conta-intenti';
 import { catenaFornitori, clientePer } from './fornitori-ia';
 import { registraConsumo, superatoLimite, messaggioLimite } from './consumi-ia';
+import { riconosciConsiglio, firmaMenu, leggiConsiglio, salvaConsiglio } from './consigli-pronti';
+import { normalizza } from './risposte-dirette';
 
 // `saved_preferences` e `previous_dishes` arrivano dal body pubblico di
 // POST /api/chat/session, quindi sono testo scelto dal cliente: non vanno mai
@@ -360,11 +362,24 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
   }
   const { dishes, expiring, highStock, topMargin, popular } = ctxData.data;
 
+  // Consiglio generico ("cosa mi consigli?", "degustazione per 2",
+  // "vegetariano", "per bambini"): se un altro cliente l'ha gia' chiesto
+  // in questa lingua, la risposta e' pronta e non costa niente.
+  const tipoConsiglio = riconosciConsiglio(userMessage, dishes.map((d: { name: string }) => normalizza(d.name)));
+  const firma = tipoConsiglio ? firmaMenu(dishes) : '';
+  if (tipoConsiglio) {
+    const pronto = await leggiConsiglio(restaurantId, language, tipoConsiglio, firma);
+    if (pronto) {
+      registraIntento(restaurantId, 'consiglio', language);
+      return { message: pronto.testo, suggestions: pronto.suggerimenti };
+    }
+  }
+
   // Scorciatoia: se la domanda e' una di quelle a cui il database risponde
   // meglio del modello (un piatto, i suoi allergeni, "voglio ordinare", un
   // grazie), si risponde qui e si risparmiano 3.400 token di menu.
   // Nel dubbio rispostaDiretta restituisce null e si prosegue come sempre.
-  try {
+  if (!tipoConsiglio) try {
     const diretta = await rispostaDiretta({
       restaurantId, dishes, language, currency: ctx.currency,
       messaggio: userMessage,
@@ -407,16 +422,20 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
     }
   }
 
+  // Un consiglio che verra' riusato per tutti si scrive senza niente di
+  // personale: niente gruppo, preferenze, ordini o storico del cliente.
+  const perTutti = !!tipoConsiglio;
   const systemPrompt = buildSystemPrompt(
     restaurantName, dishes, expiring, highStock, topMargin, popular,
-    language, tableNumber, weather, groupSize, savedPreferences, existingOrders,
-    returningCustomer, previousDishes, aiName,
+    language, tableNumber, weather,
+    perTutti ? undefined : groupSize, perTutti ? undefined : savedPreferences, perTutti ? undefined : existingOrders,
+    perTutti ? false : returningCustomer, perTutti ? [] : previousDishes, aiName,
     { city: ctx.city, country: ctx.country, cuisineType: ctx.cuisineType, about: ctx.about, timezone: ctx.timezone },
     userMessage,
   );
 
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
-    ...conversationHistory.slice(-6),
+    ...(perTutti ? [] : conversationHistory.slice(-6)),
     { role: 'user', content: userMessage },
   ];
 
@@ -499,6 +518,9 @@ REGOLE FINALI, PIU' IMPORTANTI DI TUTTE:
   const visibleMessage = assistantMessage
     .replace(/SUGGESTIONS_JSON:\s*\[[\s\S]+?\]\s*$/m, '')
     .trim();
+
+  // Primo cliente che fa questa domanda: la risposta diventa quella pronta
+  if (tipoConsiglio) salvaConsiglio(restaurantId, language, tipoConsiglio, firma, visibleMessage, suggestions);
 
   return { message: visibleMessage, suggestions };
 }

@@ -135,7 +135,7 @@ function troppoLunga(msg: string): boolean {
 // scattare per sbaglio una parola italiana, quindi non serve tenerle divise.
 // Sono gia' normalizzate (minuscole, senza accenti) come l'input.
 
-const PAROLE_ALLERGENI = [
+export const PAROLE_ALLERGENI = [
   // it / es / pt
   'allergen', 'allergi', 'alerg', 'glutine', 'gluten', 'lattosio', 'lactosa', 'lactose',
   'celiac', 'celiaco', 'intolleran', 'intoleran', 'vegano', 'vegetarian', 'vegetarien',
@@ -206,7 +206,7 @@ const PAROLE_GRAZIE = [
  * dentro "donut" farebbe partire l'intento sbagliato. Queste si cercano come
  * parola intera.
  */
-const PAROLE_ALLERGENI_INTERE = [
+export const PAROLE_ALLERGENI_INTERE = [
   'nut', 'nuts', 'noci', 'noce', 'soia', 'soy', 'uova', 'uovo', 'egg', 'eggs',
   'latte', 'milk', 'pesce', 'fish', 'sesamo', 'sesame', 'sedano', 'celery',
   'senape', 'mustard', 'solfiti', 'sulphites', 'sulfites', 'molluschi', 'crostacei',
@@ -339,6 +339,12 @@ const T: Record<string, Testi> = {
     suggerimenti: ['आप क्या सुझाएंगे?', 'कौन सी वाइन?', '2 के लिए टेस्टिंग मेन्यू'],
   },
 };
+
+// I nostri suggerimenti da cliccare, normalizzati, in tutte le lingue:
+// testo -> posizione (0 = "cosa mi consigli", 1 = vino, 2 = degustazione per 2)
+export const SUGGERIMENTI_TUTTE_LE_LINGUE = new Map<string, number>(
+  Object.values(T).flatMap(t => t.suggerimenti.map((s, i) => [normalizza(s), i] as [string, number])),
+);
 
 function testi(lang: string): Testi {
   return T[lang] ?? T['en'];
