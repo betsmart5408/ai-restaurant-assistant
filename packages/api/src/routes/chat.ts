@@ -56,20 +56,13 @@ router.post('/session', async (req, res) => {
 
     const tableId = table.rows[0].id;
 
-    // ── Cerca sessione attiva per questo tavolo ──────────────────────────────
-    let existingSessionId: string | null = null;
-    try {
-      const existing = await db.query(
-        `SELECT id FROM chat_sessions
-         WHERE restaurant_id = $1 AND table_id = $2
-           AND created_at > NOW() - INTERVAL '6 hours'
-         ORDER BY created_at DESC LIMIT 1`,
-        [restaurantId, tableId]
-      );
-      if (existing.rows.length > 0) existingSessionId = existing.rows[0].id;
-    } catch {
-      // created_at potrebbe non esistere — procediamo con nuova sessione
-    }
+    // ── Una conversazione per cliente, mai condivisa ─────────────────────────
+    // Prima si univano le sessioni dello stesso tavolo per 6 ore. Con un solo
+    // QR per locale tutti i clienti sono al "tavolo 1": finivano in UNA
+    // conversazione, l'IA leggeva le domande di sconosciuti come contesto e
+    // dopo ~75 domande nel locale scattava il tetto per tutti. Il telefono del
+    // cliente ricorda gia' la sua conversazione (12 ore), il server non deve.
+    const existingSessionId: string | null = null;
 
     const dishList = Array.isArray(previous_dishes) && previous_dishes.length > 0
       ? previous_dishes.slice(0, 5).join(', ')
@@ -237,7 +230,14 @@ router.post('/:sessionId/message', async (req, res) => {
     if (visita.length >= MAX_MESSAGGI_PER_VISITA) {
       return res.status(429).json({
         error: 'Conversazione troppo lunga',
-        message: 'Abbiamo parlato parecchio! Per il resto chiedi pure al cameriere.',
+        message: ({
+          it: 'Abbiamo parlato parecchio! Per il resto chiedi pure al cameriere.',
+          en: 'We’ve talked quite a lot! For anything else, please ask your waiter.',
+          es: '¡Hemos hablado bastante! Para lo demás, pregunta al camarero.',
+          fr: 'Nous avons beaucoup parlé ! Pour le reste, demandez au serveur.',
+          de: 'Wir haben schon viel geredet! Für alles Weitere fragen Sie bitte die Bedienung.',
+          pt: 'Já falámos bastante! Para o resto, pergunte ao empregado.',
+        } as Record<string, string>)[String(language || s.language)] ?? 'We’ve talked quite a lot! For anything else, please ask your waiter.',
       });
     }
 
