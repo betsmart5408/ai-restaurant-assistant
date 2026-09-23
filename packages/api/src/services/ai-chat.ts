@@ -4,7 +4,7 @@ import { modelliDisponibili } from './groq-model';
 import { costruisciMenuPerPrompt, avvisoMenuParziale, eBevanda } from './menu-contesto';
 import { registraIntento } from './conta-intenti';
 import { catenaFornitori, clientePer } from './fornitori-ia';
-import { registraConsumo, superatoLimite, messaggioLimite } from './consumi-ia';
+import { registraConsumo, superatoLimite, superatoLimiteCliente, segnaChiamataCliente, messaggioLimite } from './consumi-ia';
 import { riconosciConsiglio, chiaveMemoria, firmaMenu, leggiConsiglio, salvaConsiglio } from './consigli-pronti';
 import { rispostaDiretta, normalizza, suggerimentiPredefiniti, sembraVegetariano } from './risposte-dirette';
 
@@ -156,6 +156,8 @@ interface MenuDish {
 
 interface ChatContext {
   restaurantId: string;
+  /** La conversazione di QUESTO cliente: serve per il tetto di domande al modello. */
+  sessionId?: string;
   restaurantName: string;
   tableNumber: number;
   language: string;
@@ -571,9 +573,18 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
     }
   }
 
-  // Limite giornaliero di domande all'IA per questo ristorante: oltre, si
-  // resta sulle risposte pronte (qui sopra) e per il resto si rimanda al
-  // personale. Il giorno dopo si riparte.
+  // Il tetto vero: quante domande al modello ha gia' fatto QUESTO cliente.
+  // Da qui in poi per lui risponde solo il database - che sopra ha gia'
+  // coperto piatti, prezzi, allergeni, ordini, saluti e fuori tema - e il
+  // cliente seguente ricomincia da capo con le sue cinque.
+  if (await superatoLimiteCliente(ctx.sessionId)) {
+    registraIntento(restaurantId, 'limite', language);
+    return { message: messaggioLimite(language), suggestions: suggerimentiPredefiniti(language) };
+  }
+
+  // E il paracadute: un solo ristorante non deve poter bruciare la quota
+  // gratuita di tutti gli altri (i limiti dei fornitori sono per
+  // organizzazione, non per ristorante).
   if (await superatoLimite(restaurantId)) {
     registraIntento(restaurantId, 'limite', language);
     // Con i pulsanti, non senza: da qui in poi il database risponde ancora a
@@ -707,6 +718,7 @@ REGOLE FINALI, PIU' IMPORTANTI DI TUTTE:
   // Il modello ha risposto: si segna, cosi' il rapporto sa dire quante
   // domande sono finite qui invece che nelle risposte diretta.
   registraIntento(restaurantId, 'modello', language);
+  segnaChiamataCliente(ctx.sessionId);
 
   const separati = separaSuggerimenti(assistantMessage);
   // Rete di sicurezza sui pulsanti: via il grassetto, via le domande rivolte

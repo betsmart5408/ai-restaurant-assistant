@@ -17,27 +17,31 @@
  */
 import { db } from '../db/client';
 
-// Quante volte al giorno, per ristorante, si puo' disturbare un MODELLO.
+// ── I due tetti ─────────────────────────────────────────────────────────────
 //
-// Cinque, non trecento. Il conto non e' "quante domande fa un cliente" ma
-// "quante domande nuove esistono in un locale": le risposte su un piatto,
-// gli allergeni, gli abbinamenti e i saluti le da' il database senza
-// limite, e i consigli generici ("cosa mi consigli?", "sono vegetariano")
-// il modello li scrive UNA volta e poi restano in cache per tutti.
-// Quindi cinque chiamate bastano a riempire la cache di un locale, e senza
-// un tetto cosi' ogni cliente che apre la chat per curiosita' brucia
-// crediti per una risposta che avevamo gia'.
+// 1. PER CLIENTE (LIMITE_IA_CLIENTE): cinque domande al modello dentro una
+//    conversazione. E' il tetto vero, quello che si sente. E' per cliente e
+//    non per ristorante perche' altrimenti il sesto cliente della giornata
+//    trova l'assistente spento per colpa dei cinque di prima: non e' giusto
+//    e non e' spiegabile a un ristoratore.
 //
-// Il ristoratore puo' avere un suo tetto nella colonna limite_ia_giorno.
-// Si legge con Number.isFinite e non con "|| predefinito": zero e' un valore
-// legittimo (vuol dire "il modello non si tocca, risponde solo il database")
-// e con "||" era impossibile da impostare, perche' 0 e' falso.
+// 2. PER RISTORANTE E GIORNO (LIMITE_IA_GIORNO): non e' un tetto, e' un
+//    paracadute. I limiti dei piani gratuiti di Groq e Mistral valgono per
+//    ORGANIZZAZIONE, non per ristorante: senza questo, un solo locale con
+//    duecento clienti curiosi brucia la quota di tutti gli altri 518 e la
+//    piattaforma resta senza assistente. Va tenuto alto abbastanza da non
+//    dare fastidio a un locale normale.
+//
+// Quello che risponde il DATABASE - piatti, prezzi, allergeni, ordini,
+// saluti, fuori tema, consigli gia' in cache - non conta in nessuno dei due:
+// non costa niente e non si raziona.
 function daEnv(nome: string, predefinito: number): number {
   const v = Number(process.env[nome]);
   return Number.isFinite(v) && v >= 0 ? v : predefinito;
 }
-const LIMITE_CLIENTI = daEnv('LIMITE_IA_GIORNO', 5);
-const LIMITE_DEMO = daEnv('LIMITE_IA_DEMO_GIORNO', 5);
+const LIMITE_CLIENTE = daEnv('LIMITE_IA_CLIENTE', 5);
+const LIMITE_CLIENTI = daEnv('LIMITE_IA_GIORNO', 200);
+const LIMITE_DEMO = daEnv('LIMITE_IA_DEMO_GIORNO', 200);
 
 function prezzo(fornitore: string, verso: 'IN' | 'OUT'): number {
   if (fornitore.includes('chiave del ristorante')) return 0;
@@ -65,6 +69,37 @@ export function registraConsumo(
        costo_usd = consumi_ia.costo_usd + EXCLUDED.costo_usd`,
     [restaurantId, fornitore, modello, Math.max(0, tokenIn | 0), Math.max(0, tokenOut | 0), costo],
   ).catch(err => console.error('[consumi-ia] non registrato:', err?.message ?? err));
+}
+
+/**
+ * Questo cliente ha gia' fatto le sue domande al modello?
+ *
+ * Se la colonna non c'e' ancora (migrazione 027 non applicata) si risponde
+ * "no" e si tira dritto: meglio nessun tetto che una chat rotta. Vale la
+ * stessa regola di tutto il resto del file.
+ */
+export async function superatoLimiteCliente(sessionId?: string): Promise<boolean> {
+  if (!sessionId || LIMITE_CLIENTE <= 0) return LIMITE_CLIENTE === 0;
+  try {
+    const r = await db.query<{ chiamate_ia: number }>(
+      `SELECT chiamate_ia FROM chat_sessions WHERE id = $1`, [sessionId]);
+    return (r.rows[0]?.chiamate_ia ?? 0) >= LIMITE_CLIENTE;
+  } catch (err) {
+    if (!avvisoColonna) {
+      avvisoColonna = true;
+      console.warn('[consumi-ia] tetto per cliente non attivo (manca la migrazione 027?):', (err as Error)?.message);
+    }
+    return false;
+  }
+}
+let avvisoColonna = false;
+
+/** Una domanda in piu' segnata a questo cliente. Si lancia e non si aspetta. */
+export function segnaChiamataCliente(sessionId?: string): void {
+  if (!sessionId) return;
+  void db.query(
+    `UPDATE chat_sessions SET chiamate_ia = chiamate_ia + 1 WHERE id = $1`, [sessionId],
+  ).catch(() => { /* senza la colonna si prosegue: il tetto semplicemente non morde */ });
 }
 
 /** true se il ristorante ha gia' fatto oggi tutte le domande all'IA che gli spettano. */

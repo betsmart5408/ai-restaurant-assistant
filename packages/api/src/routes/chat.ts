@@ -252,6 +252,7 @@ router.post('/:sessionId/message', async (req, res) => {
     const response = await processChat(
       {
         restaurantId: s.restaurant_id,
+        sessionId,
         restaurantName: s.restaurant_name,
         aiName: (s.ai_name || '').trim() || 'Marco',
         city: s.city, country: s.country, cuisineType: s.cuisine_type, about: s.about,
