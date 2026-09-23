@@ -8,6 +8,7 @@ import {
   msgExpiryAlert,
   msgDailySummary,
 } from './whatsapp';
+import { pregeneraConsigli } from './pregenera';
 
 interface Restaurant {
   id: string;
@@ -182,6 +183,12 @@ export function startAlertScheduler() {
   cron.schedule('15 * * * *', () =>
     controllaProve().catch(err => console.error('Controllo prove error:', err))
   );
+  // Consigli pronti scritti di notte, quando nessuno e' a tavola: il primo
+  // cliente del giorno non aspetta e non consuma le sue domande al modello
+  // per una risposta che poi leggeranno gratis tutti gli altri.
+  cron.schedule('30 4 * * *', () =>
+    pregeneraConsigli().catch(err => console.error('Pregenerazione consigli error:', err))
+  );
 
-  console.log('✅ Scheduler: stock/ora · scadenze/8:00 · riepilogo/22:00 · report/lunedì-8:30');
+  console.log('✅ Scheduler: stock/ora · scadenze/8:00 · riepilogo/22:00 · report/lunedì-8:30 · consigli/4:30');
 }

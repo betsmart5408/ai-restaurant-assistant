@@ -20,7 +20,8 @@
     "genera-risposte": "tsx src/db/genera-risposte.ts",
     "prova-logica": "tsx scripts/prova-logica.ts",
     "prova-allergeni": "tsx scripts/prova-allergeni-menu.ts",
-    "analisi-domande": "tsx scripts/analisi-domande-vere.ts"
+    "analisi-domande": "tsx scripts/analisi-domande-vere.ts",
+    "pregenera": "tsx scripts/pregenera.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
