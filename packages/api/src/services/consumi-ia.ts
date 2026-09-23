@@ -17,8 +17,27 @@
  */
 import { db } from '../db/client';
 
-const LIMITE_CLIENTI = Number(process.env.LIMITE_IA_GIORNO) || 300;
-const LIMITE_DEMO = Number(process.env.LIMITE_IA_DEMO_GIORNO) || 50;
+// Quante volte al giorno, per ristorante, si puo' disturbare un MODELLO.
+//
+// Cinque, non trecento. Il conto non e' "quante domande fa un cliente" ma
+// "quante domande nuove esistono in un locale": le risposte su un piatto,
+// gli allergeni, gli abbinamenti e i saluti le da' il database senza
+// limite, e i consigli generici ("cosa mi consigli?", "sono vegetariano")
+// il modello li scrive UNA volta e poi restano in cache per tutti.
+// Quindi cinque chiamate bastano a riempire la cache di un locale, e senza
+// un tetto cosi' ogni cliente che apre la chat per curiosita' brucia
+// crediti per una risposta che avevamo gia'.
+//
+// Il ristoratore puo' avere un suo tetto nella colonna limite_ia_giorno.
+// Si legge con Number.isFinite e non con "|| predefinito": zero e' un valore
+// legittimo (vuol dire "il modello non si tocca, risponde solo il database")
+// e con "||" era impossibile da impostare, perche' 0 e' falso.
+function daEnv(nome: string, predefinito: number): number {
+  const v = Number(process.env[nome]);
+  return Number.isFinite(v) && v >= 0 ? v : predefinito;
+}
+const LIMITE_CLIENTI = daEnv('LIMITE_IA_GIORNO', 5);
+const LIMITE_DEMO = daEnv('LIMITE_IA_DEMO_GIORNO', 5);
 
 function prezzo(fornitore: string, verso: 'IN' | 'OUT'): number {
   if (fornitore.includes('chiave del ristorante')) return 0;
@@ -26,35 +45,6 @@ function prezzo(fornitore: string, verso: 'IN' | 'OUT'): number {
   return Number(process.env[`${P}_PRICE_${verso}`]) || 0;
 }
 
-/**
- * Questo fornitore ce lo fanno pagare. I piani gratuiti e la chiave del
- * ristoratore valgono zero: quelli non si contingentano.
- */
-export function fornitoreAPagamento(nome: string): boolean {
-  return prezzo(nome, 'IN') > 0 || prezzo(nome, 'OUT') > 0;
-}
-
-// Quante domande al giorno, per ristorante, possono finire su un fornitore
-// che ci costa. Oltre, si resta sui fornitori gratuiti e sulle risposte
-// pronte: il cliente non se ne accorge, la bolletta si'.
-const LIMITE_PAGAMENTO = Number(process.env.LIMITE_IA_PAGAMENTO) || 5;
-
-/** true se oggi questo ristorante ha gia' consumato le sue chiamate a pagamento. */
-export async function superatoLimitePagamento(restaurantId: string): Promise<boolean> {
-  try {
-    const r = await db.query<{ oggi: number }>(
-      `SELECT COALESCE(SUM(chiamate), 0)::int AS oggi FROM consumi_ia
-        WHERE restaurant_id = $1 AND giorno = CURRENT_DATE AND costo_usd > 0`,
-      [restaurantId],
-    );
-    return (r.rows[0]?.oggi ?? 0) >= LIMITE_PAGAMENTO;
-  } catch (err) {
-    // Se il conteggio non riesce si sta dalla parte della spesa: niente
-    // fornitori a pagamento. Le risposte pronte e i gratuiti bastano.
-    console.error('[consumi-ia] controllo limite a pagamento non riuscito:', err);
-    return true;
-  }
-}
 
 export function registraConsumo(
   restaurantId: string,
