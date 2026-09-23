@@ -4,7 +4,7 @@ import { modelliDisponibili } from './groq-model';
 import { costruisciMenuPerPrompt, avvisoMenuParziale, eBevanda } from './menu-contesto';
 import { registraIntento } from './conta-intenti';
 import { catenaFornitori, clientePer } from './fornitori-ia';
-import { registraConsumo, superatoLimite, messaggioLimite } from './consumi-ia';
+import { registraConsumo, superatoLimite, superatoLimitePagamento, fornitoreAPagamento, messaggioLimite } from './consumi-ia';
 import { riconosciConsiglio, chiaveMemoria, firmaMenu, leggiConsiglio, salvaConsiglio } from './consigli-pronti';
 import { rispostaDiretta, normalizza, suggerimentiPredefiniti, sembraVegetariano } from './risposte-dirette';
 
@@ -613,9 +613,23 @@ export async function processChat(ctx: ChatContext, userMessage: string, groqApi
 
   // Il modello si sceglie al volo: i nomi fissi vengono ritirati e l'assistente
   // smetterebbe di rispondere senza che nessuno abbia toccato il codice.
-  const catena = catenaFornitori(groqApiKey);
+  let catena = catenaFornitori(groqApiKey);
   if (catena.length === 0) {
     throw new Error('Nessun fornitore IA configurato. Controlla la chiave in Impostazioni IA o AI_PROVIDERS nel .env.');
+  }
+
+  // Tetto sui fornitori che ci costano: poche domande al giorno per
+  // ristorante. Superato il tetto non si smette di rispondere, si smette di
+  // pagare: restano la chiave del ristoratore e i piani gratuiti, che per
+  // il cliente al tavolo sono indistinguibili. Solo se non resta proprio
+  // nessuno si rimanda al personale.
+  if (catena.some(f => fornitoreAPagamento(f.nome)) && await superatoLimitePagamento(restaurantId)) {
+    const gratuiti = catena.filter(f => !fornitoreAPagamento(f.nome));
+    if (gratuiti.length === 0) {
+      registraIntento(restaurantId, 'limite', language);
+      return { message: messaggioLimite(language), suggestions: suggerimentiPredefiniti(language) };
+    }
+    catena = gratuiti;
   }
 
   const nomiLingua: Record<string, string> = {

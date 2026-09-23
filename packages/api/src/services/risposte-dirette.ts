@@ -33,7 +33,7 @@ export interface PiattoBase {
 export interface RispostaDiretta {
   message: string;
   suggestions: string[];
-  intento: 'piatto' | 'allergeni' | 'ordine' | 'saluto' | 'abbinamento';
+  intento: 'piatto' | 'allergeni' | 'ordine' | 'saluto' | 'abbinamento' | 'fuoritema';
 }
 
 // ── Valuta: stessa tabella del menu pubblico (App.tsx), cosi' il prezzo nella
@@ -607,6 +607,96 @@ export const SCRITTURA_SENZA_SPAZI = /[぀-ヿ一-鿿가-힯]/;
 /** Quanti piatti al massimo in un elenco: il cliente legge dal telefono. */
 const MAX_PIATTI_ELENCATI = 10;
 
+// ── Fuori tema ──────────────────────────────────────────────────────────────
+//
+// Poesie, compiti di matematica, politica, calcio, "sei un robot?", "ignora
+// le tue istruzioni": domande che il modello sa fare benissimo e che non
+// c'entrano niente col tavolo. Prima costavano una chiamata a testa per
+// farsi dire "sono qui per aiutarti col menu". Ora si riconoscono qui e la
+// risposta e' gia' scritta, con un sorriso.
+//
+// REGOLA: si interviene SOLO su segnali espliciti di fuori tema. Nel dubbio
+// non si riconosce niente e decide il modello — la stessa regola del resto
+// del file. Meglio pagare una chiamata che rispondere con una battuta a chi
+// stava chiedendo da mangiare.
+const FUORI_TEMA = normalizzaElenco([
+  // poesie, storie, battute, canzoni
+  'poesia', 'poem', 'poesie', 'gedicht', 'poeme', 'poema', 'filastrocca', 'rima',
+  'barzelletta', 'joke', 'chiste', 'witz', 'blague', 'piada', 'raccontami una storia',
+  'tell me a story', 'canzone', 'song', 'cancion', 'lyrics', 'testo della canzone',
+  'поэм', 'стих', 'шутк', 'анекдот', '写首诗', '笑话', '诗', '詩を', 'ジョーク', '冗談',
+  '시를', '농담', 'قصيدة', 'نكتة', 'कविता', 'चुटकुला',
+  // compiti, matematica, codice
+  'compiti', 'homework', 'tarea escolar', 'hausaufgaben', 'devoirs',
+  'matematica', 'equazione', 'equation', 'calcola', 'quanto fa', 'how much is',
+  'codice python', 'python code', 'javascript', 'scrivi un programma', 'write code',
+  'write a program', 'sql', 'html', 'excel', 'formula',
+  // politica, notizie, guerra
+  'politica', 'politics', 'elezioni', 'election', 'presidente', 'president',
+  'governo', 'government', 'guerra', 'war', 'notizie', 'news', 'borsa', 'bitcoin',
+  'политик', 'выбор', 'новост', '政治', '新闻', '政治', 'ニュース', '정치', '뉴스',
+  'سياسة', 'أخبار', 'राजनीति', 'समाचार',
+  // sport
+  'calcio', 'football', 'soccer', 'partita di', 'champions', 'formula 1', 'tennis',
+  'basket', 'nba', 'mondiali', 'футбол', '足球', 'サッカー', '축구', 'كرة القدم', 'क्रिकेट',
+  // chi sei, cosa sei
+  'sei un robot', 'sei umano', 'sei una persona', 'sei un bot', 'sei una ia',
+  'are you a robot', 'are you human', 'are you a bot', 'are you an ai', 'are you real',
+  'eres un robot', 'eres humano', 'chatgpt', 'gpt', 'openai', 'intelligenza artificiale',
+  'chi ti ha creato', 'who created you', 'who made you', 'quien te creo', 'wer hat dich',
+  'come funzioni', 'how do you work', 'che modello sei', 'which model',
+  // istruzioni, prompt
+  'ignora le istruzioni', 'ignora le tue istruzioni', 'ignore your instructions',
+  'ignore previous', 'ignore all previous', 'disregard your', 'system prompt',
+  'tue istruzioni', 'your instructions', 'prompt di sistema', 'jailbreak',
+  // fuori dal ristorante
+  'hotel', 'albergo', 'taxi', 'aeroporto', 'airport', 'stazione', 'metro',
+  'museo', 'museum', 'spiaggia', 'beach', 'farmacia', 'pharmacy', 'ospedale',
+  'hospital', 'che tempo fara', 'meteo domani', 'weather tomorrow',
+]);
+
+// Se c'e' dentro qualcosa che sa di cibo o di locale, NON e' fuori tema:
+// "una poesia sulla carbonara" e "consigli un hotel dove cenare" restano
+// roba da modello. La rete di sicurezza contro i falsi positivi.
+const SA_DI_CIBO = /\b(mangi|cibo|piatt|menu|men[uù]|cucina|ordin|antipast|prim[io]|second[io]|dolc[ei]|dessert|bere|bevut|vino|vini|birra|acqua|pizza|pasta|carne|pesce|insalat|contorn|porzion|prezzo|costa|allerg|vegetarian|vegan|celiac|glutin|tavolo|camerier|chef|ricett|ingredient|sapor|piccant|dish|food|eat|drink|wine|beer|starter|main course|side|price|cost|waiter|kitchen|recipe|ingredient|spicy|taste|comida|plato|carta|beber|comer|precio|essen|gericht|speise|trinken|preis|manger|plat|boire|prix|comer|prato|preco)/i;
+const SA_DI_CIBO_NON_LATINO = normalizzaElenco([
+  '菜', '吃', '喝', '菜单', '价格', '料理', '食べ', '飲み', 'メニュー', '値段',
+  '요리', '메뉴', '먹', '마시', '가격', 'طعام', 'طبق', 'قائمة', 'سعر', 'أكل',
+  'блюд', 'еда', 'меню', 'цена', 'выпить', 'खाना', 'व्यंजन', 'मेन्यू', 'कीमत',
+]);
+
+/**
+ * La domanda non c'entra niente col ristorante.
+ * null = non si sa, e allora decide il modello.
+ */
+// Segnali che valgono anche se nella frase compare una parola di cibo:
+// "un codice python per ORDINARE una lista" non e' una domanda sul menu,
+// per quanto contenga "ordinare".
+const FUORI_TEMA_CERTO = normalizzaElenco([
+  'codice python', 'python code', 'javascript', 'scrivi un programma', 'write a program',
+  'write code', 'scrivimi il codice', 'jailbreak', 'system prompt', 'prompt di sistema',
+  'ignora le istruzioni', 'ignora le tue istruzioni', 'ignore your instructions',
+  'ignore previous', 'ignore all previous', 'disregard your', 'chatgpt', 'openai',
+  'sei un robot', 'are you a robot', 'sei una ia', 'are you an ai',
+]);
+
+export function fuoriTema(messaggio: string, nomiPiatti: string[] = []): boolean {
+  const msg = normalizza(messaggio);
+  if (!msg) return false;
+  if (FUORI_TEMA_CERTO.some(w => msg.includes(w))) return true;
+  // Parole corte solo come parola intera: "rima" dentro "Terima kasih" (grazie
+  // in indonesiano) e "war" dentro "shawarma" facevano scattare il fuori tema.
+  const con = ' ' + msg + ' ';
+  const dentro = (w: string) => (w.length <= 5 && !SCRITTURA_SENZA_SPAZI.test(w))
+    ? con.includes(' ' + w + ' ')
+    : msg.includes(w);
+  if (!FUORI_TEMA.some(dentro)) return false;
+  // Parla anche di cibo o di un piatto del menu: la lascio al modello
+  if (SA_DI_CIBO.test(msg) || SA_DI_CIBO_NON_LATINO.some(w => msg.includes(w))) return false;
+  if (nomiPiatti.some(n => n && n.length >= 3 && msg.includes(n))) return false;
+  return true;
+}
+
 /**
  * Proporre piatti leggendo il TESTO del menu quando gli allergeni non sono
  * registrati. Acceso, ma solo dopo che la prova su dieci menu veri di cucine
@@ -787,6 +877,8 @@ interface Testi {
   nessunoSenza: (allergeni: string) => string;
   /** Il testo del piatto nomina proprio l'allergene del cliente: si avvisa. */
   piattoNomina: (piatto: string, allergene: string) => string;
+  /** Domanda che col ristorante non c'entra niente: si risponde col sorriso. */
+  fuoriTemaTesto: string;
   abbinamentoDi: (piatto: string, testo: string) => string;
   ordine: string;
   grazie: string;
@@ -803,6 +895,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `Sul menu questi piatti non nominano ${a} fra gli ingredienti scritti:\n${p}\n${altri > 0 ? `Su altri ${altri} piatti il menu non dice abbastanza per poterlo dire.\n` : ''}Per sicurezza chiedi sempre al cameriere prima di ordinare.`,
     nessunoSenza: a => `Sul menu non trovo piatti da consigliarti con sicurezza senza ${a}.\nChiedi al cameriere prima di ordinare: la cucina sa cosa pu\u00f2 prepararti.`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F Attenzione: nella descrizione di **${pi}** il ristorante ha scritto ${a}.\nGli allergeni non sono registrati, quindi prima di ordinare fatti confermare dalla cucina.`,
+    fuoriTemaTesto: `Ahah, su quello non ti so aiutare 😄 Io conosco solo i piatti di qui, ma su quelli sono imbattibile.\nVuoi sapere cosa vale la pena provare?`,
     abbinamentoDi: (p, t) => `🍷 Con **${p}** ti consiglio: ${t}`,
     ordine: 'Puoi salvare il piatto nell’app per non dimenticarlo: il cameriere viene al tavolo a prendere l’ordine.',
     grazie: 'Figurati! Se ti serve altro sono qui.',
@@ -817,6 +910,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `On the menu these dishes do not mention ${a} among the ingredients written:\n${p}\n${altri > 0 ? `For ${altri} other dishes the menu doesn\u2019t say enough for me to tell.\n` : ''}To be safe, always ask your waiter before ordering.`,
     nessunoSenza: a => `On the menu I can\u2019t find dishes I\u2019d confidently suggest without ${a}.\nPlease ask your waiter before ordering: the kitchen knows what they can prepare for you.`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F Careful: in the description of **${pi}** the restaurant wrote ${a}.\nAllergens are not registered here, so have the kitchen confirm before you order.`,
+    fuoriTemaTesto: `Ha! That one’s beyond me 😄 I only know what’s on this menu, but there I’m unbeatable.\nWant to hear what’s worth trying?`,
     abbinamentoDi: (p, t) => `🍷 With **${p}** I’d suggest: ${t}`,
     ordine: 'You can save the dish in the app so you don’t forget it: the waiter will come to your table to take the order.',
     grazie: 'Anytime! I’m here if you need anything else.',
@@ -831,6 +925,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `Auf der Karte nennen diese Gerichte ${a} nicht unter den angegebenen Zutaten:\n${p}\n${altri > 0 ? `Bei ${altri} weiteren Gerichten sagt die Karte zu wenig, um es beurteilen zu k\u00f6nnen.\n` : ''}Fragen Sie zur Sicherheit immer die Bedienung, bevor Sie bestellen.`,
     nessunoSenza: a => `Auf der Karte finde ich keine Gerichte, die ich Ihnen ohne ${a} sicher empfehlen k\u00f6nnte.\nFragen Sie bitte vor der Bestellung die Bedienung: die K\u00fcche wei\u00df, was sie f\u00fcr Sie zubereiten kann.`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F Achtung: in der Beschreibung von **${pi}** hat das Restaurant ${a} genannt.\nAllergene sind nicht eingetragen, lassen Sie es sich vor der Bestellung von der K\u00fcche best\u00e4tigen.`,
+    fuoriTemaTesto: `Haha, da muss ich passen 😄 Ich kenne nur die Gerichte von hier, dafür aber richtig gut.\nSoll ich Ihnen sagen, was sich lohnt?`,
     abbinamentoDi: (p, t) => `🍷 Zu **${p}** empfehle ich: ${t}`,
     ordine: 'Sie können das Gericht in der App speichern, damit Sie es nicht vergessen: die Bedienung nimmt die Bestellung am Tisch auf.',
     grazie: 'Sehr gerne! Melden Sie sich, wenn Sie noch etwas brauchen.',
@@ -845,6 +940,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `En la carta estos platos no mencionan ${a} entre los ingredientes escritos:\n${p}\n${altri > 0 ? `De otros ${altri} platos la carta no dice lo suficiente para poder decirlo.\n` : ''}Por seguridad, pregunta siempre al camarero antes de pedir.`,
     nessunoSenza: a => `En la carta no encuentro platos que pueda recomendarte con seguridad sin ${a}.\nPreg\u00fantale al camarero antes de pedir: la cocina sabe qu\u00e9 puede prepararte.`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F Atenci\u00f3n: en la descripci\u00f3n de **${pi}** el restaurante ha escrito ${a}.\nLos al\u00e9rgenos no est\u00e1n registrados, as\u00ed que pide confirmaci\u00f3n a la cocina antes de pedir.`,
+    fuoriTemaTesto: `¡Ja! Con eso no te puedo ayudar 😄 Yo solo sé de los platos de aquí, pero ahí soy imbatible.\n¿Te digo qué merece la pena?`,
     abbinamentoDi: (p, t) => `🍷 Con **${p}** te recomiendo: ${t}`,
     ordine: 'Puedes guardar el plato en la app para no olvidarlo: el camarero vendrá a la mesa a tomar el pedido.',
     grazie: '¡De nada! Aquí estoy si necesitas algo más.',
@@ -859,6 +955,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `Sur la carte, ces plats ne mentionnent pas ${a} parmi les ingr\u00e9dients \u00e9crits :\n${p}\n${altri > 0 ? `Pour ${altri} autres plats, la carte n\u2019en dit pas assez pour que je puisse le dire.\n` : ''}Par sécurité, demandez toujours au serveur avant de commander.`,
     nessunoSenza: a => `Sur la carte, je ne trouve pas de plats \u00e0 vous conseiller avec certitude sans ${a}.\nDemandez au serveur avant de commander : la cuisine sait ce qu\u2019elle peut vous pr\u00e9parer.`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F Attention : dans la description de **${pi}**, le restaurant a \u00e9crit ${a}.\nLes allerg\u00e8nes ne sont pas enregistr\u00e9s, faites confirmer par la cuisine avant de commander.`,
+    fuoriTemaTesto: `Ha ! Là, je ne peux rien pour vous 😄 Je ne connais que les plats d’ici, mais alors par cœur.\nJe vous dis ce qui vaut le détour ?`,
     abbinamentoDi: (p, t) => `🍷 Avec **${p}** je vous conseille : ${t}`,
     ordine: 'Vous pouvez enregistrer le plat dans l’application pour ne pas l’oublier : le serveur viendra prendre la commande à table.',
     grazie: 'Avec plaisir ! Je reste à votre disposition.',
@@ -873,6 +970,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `Na ementa estes pratos n\u00e3o mencionam ${a} entre os ingredientes escritos:\n${p}\n${altri > 0 ? `De outros ${altri} pratos a ementa n\u00e3o diz o suficiente para eu poder dizer.\n` : ''}Por segurança, pergunte sempre ao empregado antes de pedir.`,
     nessunoSenza: a => `Na ementa n\u00e3o encontro pratos que lhe possa recomendar com seguran\u00e7a sem ${a}.\nPergunte ao empregado antes de pedir: a cozinha sabe o que lhe pode preparar.`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F Aten\u00e7\u00e3o: na descri\u00e7\u00e3o de **${pi}** o restaurante escreveu ${a}.\nOs alerg\u00e9nios n\u00e3o est\u00e3o registados, pe\u00e7a confirma\u00e7\u00e3o \u00e0 cozinha antes de pedir.`,
+    fuoriTemaTesto: `Ah! Nisso não posso ajudar 😄 Só sei dos pratos daqui, mas esses sei de cor.\nQuer saber o que vale a pena?`,
     abbinamentoDi: (p, t) => `🍷 Com **${p}** recomendo: ${t}`,
     ordine: 'Pode guardar o prato na app para não se esquecer: o empregado vem à mesa tirar o pedido.',
     grazie: 'De nada! Estou aqui se precisar de mais alguma coisa.',
@@ -887,6 +985,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `\u0412 \u043c\u0435\u043d\u044e \u044d\u0442\u0438 \u0431\u043b\u044e\u0434\u0430 \u043d\u0435 \u0443\u043f\u043e\u043c\u0438\u043d\u0430\u044e\u0442 ${a} \u0441\u0440\u0435\u0434\u0438 \u0443\u043a\u0430\u0437\u0430\u043d\u043d\u044b\u0445 \u0438\u043d\u0433\u0440\u0435\u0434\u0438\u0435\u043d\u0442\u043e\u0432:\n${p}\n${altri > 0 ? `\u041f\u0440\u043e \u0435\u0449\u0451 ${altri} \u0431\u043b\u044e\u0434 \u043c\u0435\u043d\u044e \u0433\u043e\u0432\u043e\u0440\u0438\u0442 \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u043c\u0430\u043b\u043e, \u0447\u0442\u043e\u0431\u044b \u0441\u0443\u0434\u0438\u0442\u044c.\n` : ''}На всякий случай всегда спрашивайте официанта перед заказом.`,
     nessunoSenza: a => `\u0412 \u043c\u0435\u043d\u044e \u043d\u0435\u0442 \u0431\u043b\u044e\u0434, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u044f \u043c\u043e\u0433 \u0431\u044b \u0443\u0432\u0435\u0440\u0435\u043d\u043d\u043e \u043f\u043e\u0441\u043e\u0432\u0435\u0442\u043e\u0432\u0430\u0442\u044c \u0431\u0435\u0437 ${a}.\n\u0421\u043f\u0440\u043e\u0441\u0438\u0442\u0435 \u043e\u0444\u0438\u0446\u0438\u0430\u043d\u0442\u0430 \u043f\u0435\u0440\u0435\u0434 \u0437\u0430\u043a\u0430\u0437\u043e\u043c: \u043a\u0443\u0445\u043d\u044f \u0437\u043d\u0430\u0435\u0442, \u0447\u0442\u043e \u043c\u043e\u0436\u0435\u0442 \u043f\u0440\u0438\u0433\u043e\u0442\u043e\u0432\u0438\u0442\u044c.`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F \u0412\u043d\u0438\u043c\u0430\u043d\u0438\u0435: \u0432 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0438 **${pi}** \u0440\u0435\u0441\u0442\u043e\u0440\u0430\u043d \u0443\u043a\u0430\u0437\u0430\u043b ${a}.\n\u0410\u043b\u043b\u0435\u0440\u0433\u0435\u043d\u044b \u0437\u0434\u0435\u0441\u044c \u043d\u0435 \u0437\u0430\u043f\u043e\u043b\u043d\u0435\u043d\u044b, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u043f\u0435\u0440\u0435\u0434 \u0437\u0430\u043a\u0430\u0437\u043e\u043c \u0443\u0442\u043e\u0447\u043d\u0438\u0442\u0435 \u043d\u0430 \u043a\u0443\u0445\u043d\u0435.`,
+    fuoriTemaTesto: `Ха! Тут я бессилен 😄 Я знаю только блюда этого ресторана, зато назубок.\nРассказать, что стоит попробовать?`,
     abbinamentoDi: (p, t) => `🍷 К блюду **${p}** советую: ${t}`,
     ordine: 'Сохраните блюдо в приложении, чтобы не забыть: официант подойдёт к столику и примет заказ.',
     grazie: 'Пожалуйста! Обращайтесь, если что-то нужно.',
@@ -901,6 +1000,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `\u83dc\u5355\u4e0a\u4ee5\u4e0b\u83dc\u54c1\u7684\u914d\u6599\u4e2d\u6ca1\u6709\u5199\u5230${a}\uff1a\n${p}\n${altri > 0 ? `\u53e6\u6709 ${altri} \u9053\u83dc\u7684\u63cf\u8ff0\u4e0d\u591f\u8be6\u7ec6\uff0c\u6211\u65e0\u6cd5\u5224\u65ad\u3002\n` : ''}为安全起见，点菜前请务必询问服务员。`,
     nessunoSenza: a => `\u83dc\u5355\u4e0a\u6ca1\u6709\u6211\u80fd\u653e\u5fc3\u63a8\u8350\u7684\u4e0d\u542b${a}\u7684\u83dc\u54c1\u3002\n\u70b9\u83dc\u524d\u8bf7\u8be2\u95ee\u670d\u52a1\u5458\uff0c\u53a8\u623f\u77e5\u9053\u80fd\u4e3a\u60a8\u505a\u4ec0\u4e48\u3002`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F \u8bf7\u6ce8\u610f\uff1a**${pi}** \u7684\u63cf\u8ff0\u4e2d\u5199\u6709${a}\u3002\n\u672c\u5e97\u672a\u767b\u8bb0\u8fc7\u654f\u539f\uff0c\u70b9\u83dc\u524d\u8bf7\u8ba9\u53a8\u623f\u786e\u8ba4\u3002`,
+    fuoriTemaTesto: `哈哈，这个我可帮不上忙 😄 我只懂这里的菜，不过那可是我的强项。\n想听听有什么值得一试吗？`,
     abbinamentoDi: (p, t) => `🍷 搭配**${p}**，推荐：${t}`,
     ordine: '您可以在应用里保存这道菜以免忘记：服务员会到桌前为您点菜。',
     grazie: '不客气！需要其他帮助随时告诉我。',
@@ -915,6 +1015,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `\u30e1\u30cb\u30e5\u30fc\u306b\u66f8\u304b\u308c\u305f\u6750\u6599\u306b${a}\u304c\u306a\u3044\u6599\u7406\u306f\u3053\u3061\u3089\u3067\u3059\uff1a\n${p}\n${altri > 0 ? `\u307b\u304b\u306e${altri}\u54c1\u306f\u8aac\u660e\u304c\u77ed\u304f\u3001\u5224\u65ad\u3067\u304d\u307e\u305b\u3093\u3002\n` : ''}念のため、ご注文前に必ずスタッフにお尋ねください。`,
     nessunoSenza: a => `${a}\u3092\u9664\u3044\u305f\u6599\u7406\u3092\u3001\u30e1\u30cb\u30e5\u30fc\u304b\u3089\u78ba\u4fe1\u3092\u3082\u3063\u3066\u304a\u3059\u3059\u3081\u3059\u308b\u3053\u3068\u304c\u3067\u304d\u307e\u305b\u3093\u3002\n\u3054\u6ce8\u6587\u524d\u306b\u30b9\u30bf\u30c3\u30d5\u306b\u304a\u5c0b\u306d\u304f\u3060\u3055\u3044\u3002\u53a8\u623f\u304c\u5bfe\u5fdc\u3092\u628a\u63e1\u3057\u3066\u3044\u307e\u3059\u3002`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F \u3054\u6ce8\u610f\u304f\u3060\u3055\u3044\uff1a**${pi}** \u306e\u8aac\u660e\u306b${a}\u3068\u66f8\u304b\u308c\u3066\u3044\u307e\u3059\u3002\n\u30a2\u30ec\u30eb\u30ae\u30fc\u60c5\u5831\u306f\u672a\u767b\u9332\u306a\u306e\u3067\u3001\u3054\u6ce8\u6587\u524d\u306b\u53a8\u623f\u306b\u3054\u78ba\u8a8d\u304f\u3060\u3055\u3044\u3002`,
+    fuoriTemaTesto: `ははっ、それはさすがに専門外です 😄 私が知っているのはここの料理だけ、でもそこは自信ありです。\nおすすめ、聞いてみますか？`,
     abbinamentoDi: (p, t) => `🍷 **${p}**には、こちらがおすすめです：${t}`,
     ordine: '忘れないようアプリに保存できます。ご注文はスタッフがテーブルで承ります。',
     grazie: 'どういたしまして！他にもあればお声がけください。',
@@ -929,6 +1030,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `\u0641\u064a \u0627\u0644\u0642\u0627\u0626\u0645\u0629\u060c \u0647\u0630\u0647 \u0627\u0644\u0623\u0637\u0628\u0627\u0642 \u0644\u0627 \u062a\u0630\u0643\u0631 ${a} \u0636\u0645\u0646 \u0627\u0644\u0645\u0643\u0648\u0651\u0646\u0627\u062a \u0627\u0644\u0645\u0643\u062a\u0648\u0628\u0629:\n${p}\n${altri > 0 ? `\u0648\u0647\u0646\u0627\u0643 ${altri} \u0623\u0637\u0628\u0627\u0642 \u0623\u062e\u0631\u0649 \u0644\u0627 \u062a\u0643\u0641\u064a \u0623\u0648\u0635\u0627\u0641\u0647\u0627 \u0644\u0644\u062d\u0643\u0645 \u0639\u0644\u064a\u0647\u0627.\n` : ''}للسلامة، اسأل النادل دائمًا قبل الطلب.`,
     nessunoSenza: a => `\u0644\u0627 \u0623\u062c\u062f \u0641\u064a \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0623\u0637\u0628\u0627\u0642\u064b\u0627 \u0623\u0646\u0635\u062d \u0628\u0647\u0627 \u0628\u062b\u0642\u0629 \u062e\u0627\u0644\u064a\u0629 \u0645\u0646 ${a}.\n\u0627\u0633\u0623\u0644 \u0627\u0644\u0646\u0627\u062f\u0644 \u0642\u0628\u0644 \u0627\u0644\u0637\u0644\u0628: \u0627\u0644\u0645\u0637\u0628\u062e \u064a\u0639\u0631\u0641 \u0645\u0627 \u064a\u0645\u0643\u0646 \u062a\u062d\u0636\u064a\u0631\u0647 \u0644\u0643.`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F \u0627\u0646\u062a\u0628\u0647: \u0641\u064a \u0648\u0635\u0641 **${pi}** \u0643\u062a\u0628 \u0627\u0644\u0645\u0637\u0639\u0645 ${a}.\n\u0627\u0644\u0645\u062d\u0633\u0633\u0627\u062a \u063a\u064a\u0631 \u0645\u0633\u062c\u0651\u0644\u0629 \u0647\u0646\u0627\u060c \u0641\u0627\u0637\u0644\u0628 \u062a\u0623\u0643\u064a\u062f \u0627\u0644\u0645\u0637\u0628\u062e \u0642\u0628\u0644 \u0627\u0644\u0637\u0644\u0628.`,
+    fuoriTemaTesto: `هاها، هذا خارج تخصصي 😄 أنا لا أعرف سوى أطباق هذا المطعم، لكنني فيها بارع.\nهل أخبرك بما يستحق التجربة؟`,
     abbinamentoDi: (p, t) => `🍷 مع **${p}** أنصحك: ${t}`,
     ordine: 'يمكنك حفظ الطبق في التطبيق حتى لا تنساه: النادل سيأتي إلى الطاولة لأخذ الطلب.',
     grazie: 'عفوًا! أنا هنا إذا احتجت شيئًا آخر.',
@@ -943,6 +1045,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `\uba54\ub274\uc5d0 \uc801\ud78c \uc7ac\ub8cc\uc5d0 ${a}\uc774(\uac00) \uc5c6\ub294 \uc694\ub9ac\uc608\uc694:\n${p}\n${altri > 0 ? `\ub2e4\ub978 ${altri}\uac1c \uc694\ub9ac\ub294 \uc124\uba85\uc774 \ubd80\uc871\ud574 \ud310\ub2e8\ud560 \uc218 \uc5c6\uc5b4\uc694.\n` : ''}안전을 위해 주문 전에 꼭 직원에게 확인해 주세요.`,
     nessunoSenza: a => `${a} \uc5c6\uc774 \uc790\uc2e0 \uc788\uac8c \ucd94\ucc9c\ub4dc\ub9b4 \uc218 \uc788\ub294 \uc694\ub9ac\ub97c \uba54\ub274\uc5d0\uc11c \ucc3e\uc9c0 \ubabb\ud588\uc5b4\uc694.\n\uc8fc\ubb38 \uc804\uc5d0 \uc9c1\uc6d0\uc5d0\uac8c \ubb38\uc758\ud574 \uc8fc\uc138\uc694. \uc8fc\ubc29\uc774 \uac00\ub2a5\ud55c \uac83\uc744 \uc54c\uace0 \uc788\uc5b4\uc694.`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F \uc8fc\uc758\ud558\uc138\uc694: **${pi}** \uc124\uba85\uc5d0 ${a}\uc774(\uac00) \uc801\ud600 \uc788\uc5b4\uc694.\n\uc54c\ub808\ub974\uae30 \uc815\ubcf4\uac00 \ub4f1\ub85d\ub418\uc5b4 \uc788\uc9c0 \uc54a\uc73c\ub2c8 \uc8fc\ubb38 \uc804\uc5d0 \uc8fc\ubc29\uc5d0 \ud655\uc778\ud574 \uc8fc\uc138\uc694.`,
+    fuoriTemaTesto: `하하, 그건 제 전문이 아니에요 😄 저는 이곳 요리만 알아요, 대신 그건 자신 있어요.\n뭐가 맛있는지 알려드릴까요?`,
     abbinamentoDi: (p, t) => `🍷 **${p}**에는 이것을 추천해요: ${t}`,
     ordine: '잊지 않도록 앱에 저장해 두세요. 주문은 직원이 테이블에서 받습니다.',
     grazie: '천만에요! 필요하신 게 있으면 말씀해 주세요.',
@@ -957,6 +1060,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `Di menu, hidangan berikut tidak menyebut ${a} di antara bahan yang tertulis:\n${p}\n${altri > 0 ? `Untuk ${altri} hidangan lain menu tidak cukup jelas untuk saya nilai.\n` : ''}Demi keamanan, selalu tanyakan kepada pelayan sebelum memesan.`,
     nessunoSenza: a => `Di menu saya tidak menemukan hidangan yang bisa saya sarankan dengan yakin tanpa ${a}.\nTanyakan kepada pelayan sebelum memesan: dapur tahu apa yang bisa disiapkan untuk Anda.`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F Perhatian: dalam deskripsi **${pi}** restoran menulis ${a}.\nAlergen belum dicatat di sini, jadi mintalah konfirmasi dapur sebelum memesan.`,
+    fuoriTemaTesto: `Haha, yang itu di luar keahlian saya 😄 Saya cuma tahu hidangan di sini, tapi soal itu saya jagonya.\nMau tahu apa yang layak dicoba?`,
     abbinamentoDi: (p, t) => `🍷 Dengan **${p}** saya sarankan: ${t}`,
     ordine: 'Anda bisa menyimpan hidangan di aplikasi agar tidak lupa: pelayan akan datang ke meja untuk mencatat pesanan.',
     grazie: 'Sama-sama! Saya di sini kalau ada yang lain.',
@@ -971,6 +1075,7 @@ const T: Record<string, Testi> = {
     consiglioSenza: (a, p, altri) => `\u092e\u0947\u0928\u094d\u092f\u0942 \u092e\u0947\u0902 \u0932\u093f\u0916\u0940 \u0938\u093e\u092e\u0917\u094d\u0930\u0940 \u092e\u0947\u0902 \u0907\u0928 \u0935\u094d\u092f\u0902\u091c\u0928\u094b\u0902 \u092e\u0947\u0902 ${a} \u0928\u0939\u0940\u0902 \u0939\u0948:\n${p}\n${altri > 0 ? `\u0905\u0928\u094d\u092f ${altri} \u0935\u094d\u092f\u0902\u091c\u0928\u094b\u0902 \u0915\u093e \u0935\u093f\u0935\u0930\u0923 \u092a\u0930\u094d\u092f\u093e\u092a\u094d\u0924 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964\n` : ''}सुरक्षा के लिए ऑर्डर से पहले वेटर से ज़रूर पूछें।`,
     nessunoSenza: a => `${a} \u0915\u0947 \u092c\u093f\u0928\u093e \u092e\u0948\u0902 \u092e\u0947\u0928\u094d\u092f\u0942 \u0938\u0947 \u092d\u0930\u094b\u0938\u0947 \u0915\u0947 \u0938\u093e\u0925 \u0915\u094b\u0908 \u0935\u094d\u092f\u0902\u091c\u0928 \u0928\u0939\u0940\u0902 \u0938\u0941\u091d\u093e \u0938\u0915\u0924\u093e\u0964\n\u0911\u0930\u094d\u0921\u0930 \u0938\u0947 \u092a\u0939\u0932\u0947 \u0935\u0947\u091f\u0930 \u0938\u0947 \u092a\u0942\u091b\u0947\u0902: \u0930\u0938\u094b\u0908 \u091c\u093e\u0928\u0924\u0940 \u0939\u0948 \u0915\u093f \u0935\u0939 \u0915\u094d\u092f\u093e \u092c\u0928\u093e \u0938\u0915\u0924\u0940 \u0939\u0948\u0964`,
     piattoNomina: (pi, a) => `\u26a0\uFE0F \u0927\u094d\u092f\u093e\u0928 \u0926\u0947\u0902: **${pi}** \u0915\u0947 \u0935\u093f\u0935\u0930\u0923 \u092e\u0947\u0902 \u0930\u0947\u0938\u094d\u091f\u094b\u0930\u0947\u0902\u091f \u0928\u0947 ${a} \u0932\u093f\u0916\u093e \u0939\u0948\u0964\n\u090f\u0932\u0930\u094d\u091c\u0940 \u091c\u093e\u0928\u0915\u093e\u0930\u0940 \u0926\u0930\u094d\u091c \u0928\u0939\u0940\u0902 \u0939\u0948, \u0907\u0938\u0932\u093f\u090f \u0911\u0930\u094d\u0921\u0930 \u0938\u0947 \u092a\u0939\u0932\u0947 \u0930\u0938\u094b\u0908 \u0938\u0947 \u092a\u0941\u0937\u094d\u091f\u093f \u0915\u0930\u093e\u090f\u0902\u0964`,
+    fuoriTemaTesto: `हाहा, इसमें मैं मदद नहीं कर सकता 😄 मुझे सिर्फ यहां के व्यंजन पता हैं, और उनमें मेरा कोई मुकाबला नहीं।\nबताऊं क्या ज़रूर आज़माना चाहिए?`,
     abbinamentoDi: (p, t) => `🍷 **${p}** के साथ मेरा सुझाव: ${t}`,
     ordine: 'आप व्यंजन को ऐप में सहेज सकते हैं: वेटर टेबल पर ऑर्डर लेने आएगा।',
     grazie: 'खुशी हुई! कुछ और चाहिए तो बताइए।',
@@ -1209,7 +1314,17 @@ export async function rispostaDiretta(p: {
   }
 
   const grezzo = (p.messaggio || '').trim();
-  if (!grezzo || troppoLunga(grezzo)) return null;
+  if (!grezzo) return null;
+
+  // Fuori tema, PRIMA del taglio sulla lunghezza: "scrivimi una poesia sui
+  // gatti in rima baciata" e' lunga apposta, ed e' proprio quella che non
+  // deve arrivare al modello.
+  if (fuoriTema(grezzo, p.dishes.map(d => normalizza(d.name)))) {
+    const t0 = testi(p.language);
+    return { message: t0.fuoriTemaTesto, suggestions: t0.suggerimenti, intento: 'fuoritema' };
+  }
+
+  if (troppoLunga(grezzo)) return null;
 
   const msg = normalizza(grezzo);
   if (!msg) return null;

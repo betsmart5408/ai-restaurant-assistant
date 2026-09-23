@@ -12,7 +12,7 @@
  */
 import { db } from '../db/client';
 
-export type Intento = 'piatto' | 'allergeni' | 'abbinamento' | 'ordine' | 'saluto' | 'modello' | 'limite' | 'consiglio' | 'memoria';
+export type Intento = 'piatto' | 'allergeni' | 'abbinamento' | 'ordine' | 'saluto' | 'modello' | 'limite' | 'consiglio' | 'memoria' | 'fuoritema';
 
 export function registraIntento(
   restaurantId: string,

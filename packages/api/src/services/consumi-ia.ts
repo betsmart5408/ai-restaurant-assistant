@@ -26,6 +26,36 @@ function prezzo(fornitore: string, verso: 'IN' | 'OUT'): number {
   return Number(process.env[`${P}_PRICE_${verso}`]) || 0;
 }
 
+/**
+ * Questo fornitore ce lo fanno pagare. I piani gratuiti e la chiave del
+ * ristoratore valgono zero: quelli non si contingentano.
+ */
+export function fornitoreAPagamento(nome: string): boolean {
+  return prezzo(nome, 'IN') > 0 || prezzo(nome, 'OUT') > 0;
+}
+
+// Quante domande al giorno, per ristorante, possono finire su un fornitore
+// che ci costa. Oltre, si resta sui fornitori gratuiti e sulle risposte
+// pronte: il cliente non se ne accorge, la bolletta si'.
+const LIMITE_PAGAMENTO = Number(process.env.LIMITE_IA_PAGAMENTO) || 5;
+
+/** true se oggi questo ristorante ha gia' consumato le sue chiamate a pagamento. */
+export async function superatoLimitePagamento(restaurantId: string): Promise<boolean> {
+  try {
+    const r = await db.query<{ oggi: number }>(
+      `SELECT COALESCE(SUM(chiamate), 0)::int AS oggi FROM consumi_ia
+        WHERE restaurant_id = $1 AND giorno = CURRENT_DATE AND costo_usd > 0`,
+      [restaurantId],
+    );
+    return (r.rows[0]?.oggi ?? 0) >= LIMITE_PAGAMENTO;
+  } catch (err) {
+    // Se il conteggio non riesce si sta dalla parte della spesa: niente
+    // fornitori a pagamento. Le risposte pronte e i gratuiti bastano.
+    console.error('[consumi-ia] controllo limite a pagamento non riuscito:', err);
+    return true;
+  }
+}
+
 export function registraConsumo(
   restaurantId: string,
   fornitore: string,
