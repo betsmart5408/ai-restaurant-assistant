@@ -194,7 +194,7 @@ export function startAlertScheduler() {
   // cliente del giorno non aspetta e non consuma le sue domande al modello
   // per una risposta che poi leggeranno gratis tutti gli altri.
   cron.schedule('30 4 * * *', () =>
-    pregeneraConsigli().catch(err => console.error('Pregenerazione consigli error:', err))
+    pregeneraConsigli({ tutti: true }).catch(err => console.error('Pregenerazione consigli error:', err))
   );
 
   console.log('✅ Scheduler: stock/ora · scadenze/8:00 · riepilogo/22:00 · report/lunedì-8:30 · pulizia chat/4:00 · consigli/4:30');

@@ -11,9 +11,10 @@
  *   --slug     un ristorante preciso, in tutte le lingue che offre
  *   --giorni   quanto indietro guardare per il traffico (30)
  *   --lingue   solo queste
- *   --max      tetto di chiamate (400)
- *   --pausa    millisecondi fra una chiamata e l'altra (4000)
+ *   --max      tetto di chiamate (2500)
+ *   --pausa    millisecondi fra una chiamata e l'altra (6000)
  *   --forza    riscrive anche quello che e' gia' pronto
+ *   --tutti    anche i ristoranti senza clienti (prima quelli che ne hanno)
  */
 import 'dotenv/config';
 import { pregeneraConsigli } from '../src/services/pregenera';
@@ -31,6 +32,7 @@ pregeneraConsigli({
   max: Number(arg('max')) || undefined,
   pausaMs: Number(arg('pausa')) || undefined,
   forza: flag('forza'),
+  tutti: flag('tutti'),
   prova: flag('prova'),
 })
   .then(r => { console.log(r); process.exit(0); })

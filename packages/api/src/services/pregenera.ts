@@ -3,23 +3,21 @@
  *
  * I quattro consigli generici - "cosa mi consigli?", "menu degustazione per
  * 2", "sono vegetariano", "per bambini" - sono uguali per tutti i clienti di
- * un locale e restano in cache 24 ore. Oggi li paga il PRIMO cliente della
- * giornata: e' lui che aspetta tre secondi e consuma una delle sue cinque
- * domande al modello, per una risposta che poi leggeranno gratis tutti gli
- * altri.
+ * un locale e restano in cache due settimane. Prima li pagava il PRIMO
+ * cliente della giornata: era lui ad aspettare e a consumare una delle sue
+ * cinque domande al modello, per una risposta che poi leggevano gratis tutti
+ * gli altri.
  *
- * Questo lavoro li scrive di notte, quando nessuno e' a tavola. Tre effetti:
- * il cliente al tavolo non aspetta piu', non consuma le sue domande per una
- * risposta che avevamo gia', e le chiamate si spalmano in un'ora in cui i
- * 2 al minuto di Groq non danno fastidio a nessuno.
+ * Qui si scrivono di notte, quando nessuno e' a tavola.
  *
- * SI GENERA SOLO DOVE SERVE. Pre-generare per tutti i 519 ristoranti in
- * tutte le lingue sarebbe 20.760 chiamate a notte, e il piano gratuito ne
- * regge circa 9.700. Ma i ristoranti che hanno avuto un cliente vero negli
- * ultimi 30 giorni sono 25, in 50 combinazioni di lingua: 200 chiamate.
- * Quindi si guarda il traffico vero e si pre-genera per quello. Per tutti
- * gli altri continua a pagare il primo cliente, come adesso.
+ * L'ORDINE CONTA. Prima i ristoranti che hanno avuto clienti veri negli
+ * ultimi 30 giorni: quelle risposte le legge qualcuno. Poi, con --tutti, gli
+ * altri. Coprire tutti e 519 in tutte le lingue e' 20.760 chiamate, cioe'
+ * due giorni della quota gratuita di tutta la piattaforma: non si fa in una
+ * notte e non si deve. Si riempie un pezzo per notte, e siccome la cache
+ * dura due settimane il lavoro si completa da solo in qualche giorno.
  */
+
 import { db } from '../db/client';
 import { processChat } from './ai-chat';
 import { firmaMenu, leggiConsiglio, type TipoConsiglio } from './consigli-pronti';
@@ -49,6 +47,8 @@ export interface OpzioniPregenera {
   forza?: boolean;
   /** Stampa cosa farebbe, senza chiamare nessun modello. */
   prova?: boolean;
+  /** Anche i ristoranti senza clienti recenti, dopo quelli con traffico. */
+  tutti?: boolean;
 }
 
 interface Coppia { restaurant_id: string; name: string; groq_api_key: string | null; lingua: string }
@@ -63,7 +63,8 @@ async function coppieDaFare(o: OpzioniPregenera): Promise<Coppia[]> {
        FROM restaurants r WHERE r.slug = $1 AND r.assistente_attivo IS NOT false`, [o.slug]);
     return r.rows;
   }
-  const r = await db.query<Coppia>(
+  // Prima chi ha avuto clienti veri: quelle risposte le legge qualcuno.
+  const conTraffico = await db.query<Coppia>(
     `SELECT DISTINCT r.id AS restaurant_id, r.name, r.groq_api_key, cs.language AS lingua
      FROM chat_sessions cs
      JOIN restaurants r ON r.id = cs.restaurant_id
@@ -72,16 +73,29 @@ async function coppieDaFare(o: OpzioniPregenera): Promise<Coppia[]> {
        AND r.assistente_attivo IS NOT false
        AND coalesce(cs.language, '') <> ''
      ORDER BY r.name, cs.language`, [String(o.giorni ?? 30)]);
-  return r.rows;
+  if (!o.tutti) return conTraffico.rows;
+
+  // Poi, se richiesto, tutti gli altri. Si riempiono un po' per notte: con la
+  // cache che dura due settimane il lavoro si completa da solo in qualche
+  // giorno, senza mangiarsi la quota in una volta.
+  const resto = await db.query<Coppia>(
+    `SELECT r.id AS restaurant_id, r.name, r.groq_api_key, unnest(r.languages) AS lingua
+     FROM restaurants r
+     WHERE r.assistente_attivo IS NOT false
+       AND (SELECT count(*) FROM dishes d WHERE d.restaurant_id = r.id AND d.available) > 0
+     ORDER BY r.id`);
+  const gia = new Set(conTraffico.rows.map(x => `${x.restaurant_id}|${x.lingua}`));
+  return [...conTraffico.rows, ...resto.rows.filter(x => !gia.has(`${x.restaurant_id}|${x.lingua}`))];
 }
 
 export async function pregeneraConsigli(o: OpzioniPregenera = {}): Promise<{ scritti: number; saltati: number; falliti: number }> {
-  const max = o.max ?? 400;
-  // Trenta secondi, non quattro. Groq gratuito da' 8.000 token al minuto e
-  // una chiamata ne usa circa 3.700: piu' di due al minuto e arriva il 429.
-  // Di notte la fretta non serve — 200 chiamate a 30 secondi sono un'ora e
-  // mezza, e alle 4:30 non disturbano nessuno.
-  const pausa = o.pausaMs ?? 30_000;
+  const max = o.max ?? 2_500;   // ~4 ore a questo ritmo: da 4:30 finisce prima di pranzo
+  // Sei secondi. Groq gratuito da' 8.000 token al minuto e una chiamata ne
+  // usa 3.700, quindi da solo reggerebbe due al minuto: ma quando risponde
+  // 429 la catena passa a Mistral, che di token al minuto ne da' molti di
+  // piu'. Sei secondi tengono occupata la catena senza sprecare tentativi,
+  // e con il ritentativo qui sotto un 429 non perde niente.
+  const pausa = o.pausaMs ?? 6_000;
   let coppie = await coppieDaFare(o);
   if (o.lingue?.length) coppie = coppie.filter(c => o.lingue!.includes(c.lingua));
 

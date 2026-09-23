@@ -22,7 +22,20 @@ import {
 
 export type TipoConsiglio = 'consiglio' | 'degustazione2' | 'vegetariano' | 'bambini';
 
-const VALIDITA_MS = 24 * 3600 * 1000;
+// Quanto vale una risposta in cache.
+//
+// Erano 24 ore, e andavano bene finche' a scriverla era il primo cliente del
+// giorno. Ora le scrive un lavoro notturno, e con 24 ore si dovrebbero
+// riscrivere TUTTE ogni notte: 20.760 chiamate per 519 ristoranti, cioe' due
+// giorni della quota gratuita di tutta la piattaforma, ogni notte, per
+// risposte che nei locali senza clienti non legge nessuno.
+//
+// Due settimane non fanno invecchiare niente, perche' la scadenza vera non e'
+// il tempo: e' la firma del menu (cambia un piatto o un prezzo e si riscrive
+// da sola) e la versione delle regole. E nel testo non c'e' niente di legato
+// al giorno: i consigli in cache si generano senza meteo, senza ora e senza
+// saluti, apposta perche' li legge chiunque in qualunque momento.
+const VALIDITA_MS = (Number(process.env.GIORNI_VALIDITA_CONSIGLI) || 14) * 24 * 3600 * 1000;
 const MAX_PAROLE = 8;
 
 /** Le frasi si confrontano con il messaggio normalizzato: devono esserlo anche loro. */
