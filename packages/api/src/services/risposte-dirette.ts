@@ -1112,7 +1112,7 @@ interface PiattoRisolto extends PiattoBase {
 const cacheTraduzioni = new Map<string, { data: PiattoRisolto[]; ts: number }>();
 const DURATA_CACHE_MS = 5 * 60 * 1000;
 
-async function piattiNellaLingua(
+export async function piattiNellaLingua(
   restaurantId: string, lang: string, dishes: PiattoBase[],
 ): Promise<PiattoRisolto[]> {
   const chiave = `${restaurantId}:${lang}`;
@@ -1216,7 +1216,7 @@ function piattoEsatto(msg: string, piatti: PiattoRisolto[]): PiattoRisolto | nul
  *     5 lettere, ma SOLO se punta a un piatto solo. Se "pasta" ne pesca sei,
  *     non si tira a indovinare: decide il modello.
  */
-function piattoCitato(msg: string, piatti: PiattoRisolto[]): PiattoRisolto | null {
+export function piattoCitato(msg: string, piatti: PiattoRisolto[]): PiattoRisolto | null {
   let migliore: PiattoRisolto | null = null;
   let lunghezza = 0;
   for (const p of piatti) {

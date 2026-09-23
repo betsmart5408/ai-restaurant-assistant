@@ -19,7 +19,8 @@
     "intenti": "tsx src/db/intenti.ts",
     "genera-risposte": "tsx src/db/genera-risposte.ts",
     "prova-logica": "tsx scripts/prova-logica.ts",
-    "prova-allergeni": "tsx scripts/prova-allergeni-menu.ts"
+    "prova-allergeni": "tsx scripts/prova-allergeni-menu.ts",
+    "analisi-domande": "tsx scripts/analisi-domande-vere.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
