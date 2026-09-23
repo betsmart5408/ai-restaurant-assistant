@@ -622,7 +622,8 @@ const MAX_PIATTI_ELENCATI = 10;
 const FUORI_TEMA = normalizzaElenco([
   // poesie, storie, battute, canzoni
   'poesia', 'poem', 'poesie', 'gedicht', 'poeme', 'poema', 'filastrocca', 'rima',
-  'barzelletta', 'joke', 'chiste', 'witz', 'blague', 'piada', 'raccontami una storia',
+  'barzelletta', 'joke', 'chiste', 'witz', 'blague', 'piada', 'lelucon', 'lawak',
+  'raccontami una storia', 'ceritakan',
   'tell me a story', 'canzone', 'song', 'cancion', 'lyrics', 'testo della canzone',
   'поэм', 'стих', 'шутк', 'анекдот', '写首诗', '笑话', '诗', '詩を', 'ジョーク', '冗談',
   '시를', '농담', 'قصيدة', 'نكتة', 'कविता', 'चुटकुला',
@@ -738,6 +739,9 @@ export const PAROLE_ALLERGENI = normalizzaElenco([
   // it / es / pt
   'allergen', 'allergi', 'alerg', 'glutine', 'gluten', 'lattosio', 'lactosa', 'lactose',
   'celiac', 'celiaco', 'intolleran', 'intoleran',
+  // Scritto male come lo scrivono davvero: "sono ciliaco" viene dai log.
+  // Un celiaco che sbaglia a digitare non deve perdere la risposta.
+  'ciliaco', 'cileaco', 'celiaci', 'coeliaco', 'alergico', 'alergia', 'allergia',
   'arachidi', 'amendoim', 'frutta a guscio', 'frutos secos',
   // en / de / fr
   'allerg', 'coeliac', 'lactose', 'peanut', 'dairy', 'laktose', 'zoliakie',
@@ -750,13 +754,13 @@ export const PAROLE_ALLERGENI = normalizzaElenco([
   // ja
   'アレルギ', 'グルテン', '乳糖',
   // ar
-  'حساسية', 'غلوتين',
+  'حساسية', 'غلوتين', 'لاكتوز', 'حساسيه',
   // ko
   '알레르기', '글루텐', '유당',
   // id
   'alergi', 'laktosa',
   // hi
-  'एलर्जी', 'ग्लूटेन',
+  'एलर्जी', 'ग्लूटेन', 'लैक्टोज', 'लैक्टोज़', 'दूध से एलर्जी',
 ]);
 
 /**
@@ -1324,8 +1328,6 @@ export async function rispostaDiretta(p: {
     return { message: t0.fuoriTemaTesto, suggestions: t0.suggerimenti, intento: 'fuoritema' };
   }
 
-  if (troppoLunga(grezzo)) return null;
-
   const msg = normalizza(grezzo);
   if (!msg) return null;
 
@@ -1336,6 +1338,14 @@ export async function rispostaDiretta(p: {
   // 1. IL MESSAGGIO E' ESATTAMENTE UN PIATTO — il cliente ha toccato un nome
   //    in grassetto o l'ha scritto. Va provato PRIMA degli altri intenti:
   //    "Pollo al vino" e' una richiesta di scheda, non una domanda sul vino.
+  //
+  //    E va provato PRIMA del taglio sulla lunghezza: 357 piatti su 21.342
+  //    hanno un nome piu' lungo di settanta caratteri ("Authentic Malaysian
+  //    style chunky chuck steak stewed with fresh herbs, coconut cream and
+  //    mild chilli"), e per tutti quelli toccare il nome in grassetto non
+  //    apriva la scheda - il messaggio veniva scartato come "troppo lungo"
+  //    prima di essere guardato. Il nome di un piatto non e' mai una
+  //    domanda troppo lunga.
   const esatto = piattoEsatto(msg, piatti);
   if (esatto) {
     return {
@@ -1345,6 +1355,19 @@ export async function rispostaDiretta(p: {
     };
   }
 
+  // Da qui in giu' si indovina, e su un messaggio lungo non si indovina.
+  //
+  // Ma il NOME del piatto non conta nella lunghezza: "is yellowfin tuna,
+  // green apple, kohlrabi & dill gluten free?" sono undici parole e sembra
+  // una domanda lunga, mentre la domanda vera e' "gluten free?" con dentro
+  // un nome di quaranta caratteri. Togliendo il nome si misura quello che
+  // il cliente ha davvero chiesto.
+  const citato = piattoCitato(msg, piatti);
+  const msgSenzaNome = citato
+    ? citato.chiavi.reduce((t, k) => t.replace(k, ' '), msg).replace(/\s+/g, ' ').trim()
+    : msg;
+  if (troppoLunga(msgSenzaNome || msg)) return null;
+
   // 2. ALLERGENI — prima degli altri: "allergeni della carbonara" non e' una
   //    richiesta della scheda del piatto, e la risposta deve essere la frase
   //    di sicurezza, sempre identica, mai generata.
@@ -1353,7 +1376,10 @@ export async function rispostaDiretta(p: {
   // Vegetariano e vegano NON sono allergie: se il cliente parla solo di
   // quello, qui non si risponde ("la carbonara e' vegetariana?" riceveva
   // l'elenco degli allergeni, che del guanciale non dice niente).
-  const parlaDiVegetariano = contiene(msg, PAROLE_VEGETARIANO);
+  // Senza il nome del piatto, se no un piatto che si chiama "Couscous de
+  // legumes marocain VEGAN GF" faceva credere che fosse il cliente a
+  // dichiararsi vegano, e la domanda sugli allergeni non veniva vista.
+  const parlaDiVegetariano = contiene(msgSenzaNome || msg, PAROLE_VEGETARIANO);
   // "glutine", "lattosio", "allergia" bastano da sole: non sono parole che si
   // usano per ordinare. "pesce", "uova", "latte" no: quelle vogliono anche un
   // segno di allergia, altrimenti "Avete del pesce?" finiva qui dentro.
